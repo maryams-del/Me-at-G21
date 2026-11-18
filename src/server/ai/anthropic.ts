@@ -33,7 +33,7 @@ const OUTPUT_SCHEMA = (opNames: string[]) => ({
         properties: {
           page: { type: "string", enum: PAGES.map((p) => p.id) },
           q: { type: ["string", "null"] }, person: { type: ["string", "null"], description: '"@f1"-style alias or "me"' },
-          kind: { type: ["string", "null"] }, year: { type: ["string", "null"] }, target: { type: ["string", "null"], description: '"@a1"-style application alias' },
+          kind: { type: ["string", "null"] }, year: { type: ["string", "null"] }, target: { type: ["string", "null"], description: '"@a1" application alias, or "@x1" space alias when page is "space"' },
         },
       }],
     },
@@ -97,6 +97,9 @@ Rules:
 - GOING SOMEWHERE ("go to…", "open…", "show me my…", "take me to…", or just a page name): intent "navigate", operations [], fill "navigate" with a page id from PAGES.
   Add filters only when said: person (family alias or "me" for "my"), kind (documents: passport|national_id|transcript|certificate|cv|application|letter; expiries: passport|national_id|license|bank_card|membership; achievements: award|certification|volunteering|project|publication|skill), year, q (search words), target (an application alias).
   If it's unclear which page, pick the closest one; the app shows options.
+- THE OWNER'S OWN SPACES (lists in CONTEXT.spaces, items in CONTEXT.spaceItems): "add X to my <space>" → spaceItem.add with spaceId "@x…" and text X;
+  "tick off X" / "X is done" → spaceItem.toggle with id "@i…" and done true; "remove X from <space>" → spaceItem.delete. "go to <space name>" → navigate page "space" with target "@x…".
+  If the list or item is unclear, leave the id out and list it in missing; the app shows options.
 - APP COMMANDS: intent "command" with "command": backup.quick (records-only backup), backup.full (backup with documents), backup.choose (they asked for a backup without saying which), export.csv (with module if a section is named), export.json. The app asks before running.
 - DELETING / CANCELLING something: propose the matching *.delete op (or subscription.cancel for "I cancelled X") with id "@alias" when exactly one record clearly matches. If it's ambiguous, leave id out and list "id" in missing; the app shows the candidates to tap.
   "the expiry reminder" means the expiry item. Never guess between two people's items.
@@ -115,7 +118,7 @@ export function anthropicProvider(): AiProvider {
       const prev = previous?.at(-1);
       const userContent = [
         `TODAY: ${ctx.today} (${ctx.weekday}), timezone ${ctx.tz}, default currency ${ctx.currency}`,
-        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries, people: ctx.people, applications: ctx.applications, subscriptions: ctx.subscriptions, achievements: ctx.achievements, hobbies: ctx.hobbies })}`,
+        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries, people: ctx.people, applications: ctx.applications, subscriptions: ctx.subscriptions, achievements: ctx.achievements, hobbies: ctx.hobbies, spaces: ctx.spaces, spaceItems: ctx.spaceItems })}`,
         `PAGES: ${JSON.stringify(PAGES.map((p) => ({ id: p.id, label: p.label })))}`,
         `OP CATALOG: ${JSON.stringify(catalog)}`,
         prev ? `PREVIOUS PROPOSAL (from "${prev.text.slice(0, 500)}"): ${JSON.stringify(prev.operations)}` : "",

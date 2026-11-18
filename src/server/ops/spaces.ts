@@ -62,7 +62,7 @@ export const spaceDelete = defineOp({
 });
 
 export const spaceItemAdd = defineOp({
-  name: "spaceItem.add", module: "spaces", label: "Add to space", aiAllowed: false,
+  name: "spaceItem.add", module: "spaces", label: "Add to space", aiAllowed: true,
   schema: z.object({ spaceId: zId, text: zText(500) }),
   summarize: (i) => `Add “${i.text}”`,
   async run(ctx, i) {
@@ -82,7 +82,7 @@ async function ownItem(ctx: Ctx, id: string) {
 }
 
 export const spaceItemToggle = defineOp({
-  name: "spaceItem.toggle", module: "spaces", label: "Tick item", aiAllowed: false,
+  name: "spaceItem.toggle", module: "spaces", label: "Tick item", aiAllowed: true,
   schema: z.object({ id: zId, done: z.boolean() }),
   summarize: (i) => (i.done ? "Tick item" : "Untick item"),
   async run(ctx, i) {
@@ -94,7 +94,7 @@ export const spaceItemToggle = defineOp({
 });
 
 export const spaceItemDelete = defineOp({
-  name: "spaceItem.delete", module: "spaces", label: "Remove item", aiAllowed: false,
+  name: "spaceItem.delete", module: "spaces", label: "Remove item", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Remove item",
   async run(ctx, i) {

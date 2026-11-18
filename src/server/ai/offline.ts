@@ -293,6 +293,47 @@ function applyCorrection(text: string, prev: ProposedOp[], ctx: AiContext): Prop
   return changed ? ops : null;
 }
 
+/** Your own spaces (lists): "add milk to my shopping list", "tick off milk", "remove milk from shopping list". */
+function parseSpaces(text: string, ctx: AiContext): Interpretation | null {
+  const spaces = ctx.spaces ?? [], items = ctx.spaceItems ?? [];
+  if (!spaces.length) return null;
+  const raw = text.trim().replace(/[.!]+$/, "");
+  const t = raw.toLowerCase();
+  const findSpace = (s: string) => {
+    const n = s.toLowerCase().replace(/\b(my|the|list|space)\b/g, " ").replace(/\s+/g, " ").trim();
+    return spaces.find((x) => x.name.toLowerCase().replace(/\b(my|the|list|space)\b/g, " ").replace(/\s+/g, " ").trim() === n)
+      ?? spaces.find((x) => n.length > 2 && x.name.toLowerCase().includes(n)) ?? null;
+  };
+  const findItem = (s: string, space?: { name: string } | null) => {
+    const n = s.toLowerCase().replace(/^(the|my)\s+/, "").trim();
+    const pool = items.filter((i) => !space || i.space === space.name);
+    const hits = pool.filter((i) => i.text.toLowerCase() === n);
+    const loose = hits.length ? hits : pool.filter((i) => n.length > 2 && i.text.toLowerCase().includes(n));
+    return loose.length === 1 ? loose[0] : null;
+  };
+  let m = raw.match(/^(?:please\s+)?(?:add|put|write down|note)\s+(.+?)\s+(?:to|on|in|into|onto)\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
+  if (m) {
+    const sp = findSpace(m[2]);
+    if (!sp && !/\blist\b/.test(t)) return null; // not about a list ("add 100 SAR to savings" is handled elsewhere)
+    return { intent: "capture", operations: [{ op: "spaceItem.add", input: { spaceId: sp ? `@${sp.alias}` : undefined, text: m[1].trim() }, missing: sp ? [] : ["spaceId"] }], questions: sp ? [] : ["Add it to which list?"] };
+  }
+  m = raw.match(/^(?:please\s+)?(?:tick(?: off)?|check(?: off)?|cross off|mark)\s+(.+?)(?:\s+(?:as\s+)?(?:done|complete|completed|off))?(?:\s+(?:in|on|from)\s+(?:my\s+|the\s+)?(.+?))?$/i);
+  if (m) {
+    const sp = m[2] ? findSpace(m[2]) : null;
+    const it = findItem(m[1], sp);
+    if (!it && !sp) return null;
+    return { intent: "capture", operations: [{ op: "spaceItem.toggle", input: { id: it ? `@${it.alias}` : undefined, done: true }, missing: it ? [] : ["id"] }], questions: it ? [] : ["Tick off which item?"] };
+  }
+  m = raw.match(/^(?:please\s+)?(?:remove|delete|take)\s+(.+?)\s+(?:off|from)\s+(?:my\s+|the\s+)?(.+?)(?:\s+list)?$/i);
+  if (m) {
+    const sp = findSpace(m[2]);
+    if (!sp) return null;
+    const it = findItem(m[1], sp);
+    return { intent: "capture", operations: [{ op: "spaceItem.delete", input: it ? { id: `@${it.alias}` } : {}, missing: it ? [] : ["id"] }], questions: it ? [] : [`Remove which item from ${sp.name}?`] };
+  }
+  return null;
+}
+
 /** "delete the expiry reminder", "remove Ali's passport expiry", "cancel Netflix", "delete the task X". */
 function parseDelete(text: string, ctx: AiContext): Interpretation | null {
   const t = text.toLowerCase().trim().replace(/[.!?]+$/, "");
@@ -338,6 +379,8 @@ export const offlineProvider: AiProvider = {
     if (!prevOps?.length) {
       const cmd = detectCommand(text);
       if (cmd) return { intent: "command", operations: [], questions: [], command: cmd };
+      const lst = parseSpaces(text, ctx);
+      if (lst) return lst;
       const del = parseDelete(text, ctx);
       if (del) return del;
       const nav = detectNavigation(text, ctx);

@@ -39,6 +39,7 @@ export const PAGES: PageDef[] = [
   { id: "projects", label: "Projects & tasks", href: "/projects", words: /\b(projects?|tasks?|to-?dos?)\b/ },
   { id: "fasts", label: "Make-up fasts", href: "/faith/fasts", words: /\b(fasts?|fasting|qada)\b/ },
   { id: "quran", label: "Quran class", href: "/quran", words: /\b(quran|class|homework)\b/ },
+  { id: "space", label: "Your space", href: "/more", words: /(?!)/ }, // one of the owner's own spaces (target = its alias)
   { id: "vault", label: "Vault", href: "/vault", words: /\b(vault|passwords?)\b/ },
   { id: "settings", label: "Settings", href: "/settings", words: /\b(settings|profile)\b/ },
   { id: "security", label: "Security settings", href: "/settings/security", words: /\b(security|passkeys?|face id|recovery codes?|authenticator)\b/ },
@@ -53,6 +54,12 @@ export type Suggestion = { label: string; detail?: string; href: string };
 export function buildNavigation(nav: NavRequest, ctx: AiContext, ids: Record<string, string>, owned: { personAlias: string | "me"; kind: string }[] = []): { suggestions: Suggestion[]; question?: string } {
   const page = PAGES.find((p) => p.id === nav.page);
   if (!page) return { suggestions: [], question: "Which page did you mean?" };
+  // one of the owner's own spaces
+  if (page.id === "space") {
+    const x = ctx.spaces.find((s) => `@${s.alias}` === nav.target || s.alias === nav.target);
+    if (x && ids[x.alias]) return { suggestions: [{ label: `Go to ${x.name}`, detail: x.section, href: `/spaces/${encodeURIComponent(ids[x.alias])}` }] };
+    return { question: "Which of your spaces?", suggestions: ctx.spaces.filter((s) => ids[s.alias]).map((s) => ({ label: `Go to ${s.name}`, detail: s.section, href: `/spaces/${encodeURIComponent(ids[s.alias])}` })) };
+  }
   // a specific application
   if (page.id === "applications" && nav.target) {
     const a = ctx.applications.find((x) => `@${x.alias}` === nav.target || x.alias === nav.target);
@@ -119,6 +126,10 @@ export function detectNavigation(text: string, ctx: AiContext): NavRequest | nul
   if (/\b(when|how much|how many|last time|did i|have i|what is|what's)\b/.test(t)) return null;
   const explicit = GO.test(t);
   const rest = t.replace(GO, "").trim();
+  const norm = (x: string) => x.toLowerCase().replace(/\b(my|the|list|page|space)\b/g, " ").replace(/\s+/g, " ").trim();
+  const exact = (ctx.spaces ?? []).find((s) => norm(rest) === norm(s.name));
+  const within = (ctx.spaces ?? []).find((s) => s.name.length > 2 && rest.includes(s.name.toLowerCase()));
+  if (exact || (explicit && within)) return { page: "space", target: `@${(exact ?? within)!.alias}` };
   // just a page name ("subscriptions", "my documents page") — nothing else said
   const bare = PAGES.find((p) => p.words.test(t) && !t.replace(new RegExp(p.words.source, "g"), " ").replace(/\b(my|the|page|section|screen|please|all)\b/g, " ").trim());
   if (!explicit && !bare) return null;

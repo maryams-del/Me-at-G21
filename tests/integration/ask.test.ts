@@ -70,4 +70,24 @@ describe("Ask AI (offline parser through the real service)", () => {
     const r = await interpret(owner, "open my period log", "text");
     expect(r).toEqual({ kind: "navigate", suggestions: [{ label: "Go to Period log", href: "/care/period" }] });
   });
+
+  it("knows your own spaces: go to one, add to one (asking which list when unclear), confirm-only", async () => {
+    const reading = await op("space.create", { name: "Reading list", section: "Me", glyph: "projects" });
+    await op("space.create", { name: "Groceries", section: "Home", glyph: "projects" });
+    const n = await interpret(owner, "open my reading list", "voice");
+    expect(n).toEqual({ kind: "navigate", suggestions: [{ label: "Go to Reading list", detail: "Me", href: `/spaces/${reading.id}` }] });
+
+    const r = await interpret(owner, "add Deep Work to my reading list", "voice");
+    if (r.kind !== "proposal") throw new Error("expected proposal");
+    expect(r.proposal.operations[0]).toMatchObject({ op: "spaceItem.add", valid: true });
+    expect(await getDb().select().from(t.customSpaceItems)).toHaveLength(0); // not yet
+    await confirm(owner, r.proposal.id, r.proposal.version, [{ position: 0, mode: "apply" }]);
+    const items = await getDb().select().from(t.customSpaceItems);
+    expect(items.map((i) => [i.text, i.spaceId])).toEqual([["Deep Work", reading.id]]);
+
+    const q = await interpret(owner, "add eggs to my list", "text");
+    if (q.kind !== "proposal") throw new Error("expected proposal");
+    expect(q.proposal.operations[0].choices[0]).toMatchObject({ question: "Which list?" });
+    expect(q.proposal.operations[0].choices[0].options.map((o) => o.label).sort()).toEqual(["Groceries", "Reading list"]);
+  });
 });

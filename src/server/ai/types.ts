@@ -50,6 +50,9 @@ export type AiContext = {
   subscriptions: { alias: string; name: string; status: string }[];
   achievements: { alias: string; title: string }[];
   hobbies: { alias: string; name: string }[];
+  /** the owner's own spaces (lists) and their open items */
+  spaces: { alias: string; name: string; section: string }[];
+  spaceItems: { alias: string; text: string; space: string; done: boolean }[];
 };
 
 export interface AiProvider {

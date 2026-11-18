@@ -10,7 +10,10 @@ const ctx: AiContext = {
   people: [{ alias: "f1", name: "Ali", relation: "child" }],
   applications: [{ alias: "a1", university: "KAUST", program: "MSc CS", status: "preparing" }],
   subscriptions: [{ alias: "s1", name: "Netflix", status: "active" }], achievements: [], hobbies: [],
+  spaces: [{ alias: "x1", name: "Reading list", section: "Me" }, { alias: "x2", name: "Groceries", section: "Home" }],
+  spaceItems: [{ alias: "i1", text: "Atomic Habits", space: "Reading list", done: false }, { alias: "i2", text: "Milk", space: "Groceries", done: false }],
 };
+const spaceIds = { x1: "33333333-3333-4333-8333-333333333333", x2: "44444444-4444-4444-8444-444444444444" };
 const ids = { f1: "11111111-1111-4111-8111-111111111111", a1: "22222222-2222-4222-8222-222222222222" };
 
 describe("Ask AI: going to a page", () => {
@@ -63,5 +66,21 @@ describe("Ask AI: deletes ask which one", () => {
   it("'cancel Netflix' records the cancellation; doesn't delete", async () => {
     const r = await offlineProvider.interpret({ text: "cancel Netflix", ctx });
     expect(r.operations[0]).toMatchObject({ op: "subscription.cancel", input: { id: "@s1", cancelledOn: "2026-11-19" } });
+  });
+});
+
+describe("Ask AI knows your own spaces", () => {
+  it("go to a space by its name", () => {
+    expect(detectNavigation("open my reading list", ctx)).toEqual({ page: "space", target: "@x1" });
+    expect(detectNavigation("groceries", ctx)).toEqual({ page: "space", target: "@x2" });
+    expect(buildNavigation({ page: "space", target: "@x2" }, ctx, spaceIds).suggestions).toEqual([{ label: "Go to Groceries", detail: "Home", href: `/spaces/${spaceIds.x2}` }]);
+  });
+  it("add, tick off and remove list items", async () => {
+    expect((await offlineProvider.interpret({ text: "add Deep Work to my reading list", ctx })).operations[0]).toMatchObject({ op: "spaceItem.add", input: { spaceId: "@x1", text: "Deep Work" } });
+    expect((await offlineProvider.interpret({ text: "put eggs on groceries", ctx })).operations[0]).toMatchObject({ op: "spaceItem.add", input: { spaceId: "@x2", text: "eggs" } });
+    expect((await offlineProvider.interpret({ text: "tick off atomic habits", ctx })).operations[0]).toMatchObject({ op: "spaceItem.toggle", input: { id: "@i1", done: true } });
+    expect((await offlineProvider.interpret({ text: "remove milk from groceries", ctx })).operations[0]).toMatchObject({ op: "spaceItem.delete", input: { id: "@i2" } });
+    // not a list: still a savings deposit / other capture
+    expect((await offlineProvider.interpret({ text: "add 100 SAR to savings", ctx })).operations[0]?.op).not.toBe("spaceItem.add");
   });
 });

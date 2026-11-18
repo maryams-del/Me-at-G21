@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import {
   aiProposals, aiProposalOperations, captureDrafts, routines, savingsGoals, debts, projects, tasks,
   charityPayments, periodCycles, expiryItems, people, mastersApplications, routineEvents, fastLedgerEvents,
-  savingsTransactions, auditEvents, homeworkTasks, subscriptions, achievements, hobbies, documents,
+  savingsTransactions, auditEvents, homeworkTasks, subscriptions, achievements, hobbies, documents, customSpaces, customSpaceItems,
 } from "@/db/schema";
 import { buildNavigation, buildCommand, type Suggestion } from "./actions";
 import { getOp, runOpInTx } from "../ops";
@@ -31,7 +31,7 @@ type AliasMap = Record<string, { id: string; kind: string; name: string }>;
 
 async function buildContext(ownerId: string, tz: string, currency: string): Promise<{ ctx: AiContext; aliases: AliasMap }> {
   const db = getDb();
-  const [rs, gs, ds, ps, ts, es, fam, apps, subs, achs, hobs] = await Promise.all([
+  const [rs, gs, ds, ps, ts, es, fam, apps, subs, achs, hobs, spcs, spItems] = await Promise.all([
     db.select({ id: routines.id, name: routines.name, kind: routines.kind }).from(routines).where(eq(routines.ownerId, ownerId)).orderBy(asc(routines.createdAt)),
     db.select({ id: savingsGoals.id, name: savingsGoals.name }).from(savingsGoals).where(and(eq(savingsGoals.ownerId, ownerId), eq(savingsGoals.status, "active"))).orderBy(asc(savingsGoals.createdAt)),
     db.select({ id: debts.id, counterparty: debts.counterparty, direction: debts.direction }).from(debts).where(and(eq(debts.ownerId, ownerId), eq(debts.status, "open"), isNull(debts.deletedAt))).orderBy(asc(debts.createdAt)),
@@ -43,7 +43,12 @@ async function buildContext(ownerId: string, tz: string, currency: string): Prom
     db.select({ id: subscriptions.id, name: subscriptions.name, status: subscriptions.status }).from(subscriptions).where(and(eq(subscriptions.ownerId, ownerId), isNull(subscriptions.deletedAt))).orderBy(asc(subscriptions.name)),
     db.select({ id: achievements.id, title: achievements.title }).from(achievements).where(and(eq(achievements.ownerId, ownerId), isNull(achievements.deletedAt))).orderBy(desc(achievements.createdAt)).limit(40),
     db.select({ id: hobbies.id, name: hobbies.name }).from(hobbies).where(and(eq(hobbies.ownerId, ownerId), isNull(hobbies.deletedAt))).orderBy(asc(hobbies.name)),
+    db.select({ id: customSpaces.id, name: customSpaces.name, section: customSpaces.section }).from(customSpaces).where(and(eq(customSpaces.ownerId, ownerId), isNull(customSpaces.deletedAt))).orderBy(asc(customSpaces.createdAt)),
+    db.select({ id: customSpaceItems.id, text: customSpaceItems.text, spaceId: customSpaceItems.spaceId, done: customSpaceItems.done }).from(customSpaceItems)
+      .innerJoin(customSpaces, and(eq(customSpaces.id, customSpaceItems.spaceId), isNull(customSpaces.deletedAt)))
+      .where(eq(customSpaceItems.ownerId, ownerId)).orderBy(asc(customSpaceItems.done), desc(customSpaceItems.createdAt)).limit(80),
   ]);
+  const spaceName = new Map(spcs.map((x) => [x.id, x.name]));
   const famName = new Map(fam.map((f) => [f.id, f.name]));
   const aliases: AliasMap = {};
   const tag = <T extends { id: string }>(prefix: string, rows: T[], kind: string, name: (r: T) => string) =>
@@ -66,6 +71,8 @@ async function buildContext(ownerId: string, tz: string, currency: string): Prom
       subscriptions: tag("s", subs, "subscription", (x) => x.name).map(({ alias, name, status }) => ({ alias, name, status })),
       achievements: tag("c", achs, "achievement", (x) => x.title).map(({ alias, title }) => ({ alias, title })),
       hobbies: tag("h", hobs, "hobby", (x) => x.name).map(({ alias, name }) => ({ alias, name })),
+      spaces: tag("x", spcs, "space", (x) => x.name).map(({ alias, name, section }) => ({ alias, name, section })),
+      spaceItems: tag("i", spItems, "spaceItem", (x) => `${x.text} (${spaceName.get(x.spaceId) ?? "list"})`).map(({ alias, text, spaceId, done }) => ({ alias, text, space: spaceName.get(spaceId) ?? "", done })),
     },
   };
 }
@@ -97,10 +104,10 @@ export type PreviewOp = {
 };
 
 /* Which record a missing id field refers to, so the preview can offer tap-to-choose options. */
-const ID_FIELD_KIND: Record<string, string> = { routineId: "routine", goalId: "goal", debtId: "debt", projectId: "project", taskId: "task", itemId: "expiry", personId: "person", applicationId: "application" };
-const OP_ID_KIND: Record<string, string> = { expiry: "expiry", subscription: "subscription", task: "task", routine: "routine", achievement: "achievement", hobby: "hobby", application: "application", debt: "debt" };
-const NOUN: Record<string, string> = { routine: "routine", goal: "savings goal", debt: "record", project: "project", task: "task", expiry: "expiry", person: "family member", application: "application", subscription: "subscription", achievement: "achievement", hobby: "hobby" };
-const STOP = new Set(["the", "a", "an", "my", "of", "for", "to", "and", "delete", "remove", "cancel", "please", "reminder", "expiry", "expiration", "it", "that", "this", "i", "want"]);
+const ID_FIELD_KIND: Record<string, string> = { spaceId: "space", routineId: "routine", goalId: "goal", debtId: "debt", projectId: "project", taskId: "task", itemId: "expiry", personId: "person", applicationId: "application" };
+const OP_ID_KIND: Record<string, string> = { spaceItem: "spaceItem", expiry: "expiry", subscription: "subscription", task: "task", routine: "routine", achievement: "achievement", hobby: "hobby", application: "application", debt: "debt" };
+const NOUN: Record<string, string> = { space: "list", spaceItem: "item", routine: "routine", goal: "savings goal", debt: "record", project: "project", task: "task", expiry: "expiry", person: "family member", application: "application", subscription: "subscription", achievement: "achievement", hobby: "hobby" };
+const STOP = new Set(["the", "a", "an", "my", "of", "for", "to", "and", "delete", "remove", "cancel", "please", "reminder", "expiry", "expiration", "it", "that", "this", "i", "want", "add", "put", "on", "in", "into", "from", "off", "tick", "list", "space"]);
 
 function choicesFor(opName: string, missing: string[], aliases: AliasMap, hint: string): Choice[] {
   const words = hint.toLowerCase().replace(/'s\b/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w));
