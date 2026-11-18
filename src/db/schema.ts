@@ -842,3 +842,29 @@ export const backups = pgTable("backups", {
   counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
   createdAt: createdAt(),
 }, (t) => [index("backups_owner_created_idx").on(t.ownerId, t.createdAt)]);
+
+/* ───────────── Custom spaces (owner-made sections with a simple list) ───────────── */
+
+export const customSpaces = pgTable("custom_spaces", {
+  id: id(),
+  ownerId: owner(),
+  name: text("name").notNull(),
+  description: text("description"),
+  /** A built-in group name ("Money", "Care", …) or a section the owner made up. */
+  section: text("section").notNull(),
+  glyph: text("glyph").notNull().default("projects"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [index("custom_spaces_owner_idx").on(t.ownerId)]);
+
+export const customSpaceItems = pgTable("custom_space_items", {
+  id: id(),
+  ownerId: owner(),
+  spaceId: uuid("space_id").notNull().references(() => customSpaces.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  done: boolean("done").notNull().default(false),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index("custom_space_items_space_idx").on(t.spaceId)]);

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { pageOwner, dashboardState } from "@/server/queries";
+import { pageOwner, dashboardState, customSpacesState } from "@/server/queries";
+import { isSpaceGlyph } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
 import { relDays, fmtShort } from "@/lib/format";
@@ -18,6 +19,7 @@ const TINT = {
 export default async function Dashboard() {
   const o = await pageOwner();
   const s = await dashboardState(o);
+  const mine = await customSpacesState(o);
   const tz = o.timezone;
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: tz }).format(new Date()));
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -68,6 +70,8 @@ export default async function Dashboard() {
     { key: "projects", name: "Projects", stat: nTasks ? `${nTasks} task${nTasks === 1 ? "" : "s"} due this week` : "Projects & tasks", href: "/projects", glyph: "projects", tint: TINT.moss },
     { key: "vault", name: "Vault", stat: "Locked away", href: "/vault", glyph: "vault", tint: TINT.sky },
     { key: "history", name: "History", stat: "Search everything", href: "/history", glyph: "history", tint: TINT.blush },
+    ...mine.map((c, i) => ({ key: c.space.id, name: c.space.name, stat: c.open ? `${c.open} to do` : c.done ? "All done" : c.space.section, href: `/spaces/${c.space.id}`,
+      glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const), tint: [TINT.moss, TINT.amber, TINT.sky, TINT.blush][i % 4] })),
   ];
 
   return (

@@ -40,6 +40,7 @@ export const TRASH: Record<string, Kind> = {
   hobby: { table: t.hobbies, label: "Hobby", name: (r) => String(r.name), href: "/education/achievements" },
   subscription: { table: t.subscriptions, label: "Subscription", name: (r) => String(r.name), href: "/finance/subscriptions", resync: syncSubscription },
   zakatEstimate: { table: t.zakatCalculations, label: "Zakat estimate", name: (r) => `Estimate as of ${r.evaluationDate}`, href: "/finance/zakat" },
+  space: { table: t.customSpaces, label: "Space", name: (r) => String(r.name), href: "/more" },
   zakatPayment: { table: t.zakatPayments, label: "Zakat payment", name: (r) => `${formatMoney(r.amountMinor as number, r.currency as string)} to ${r.recipient}`, href: "/finance/zakat" },
 };
 
