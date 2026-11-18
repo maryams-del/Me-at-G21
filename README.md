@@ -41,23 +41,27 @@ CHROME_PATH=/path/to/chrome npm run test:e2e # full journey with a virtual passk
 npm run lint                                 # TypeScript
 ```
 
-## Deploy (Vercel + Neon)
+## Deploy (Vercel + Neon): live project `me-at-g21`
 
-1. Create a Vercel project from this repo.
-2. In Vercel → Storage, add **Neon Postgres** (sets `DATABASE_URL`). Add a **private Blob** store for Phase B.
-3. Add env vars from `.env.example` with **fresh** production values. `APP_ORIGIN` must be your final HTTPS URL; passkeys are bound to that domain, so changing the domain later means re-enrolling passkeys.
-4. Run migrations once against production: `DATABASE_URL=… npm run db:migrate`.
-5. Open `/onboarding` on your iPhone in Safari and enroll. Then add a second passkey from your Mac.
+Production URL: **https://me-at-g21.vercel.app** (Vercel team "Project G21", region fra1 / Frankfurt). Every push to `main` deploys automatically, and each deploy applies database migrations (`vercel-build` script).
 
-### Reminder scheduler (important)
-Reminders are sent by `GET /api/cron/dispatch` with header `Authorization: Bearer $CRON_SECRET`, which needs to run **every minute**.
-- **Vercel Pro:** change the schedule in `vercel.json` to `* * * * *`.
-- **Vercel Hobby (free):** Vercel only allows a daily cron. Create a free per-minute job at a service such as cron-job.org pointing at `https://<your-app>/api/cron/dispatch` with that header. The daily Vercel cron stays as a fallback.
+1. **Database:** Vercel → project **me-at-g21** → **Storage** → **Create Database** → **Neon** (Serverless Postgres). Choose the **Free** plan and region **Frankfurt (eu-central-1)**, then connect it to the project for **Production** and **Preview**. This adds `DATABASE_URL`.
+2. **Secret keys:** open `https://me-at-g21.vercel.app/setup-keys`, press **Generate keys** (generated in your browser, never sent anywhere), and add each value in Vercel → Settings → Environment Variables as **Sensitive**, **Production**.
+3. **Email (needed for sign-up codes and security alerts):** create a free account at resend.com **with the same email as `OWNER_EMAIL`**, create an API key, and add it as `RESEND_API_KEY` (Sensitive). The default sender `onboarding@resend.dev` can only email the Resend account owner, which is fine for a single-owner app. Add your own domain later for better deliverability.
+4. **Redeploy:** Vercel → Deployments → ⋯ → Redeploy (or push any commit).
+5. **Enroll:** on your iPhone open `https://me-at-g21.vercel.app/onboarding` in Safari. Then add a second passkey from your Mac.
+6. **AI (optional):** add `ANTHROPIC_API_KEY` (Sensitive) and change `AI_PROVIDER` to `anthropic`, then redeploy. Until then the offline parser is used.
 
-Settings → Notifications shows when the scheduler last ran.
+Passkeys are tied to the domain `me-at-g21.vercel.app`. Moving to a different domain later means registering passkeys again.
 
-### iPhone notifications
-Safari → Share → **Add to Home Screen** → open the app from the Home Screen → Settings → Notifications → **Enable reminders** → **Send a test notification**.
+### Reminder timer (cron-job.org, free)
+1. Sign up at cron-job.org → **Create cronjob**.
+2. URL: `https://me-at-g21.vercel.app/api/cron/dispatch`. Schedule: **every minute**.
+3. **Advanced** → Headers → add `Authorization` with value `Bearer <your CRON_SECRET>`.
+4. Save, then **Test run**: expect HTTP 200. Settings → Notifications in the app shows "Last run".
+5. Turn on cron-job.org's failure notifications so you hear about it if the job starts failing.
+
+The daily Vercel cron in `vercel.json` is only a backstop.
 
 ## Backups and restore
 - Neon keeps point-in-time history (the window depends on plan); restore by branching from a timestamp in the Neon console.
