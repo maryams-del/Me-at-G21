@@ -1,7 +1,7 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { getDb, closeDb } from "../src/db";
+import { getDb, closeDb, databaseUrl } from "../src/db";
 
-if (!process.env.DATABASE_URL) {
+if (!databaseUrl()) {
   console.warn("DATABASE_URL not set — skipping migrations (add the Neon database to the Vercel project).");
 } else {
   await migrate(getDb(), { migrationsFolder: "./drizzle" });
