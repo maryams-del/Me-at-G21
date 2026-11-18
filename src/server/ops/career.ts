@@ -86,7 +86,7 @@ export const achievementUpdate = defineOp({
 });
 
 export const achievementDelete = defineOp({
-  name: "achievement.delete", module: "achievements", label: "Delete achievement", aiAllowed: false,
+  name: "achievement.delete", module: "achievements", label: "Delete achievement", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete achievement",
   async run(ctx, i) {
@@ -133,7 +133,7 @@ export const hobbyUpdate = defineOp({
 });
 
 export const hobbyDelete = defineOp({
-  name: "hobby.delete", module: "achievements", label: "Delete hobby", aiAllowed: false,
+  name: "hobby.delete", module: "achievements", label: "Delete hobby", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete hobby",
   async run(ctx, i) {

@@ -6,9 +6,9 @@ import { addVirtualAuthenticator, lastEmailCode } from "./helpers";
 const EMAIL = "owner@example.com";
 mkdirSync("test-results/screens", { recursive: true });
 /** Click until the dialog appears (dev-mode hydration can lag behind the first click). */
-async function openCapture(page: Page, name = "Log with AI") {
+async function openCapture(page: Page, name = "Ask AI") {
   await expect(async () => {
-    await page.getByRole("button", { name }).click();
+    await page.getByRole("button", { name, exact: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 60_000 });
 }
@@ -91,9 +91,9 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(page.getByText(/No donations in/)).toBeVisible();
     await page.goto("/");
     await openCapture(page);
-    const dlg = page.getByRole("dialog", { name: "Capture" });
+    const dlg = page.getByRole("dialog", { name: "Ask AI" });
     await dlg.getByLabel(/What happened/).fill("Donated 100 SAR via Ehsan, changed bedsheets, and finished a fast");
-    await dlg.getByRole("button", { name: "Preview" }).click();
+    await dlg.getByRole("button", { name: "Send" }).click();
     await expect(dlg.getByText("Log charity", { exact: true })).toBeVisible();
     await expect(dlg.getByText(/^Log routine/).first()).toBeVisible();
     await expect(dlg.getByText("Fast completed", { exact: true })).toBeVisible();
@@ -121,9 +121,9 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
   test("Test 10 — incomplete capture becomes a confirmed draft in Needs details", async () => {
     await page.goto("/");
     await openCapture(page);
-    const dlg = page.getByRole("dialog", { name: "Capture" });
+    const dlg = page.getByRole("dialog", { name: "Ask AI" });
     await dlg.getByLabel(/What happened/).fill("I lent Sara money yesterday, she will repay Friday");
-    await dlg.getByRole("button", { name: "Preview" }).click();
+    await dlg.getByRole("button", { name: "Send" }).click();
     await expect(dlg.getByText(/How much did you lend/)).toBeVisible();
     await expect(dlg.getByRole("button", { name: "Save 1 draft" })).toBeVisible();
     await dlg.getByRole("button", { name: "Save 1 draft" }).click();
@@ -141,10 +141,10 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
   test("Test 11 — grounded search", async () => {
     await page.goto("/history");
     await page.getByLabel("Ask about your records").fill("When did I last wax?");
-    await page.getByRole("button", { name: "Ask" }).click();
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
     await expect(page.getByText("I couldn't find any logged waxing.")).toBeVisible();
     await page.getByLabel("Ask about your records").fill("How much did I donate this year?");
-    await page.getByRole("button", { name: "Ask" }).click();
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
     await expect(page.getByText(/You donated 150 SAR between/)).toBeVisible();
   });
 
@@ -260,7 +260,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     // capture keeps it away from the AI
     await openCapture(page);
     await page.getByRole("dialog").getByLabel(/What happened/).fill("when did my period start?");
-    await page.getByRole("dialog").getByRole("button", { name: "Preview" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Send" }).click();
     await expect(page.getByRole("dialog").getByText(/nothing was sent to the AI/)).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
@@ -298,6 +298,43 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(page.getByText(/Estimate saved: 500 SAR\. This is not a payment\./)).toBeVisible();
     await expect(page.getByText("none yet")).toBeVisible();
     await shot(page, "23-zakat");
+  });
+
+  test("Ask AI: speak and it acts when you stop; go-to links; delete asks which one", async () => {
+    // a stand-in microphone: "hears" one phrase, then silence (the app must finish on its own)
+    await page.addInitScript(() => {
+      class FakeSR {
+        lang = ""; interimResults = false; continuous = false;
+        onresult: ((e: unknown) => void) | null = null; onend: (() => void) | null = null; onerror: ((e: unknown) => void) | null = null;
+        start() { setTimeout(() => this.onresult?.({ results: [[{ transcript: (window as unknown as { __say?: string }).__say ?? "save a backup" }]] }), 150); }
+        stop() { setTimeout(() => this.onend?.(), 20); }
+        abort() { this.stop(); }
+      }
+      (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition = FakeSR;
+    });
+    await page.goto("/");
+    await openCapture(page);
+    const dlg = page.getByRole("dialog", { name: "Ask AI" });
+    await dlg.getByRole("button", { name: "Speak" }).click();
+    // no Stop / Preview: it answers by itself after the pause
+    await expect(dlg.getByText("Which kind of backup?")).toBeVisible({ timeout: 10_000 });
+    await expect(dlg.getByText("Make a full backup")).toBeVisible();
+    await shot(page, "26-ask-ai-command");
+    await dlg.getByRole("button", { name: "Cancel" }).click();
+
+    await dlg.getByLabel(/What happened|find/).fill("open Ali's passport");
+    await dlg.getByRole("button", { name: "Send" }).click();
+    await expect(dlg.getByRole("button", { name: /Go to Documents & IDs: Ali's passport/ })).toBeVisible();
+    await dlg.getByRole("button", { name: /Go to Documents & IDs: Ali's passport/ }).click();
+    await expect(page).toHaveURL(/\/admin\/documents\?kind=passport&person=/);
+
+    await openCapture(page);
+    await dlg.getByLabel(/What happened|find/).fill("delete the expiry reminder");
+    await dlg.getByRole("button", { name: "Send" }).click();
+    await expect(dlg.getByText(/Delete (which expiry\?|the .* expiry for whom\?)/)).toBeVisible();
+    await shot(page, "27-ask-ai-delete");
+    await dlg.getByRole("button", { name: "Start over" }).click();
+    await dlg.getByRole("button", { name: "Close" }).click();
   });
 
   test("Data & backups: CSV, download a backup, check it, restore it with a passkey", async () => {
@@ -348,11 +385,11 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
   test("mobile layout", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Capture with AI" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask AI" }).first()).toBeVisible();
     await shot(page, "18-mobile-dashboard");
-    await openCapture(page, "Capture with AI");
+    await openCapture(page, "Ask AI");
     await page.getByRole("dialog").getByLabel(/What happened/).fill("I cleaned my makeup brushes today");
-    await page.getByRole("dialog").getByRole("button", { name: "Preview" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Send" }).click();
     await expect(page.getByRole("dialog").getByText("Log routine (adds it if new)", { exact: true })).toBeVisible();
     await shot(page, "19-mobile-capture");
     await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();

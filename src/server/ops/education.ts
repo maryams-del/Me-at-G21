@@ -132,7 +132,7 @@ export const applicationStatus = defineOp({
 });
 
 export const applicationDelete = defineOp({
-  name: "application.delete", module: "applications", label: "Delete application", aiAllowed: false,
+  name: "application.delete", module: "applications", label: "Delete application", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete application",
   async run(ctx, i) {

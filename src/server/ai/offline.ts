@@ -6,6 +6,7 @@
 import type { AiProvider, AiContext, Interpretation, ProposedOp, SearchQuery } from "./types";
 import { resolveDatePhrase } from "./dates";
 import { addDays } from "@/lib/time";
+import { detectNavigation, detectCommand } from "./actions";
 
 const NUM_WORDS: Record<string, number> = { one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5 };
 const CUR: Record<string, string> = { sar: "SAR", riyal: "SAR", riyals: "SAR", rial: "SAR", rials: "SAR", sr: "SAR", "﷼": "SAR", usd: "USD", dollars: "USD", dollar: "USD", $: "USD", aed: "AED", dirham: "AED", dirhams: "AED", eur: "EUR", euro: "EUR", euros: "EUR", gbp: "GBP", pounds: "GBP", pkr: "PKR", rupee: "PKR", rupees: "PKR", rs: "PKR" };
@@ -292,6 +293,40 @@ function applyCorrection(text: string, prev: ProposedOp[], ctx: AiContext): Prop
   return changed ? ops : null;
 }
 
+/** "delete the expiry reminder", "remove Ali's passport expiry", "cancel Netflix", "delete the task X". */
+function parseDelete(text: string, ctx: AiContext): Interpretation | null {
+  const t = text.toLowerCase().trim().replace(/[.!?]+$/, "");
+  const m = t.match(/^(?:please\s+)?(delete|remove|get rid of|stop tracking|cancel|erase)\b\s*(.*)$/);
+  if (!m) return null;
+  const verb = m[1], rest = m[2];
+  const hit = <T extends { alias: string }>(items: T[], name: (x: T) => string) => {
+    const words = rest.replace(/'s\b/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !["the", "my", "reminder", "expiry", "expiration", "for", "and"].includes(w));
+    const scored = items.map((x) => ({ x, s: words.filter((w) => name(x).toLowerCase().includes(w)).length })).filter((z) => z.s > 0);
+    const best = Math.max(0, ...scored.map((z) => z.s));
+    const top = scored.filter((z) => z.s === best).map((z) => z.x);
+    return top.length === 1 ? top[0] : null;
+  };
+  const one = (op: string, alias: string | null, question: string): Interpretation => ({
+    intent: "capture", operations: [{ op, input: alias ? { id: `@${alias}` } : {}, missing: alias ? [] : ["id"] }], questions: alias ? [] : [question],
+  });
+  if (/\b(expir\w*|passport|iqama|national id|id card|licen[cs]e|membership|bank card|card)\b/.test(rest)) {
+    const e = hit(ctx.expiries, (x) => x.label);
+    return one("expiry.delete", e?.alias ?? null, "Delete the expiry for which item, and whose?");
+  }
+  const sub = hit(ctx.subscriptions, (x) => x.name);
+  if (sub || /\bsubscription\b/.test(rest)) {
+    if (verb === "cancel") return { intent: "capture", operations: [{ op: "subscription.cancel", input: { id: sub ? `@${sub.alias}` : undefined, cancelledOn: ctx.today }, missing: sub ? [] : ["id"], assumed: ["cancelledOn"] }], questions: sub ? [] : ["Which subscription did you cancel?"] };
+    return one("subscription.delete", sub?.alias ?? null, "Delete which subscription?");
+  }
+  if (/\btask\b/.test(rest) || hit(ctx.tasks, (x) => x.title)) return one("task.delete", hit(ctx.tasks, (x) => x.title)?.alias ?? null, "Delete which task?");
+  if (/\broutine\b/.test(rest) || hit(ctx.routines, (x) => x.name)) return one("routine.delete", hit(ctx.routines, (x) => x.name)?.alias ?? null, "Delete which routine and its history?");
+  if (/\bhobb/.test(rest) || hit(ctx.hobbies, (x) => x.name)) return one("hobby.delete", hit(ctx.hobbies, (x) => x.name)?.alias ?? null, "Delete which hobby?");
+  if (/\b(achievement|award)\b/.test(rest) || hit(ctx.achievements, (x) => x.title)) return one("achievement.delete", hit(ctx.achievements, (x) => x.title)?.alias ?? null, "Delete which achievement?");
+  if (/\b(application|university)\b/.test(rest) || hit(ctx.applications, (x) => `${x.university} ${x.program}`)) return one("application.delete", hit(ctx.applications, (x) => `${x.university} ${x.program}`)?.alias ?? null, "Delete which application?");
+  if (/\b(debt|loan|lent|borrowed)\b/.test(rest) || hit(ctx.debts, (x) => x.counterparty)) return one("debt.delete", hit(ctx.debts, (x) => x.counterparty)?.alias ?? null, "Delete which lent/borrowed record?");
+  return { intent: "unsupported", operations: [], questions: ["What would you like to delete? For example: “delete Ali's passport expiry” or “delete the task Update portfolio”."] };
+}
+
 export const offlineProvider: AiProvider = {
   name: "offline",
   async interpret({ text, ctx, previous }) {
@@ -299,6 +334,14 @@ export const offlineProvider: AiProvider = {
     if (prevOps?.length) {
       const corrected = applyCorrection(text, prevOps, ctx);
       if (corrected) return { intent: "capture", operations: corrected, questions: [] };
+    }
+    if (!prevOps?.length) {
+      const cmd = detectCommand(text);
+      if (cmd) return { intent: "command", operations: [], questions: [], command: cmd };
+      const del = parseDelete(text, ctx);
+      if (del) return del;
+      const nav = detectNavigation(text, ctx);
+      if (nav) return { intent: "navigate", operations: [], questions: [], navigate: nav };
     }
     const search = !prevOps?.length ? parseSearch(text, ctx) : null;
     if (search) return { intent: "search", operations: [], questions: [], query: search };

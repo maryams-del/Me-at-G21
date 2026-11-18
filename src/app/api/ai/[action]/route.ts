@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser, rateLimit } from "@/server/auth/core";
-import { interpret, correct, confirm, cancel, loadPreview, searchDirect } from "@/server/ai/service";
+import { interpret, correct, confirm, cancel, loadPreview, searchDirect, choose } from "@/server/ai/service";
 import { json } from "@/server/http";
 import { AuthError } from "@/server/auth/core";
 
@@ -20,6 +20,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       case "correct": {
         const { proposalId, text } = z.object({ proposalId: z.string().uuid(), text: z.string().min(1).max(1000) }).parse(body);
         return { kind: "proposal", proposal: await correct(owner, proposalId, text) };
+      }
+      case "choose": {
+        const { proposalId, position, field, value } = z.object({ proposalId: z.string().uuid(), position: z.number().int().min(0).max(20), field: z.string().regex(/^[a-zA-Z]{1,40}$/), value: z.string().max(10) }).parse(body);
+        return { kind: "proposal", proposal: await choose(s.user, proposalId, position, field, value) };
       }
       case "confirm": {
         const { proposalId, version, selections } = z.object({

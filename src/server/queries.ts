@@ -150,11 +150,17 @@ export async function dashboardState(o: Owner) {
   const study = quran.events.find((e) => e.kind === "study");
   const nextClass = quran.occurrences.find((x) => cls && x.eventId === cls.id && x.status === "scheduled" && x.startsAt > now) ?? null;
   const openHomework = quran.homework.filter((h) => !h.completedAt);
+  // actual calendar items for the week (not reminders): every scheduled class/event occurrence
+  const weekEnd = addDays(todayLocal(o.timezone), 6);
+  const weekEvents = quran.occurrences
+    .filter((x) => x.status === "scheduled" && x.localDate >= todayLocal(o.timezone) && x.localDate <= weekEnd)
+    .map((x) => { const ev = quran.events.find((e) => e.id === x.eventId); return ev && !ev.paused ? { date: x.localDate, startsAt: x.startsAt, title: ev.title, kind: ev.kind } : null; })
+    .filter((x): x is NonNullable<typeof x> => !!x);
   const recentlyDone = recent.filter((r) => ["completed", "deposit", "settled", "first_use", "repayment"].includes(r.action)).slice(0, 5);
 
   return {
     today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), appDeadlines: apps.filter((r) => !r.overdue), routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
-    recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework,
+    recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework, weekEvents,
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },
     period: periodSettingsOf(o.settings).showOnDashboard ? await periodState(o) : null,

@@ -1,0 +1,20 @@
+/** Spreadsheet sections (shared by the export page, the server and Ask AI commands). */
+export const CSV_KEYS: { key: string; label: string; words: RegExp; private?: boolean }[] = [
+  { key: "charity", label: "Charity", words: /\b(charity|donations?)\b/ },
+  { key: "savings", label: "Savings deposits & withdrawals", words: /\b(savings? (deposits?|transactions?)|deposits?)\b/ },
+  { key: "savings-goals", label: "Savings goals", words: /\b(savings?( goals?)?)\b/ },
+  { key: "debts", label: "Lent & borrowed", words: /\b(lent|borrowed|debts?|loans?)\b/ },
+  { key: "subscriptions", label: "Subscriptions", words: /\bsubscriptions?\b/ },
+  { key: "zakat-payments", label: "Zakat payments", words: /\bzakat( payments?)?\b/ },
+  { key: "zakat-estimates", label: "Zakat estimates", words: /\bzakat (estimates?|calculations?)\b/ },
+  { key: "fasts", label: "Make-up fasts ledger", words: /\bfasts?\b/ },
+  { key: "routines", label: "Routine history", words: /\broutines?\b/ },
+  { key: "period", label: "Period log", words: /\bperiod\b/, private: true },
+  { key: "expiries", label: "Expiries", words: /\bexpir\w*\b/ },
+  { key: "documents", label: "Documents (details only)", words: /\bdocuments?\b/ },
+  { key: "applications", label: "Master's applications", words: /\bapplications?\b/ },
+  { key: "tasks", label: "Projects & tasks", words: /\b(projects?|tasks?)\b/ },
+  { key: "achievements", label: "Achievements", words: /\bachievements?\b/ },
+  { key: "hobbies", label: "Hobbies", words: /\bhobb\w*\b/ },
+  { key: "homework", label: "Quran class homework", words: /\b(homework|quran)\b/ },
+];

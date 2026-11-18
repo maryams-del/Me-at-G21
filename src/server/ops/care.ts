@@ -116,7 +116,7 @@ export const routineUpdate = defineOp({
 });
 
 export const routineDelete = defineOp({
-  name: "routine.delete", module: "routines", label: "Delete routine", aiAllowed: false,
+  name: "routine.delete", module: "routines", label: "Delete routine", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete routine and its history",
   async run(ctx, i) {

@@ -141,7 +141,7 @@ export const expiryRenew = defineOp({
 });
 
 export const expiryDelete = defineOp({
-  name: "expiry.delete", module: "expiries", label: "Delete expiry", aiAllowed: false,
+  name: "expiry.delete", module: "expiries", label: "Delete expiry", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete item",
   async run(ctx, i) {

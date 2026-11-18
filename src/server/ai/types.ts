@@ -17,8 +17,15 @@ export type SearchQuery =
   | { type: "next_class" }
   | { type: "text"; q: string };
 
+/** "Go to <page>": only catalogue page ids; person/target are context aliases ("@f1") or "me". */
+export type NavRequest = { page: string; q?: string; person?: string; kind?: string; year?: string; target?: string };
+/** App commands from a fixed catalogue; they always wait for Proceed. */
+export type CommandRequest = { command: string; module?: string };
+
 export type Interpretation = {
-  intent: "capture" | "search" | "unsupported";
+  intent: "capture" | "search" | "navigate" | "command" | "unsupported";
+  navigate?: NavRequest;
+  command?: CommandRequest;
   operations: ProposedOp[];
   questions: string[];
   query?: SearchQuery;
@@ -40,6 +47,9 @@ export type AiContext = {
   /** family members (first names only) for "Ali's passport" */
   people: { alias: string; name: string; relation: string }[];
   applications: { alias: string; university: string; program: string; status: string }[];
+  subscriptions: { alias: string; name: string; status: string }[];
+  achievements: { alias: string; title: string }[];
+  hobbies: { alias: string; name: string }[];
 };
 
 export interface AiProvider {

@@ -121,7 +121,7 @@ export const taskComplete = defineOp({
 });
 
 export const taskDelete = defineOp({
-  name: "task.delete", module: "projects", label: "Delete task", aiAllowed: false,
+  name: "task.delete", module: "projects", label: "Delete task", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete task",
   async run(ctx, i) {

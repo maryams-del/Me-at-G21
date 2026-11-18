@@ -297,7 +297,7 @@ export const debtAdjust = defineOp({
 });
 
 export const debtDelete = defineOp({
-  name: "debt.delete", module: "debts", label: "Delete lent/borrowed record", aiAllowed: false,
+  name: "debt.delete", module: "debts", label: "Delete lent/borrowed record", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete record",
   async run(ctx, i) {

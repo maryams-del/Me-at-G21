@@ -46,6 +46,7 @@ export default async function DataPage() {
         <p className="t-small mt-4"><a href="/api/export" download>Everything as one JSON file</a> <span className="text-ink-2">(for moving to another app)</span></p>
       </Section>
 
+      <div id="full-backup" className="scroll-mt-6" />
       <Section title="Full backup (with your documents)">
         <div className="panel p-4 grid gap-4">
           <p className="t-small prose-w">Everything in one file: all your records <strong>and</strong> every uploaded document, locked with a password you choose. Your browser builds it, so the password never leaves this device. It doesn't depend on anything stored on the server, so it can be restored even into a brand-new installation of the app.</p>

@@ -4,8 +4,9 @@ import { getDb } from "@/db";
 import {
   aiProposals, aiProposalOperations, captureDrafts, routines, savingsGoals, debts, projects, tasks,
   charityPayments, periodCycles, expiryItems, people, mastersApplications, routineEvents, fastLedgerEvents,
-  savingsTransactions, auditEvents, homeworkTasks,
+  savingsTransactions, auditEvents, homeworkTasks, subscriptions, achievements, hobbies, documents,
 } from "@/db/schema";
+import { buildNavigation, buildCommand, type Suggestion } from "./actions";
 import { getOp, runOpInTx } from "../ops";
 import { UserError } from "../audit";
 import { fastBalance, routineAnchor, routineDue } from "../ops/care";
@@ -30,7 +31,7 @@ type AliasMap = Record<string, { id: string; kind: string; name: string }>;
 
 async function buildContext(ownerId: string, tz: string, currency: string): Promise<{ ctx: AiContext; aliases: AliasMap }> {
   const db = getDb();
-  const [rs, gs, ds, ps, ts, es, fam, apps] = await Promise.all([
+  const [rs, gs, ds, ps, ts, es, fam, apps, subs, achs, hobs] = await Promise.all([
     db.select({ id: routines.id, name: routines.name, kind: routines.kind }).from(routines).where(eq(routines.ownerId, ownerId)).orderBy(asc(routines.createdAt)),
     db.select({ id: savingsGoals.id, name: savingsGoals.name }).from(savingsGoals).where(and(eq(savingsGoals.ownerId, ownerId), eq(savingsGoals.status, "active"))).orderBy(asc(savingsGoals.createdAt)),
     db.select({ id: debts.id, counterparty: debts.counterparty, direction: debts.direction }).from(debts).where(and(eq(debts.ownerId, ownerId), eq(debts.status, "open"), isNull(debts.deletedAt))).orderBy(asc(debts.createdAt)),
@@ -39,6 +40,9 @@ async function buildContext(ownerId: string, tz: string, currency: string): Prom
     db.select({ id: expiryItems.id, label: expiryItems.label, kind: expiryItems.kind, personId: expiryItems.personId }).from(expiryItems).where(and(eq(expiryItems.ownerId, ownerId), isNull(expiryItems.deletedAt), eq(expiryItems.status, "active"))).orderBy(asc(expiryItems.expiresOn)),
     db.select({ id: people.id, name: people.name, relation: people.relation }).from(people).where(and(eq(people.ownerId, ownerId), isNull(people.deletedAt))).orderBy(asc(people.createdAt)),
     db.select({ id: mastersApplications.id, university: mastersApplications.university, program: mastersApplications.program, status: mastersApplications.status }).from(mastersApplications).where(and(eq(mastersApplications.ownerId, ownerId), isNull(mastersApplications.deletedAt))).orderBy(asc(mastersApplications.createdAt)),
+    db.select({ id: subscriptions.id, name: subscriptions.name, status: subscriptions.status }).from(subscriptions).where(and(eq(subscriptions.ownerId, ownerId), isNull(subscriptions.deletedAt))).orderBy(asc(subscriptions.name)),
+    db.select({ id: achievements.id, title: achievements.title }).from(achievements).where(and(eq(achievements.ownerId, ownerId), isNull(achievements.deletedAt))).orderBy(desc(achievements.createdAt)).limit(40),
+    db.select({ id: hobbies.id, name: hobbies.name }).from(hobbies).where(and(eq(hobbies.ownerId, ownerId), isNull(hobbies.deletedAt))).orderBy(asc(hobbies.name)),
   ]);
   const famName = new Map(fam.map((f) => [f.id, f.name]));
   const aliases: AliasMap = {};
@@ -59,6 +63,9 @@ async function buildContext(ownerId: string, tz: string, currency: string): Prom
       expiries: tag("e", es, "expiry", (e) => (e.personId ? `${famName.get(e.personId) ?? ""}'s ${e.label}` : e.label)).map(({ alias, label, kind, personId }) => ({ alias, label: (personId ? `${famName.get(personId) ?? ""}'s ${label}` : label).replace(/\d[\d\s-]{4,}\d/g, "•••"), kind })),
       people: tag("f", fam, "person", (f) => f.name).map(({ alias, name, relation }) => ({ alias, name, relation })),
       applications: tag("a", apps, "application", (x) => `${x.university}, ${x.program}`).map(({ alias, university, program, status }) => ({ alias, university, program, status })),
+      subscriptions: tag("s", subs, "subscription", (x) => x.name).map(({ alias, name, status }) => ({ alias, name, status })),
+      achievements: tag("c", achs, "achievement", (x) => x.title).map(({ alias, title }) => ({ alias, title })),
+      hobbies: tag("h", hobs, "hobby", (x) => x.name).map(({ alias, name }) => ({ alias, name })),
     },
   };
 }
@@ -82,11 +89,38 @@ function toAliasForm(payload: Record<string, unknown>, aliases: AliasMap) {
   return Object.fromEntries(Object.entries(payload).map(([k, v]) => [k, typeof v === "string" && rev[v] ? `@${rev[v]}` : v]));
 }
 
+export type Choice = { field: string; question: string; options: { label: string; value: string }[] };
 export type PreviewOp = {
   position: number; op: string; label: string; module: string; summary: string;
   input: Record<string, unknown>; display: Record<string, string>; missing: string[]; assumed: string[];
-  valid: boolean; error: string | null; status: string;
+  valid: boolean; error: string | null; status: string; choices: Choice[];
 };
+
+/* Which record a missing id field refers to, so the preview can offer tap-to-choose options. */
+const ID_FIELD_KIND: Record<string, string> = { routineId: "routine", goalId: "goal", debtId: "debt", projectId: "project", taskId: "task", itemId: "expiry", personId: "person", applicationId: "application" };
+const OP_ID_KIND: Record<string, string> = { expiry: "expiry", subscription: "subscription", task: "task", routine: "routine", achievement: "achievement", hobby: "hobby", application: "application", debt: "debt" };
+const NOUN: Record<string, string> = { routine: "routine", goal: "savings goal", debt: "record", project: "project", task: "task", expiry: "expiry", person: "family member", application: "application", subscription: "subscription", achievement: "achievement", hobby: "hobby" };
+const STOP = new Set(["the", "a", "an", "my", "of", "for", "to", "and", "delete", "remove", "cancel", "please", "reminder", "expiry", "expiration", "it", "that", "this", "i", "want"]);
+
+function choicesFor(opName: string, missing: string[], aliases: AliasMap, hint: string): Choice[] {
+  const words = hint.toLowerCase().replace(/'s\b/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w));
+  const out: Choice[] = [];
+  for (const field of missing) {
+    const kind = field === "id" ? OP_ID_KIND[opName.split(".")[0]] : ID_FIELD_KIND[field];
+    if (!kind) continue;
+    const all = Object.entries(aliases).filter(([, v]) => v.kind === kind);
+    if (!all.length) continue;
+    const score = (name: string) => words.filter((w) => name.toLowerCase().includes(w)).length;
+    const best = Math.max(0, ...all.map(([, v]) => score(v.name)));
+    const picked = (best > 0 ? all.filter(([, v]) => score(v.name) === best) : all).slice(0, 8);
+    const verb = opName.endsWith(".delete") ? "Delete which" : opName.endsWith(".cancel") ? "Which" : "Which";
+    // "Ali's Passport" vs "Passport": ask whose
+    const bases = new Set(picked.map(([, v]) => v.name.replace(/^.*'s\s+/, "").toLowerCase()));
+    const question = kind === "expiry" && picked.length > 1 && bases.size === 1 ? `${opName.endsWith(".delete") ? "Delete the" : "The"} ${[...bases][0]} expiry for whom?` : `${verb} ${NOUN[kind] ?? kind}?`;
+    out.push({ field, question, options: picked.map(([a, v]) => ({ label: kind === "expiry" && !/'s\s/.test(v.name) ? `Yours: ${v.name}` : v.name, value: `@${a}` })) });
+  }
+  return out;
+}
 
 function describe(op: ProposedOp & { input: Record<string, unknown> }, aliases: AliasMap) {
   const def = getOp(op.op);
@@ -109,7 +143,7 @@ function describe(op: ProposedOp & { input: Record<string, unknown> }, aliases: 
   return { def, display, valid: true, error: null, summary, data: parsed.data };
 }
 
-async function storeVersion(proposalId: string, version: number, ops: ProposedOp[], aliases: AliasMap) {
+async function storeVersion(proposalId: string, version: number, ops: ProposedOp[], aliases: AliasMap, hint = "") {
   const db = getDb();
   const rows = ops.map((o, i) => {
     const { input, missing } = resolveAliases(o, aliases);
@@ -117,7 +151,7 @@ async function storeVersion(proposalId: string, version: number, ops: ProposedOp
     const missingAll = [...new Set([...missing, ...((d as { fields?: string[] }).fields ?? [])])];
     return {
       proposalId, version, position: i, module: d.def?.module ?? "unknown", action: o.op,
-      payload: { input, assumed: o.assumed ?? [], display: d.display, valid: d.valid, error: d.error },
+      payload: { input, assumed: o.assumed ?? [], display: d.display, valid: d.valid, error: d.error, choices: d.valid ? [] : choicesFor(o.op, missingAll, aliases, hint) },
       missingFields: d.valid ? [] : missingAll, summary: d.summary,
     };
   });
@@ -130,8 +164,8 @@ export async function loadPreview(ownerId: string, proposalId: string) {
   if (!p) throw new UserError("Proposal not found");
   const ops = await db.select().from(aiProposalOperations).where(and(eq(aiProposalOperations.proposalId, p.id), eq(aiProposalOperations.version, p.version))).orderBy(asc(aiProposalOperations.position));
   const preview: PreviewOp[] = ops.map((o) => {
-    const pl = o.payload as { input: Record<string, unknown>; assumed: string[]; display: Record<string, string>; valid: boolean; error: string | null };
-    return { position: o.position, op: o.action, label: getOp(o.action)?.label ?? o.action, module: o.module, summary: o.summary, input: pl.input, display: pl.display, missing: o.missingFields, assumed: pl.assumed, valid: pl.valid, error: pl.error, status: o.status };
+    const pl = o.payload as { input: Record<string, unknown>; assumed: string[]; display: Record<string, string>; valid: boolean; error: string | null; choices?: Choice[] };
+    return { position: o.position, op: o.action, label: getOp(o.action)?.label ?? o.action, module: o.module, summary: o.summary, input: pl.input, display: pl.display, missing: o.missingFields, assumed: pl.assumed, valid: pl.valid, error: pl.error, status: o.status, choices: pl.choices ?? [] };
   });
   return {
     id: p.id, version: p.version, status: p.status, inputText: p.inputText, questions: p.questions, provider: p.provider,
@@ -160,6 +194,8 @@ async function privatePeriodAnswer(owner: { id: string; timezone: string }, text
 export async function interpret(owner: { id: string; timezone: string; defaultCurrency: string }, text: string, mode: "text" | "voice") {
   const clean = text.trim().slice(0, 2000);
   if (!clean) throw new UserError("Type or say something first");
+  // "open the period log" is just navigation, answered locally (period text never goes to the provider)
+  if (/\bperiod\b/i.test(clean) && /^(?:please\s+)?(go to|open|show( me)?|take me to)\b/i.test(clean)) return { kind: "navigate" as const, suggestions: [{ label: "Go to Period log", href: "/care/period" }] };
   const priv = await privatePeriodAnswer(owner, clean, true);
   if (priv) return { kind: "search" as const, ...priv };
   const { ctx, aliases } = await buildContext(owner.id, owner.timezone, owner.defaultCurrency);
@@ -174,14 +210,54 @@ export async function interpret(owner: { id: string; timezone: string; defaultCu
   if (out.intent === "search" && out.query) {
     return { kind: "search" as const, ...(await runSearch(owner, out.query, aliases)) };
   }
+  if (out.intent === "navigate" && out.navigate) return { kind: "navigate" as const, ...(await navigation(owner.id, out.navigate, ctx, aliases)) };
+  if (out.intent === "command" && out.command) return { kind: "command" as const, ...buildCommand(out.command) };
   const db = getDb();
   const [p] = await db.insert(aiProposals).values({
     ownerId: owner.id, inputText: clean, inputMode: mode, provider: provider.name, questions: out.questions,
     history: [{ role: "user", text: clean }], result: { aliases },
     expiresAt: new Date(Date.now() + PROPOSAL_TTL_MIN * 60_000),
   }).returning({ id: aiProposals.id });
-  await storeVersion(p.id, 1, out.operations, aliases);
+  await storeVersion(p.id, 1, out.operations, aliases, clean);
   return { kind: "proposal" as const, proposal: await loadPreview(owner.id, p.id) };
+}
+
+/** Build "Go to …" links from a page request; asks "whose?" when several people have that kind of item. */
+async function navigation(ownerId: string, nav: import("./types").NavRequest, ctx: AiContext, aliases: AliasMap): Promise<{ question?: string; suggestions: Suggestion[] }> {
+  const ids = Object.fromEntries(Object.entries(aliases).map(([a, v]) => [a, v.id]));
+  if (!nav.page) {
+    return { question: `I couldn't find a page for “${(nav.q ?? "").slice(0, 60)}”. Here are the main ones:`, suggestions: [
+      { label: "Go to Today", href: "/" }, { label: "Go to Documents & IDs", href: "/admin/documents" }, { label: "Go to Expiries", href: "/admin/expiries" },
+      { label: "Go to Charity", href: "/finance/charity" }, { label: "Go to Routines", href: "/care/routines" }, { label: "Go to Settings", href: "/settings" },
+    ] };
+  }
+  let owned: { personAlias: string; kind: string }[] = [];
+  if (nav.kind && (nav.page === "documents" || nav.page === "expiries")) {
+    const personAlias = Object.fromEntries(Object.entries(aliases).filter(([, v]) => v.kind === "person").map(([a, v]) => [v.id, `@${a}`]));
+    const rows = nav.page === "documents"
+      ? await getDb().select({ kind: documents.kind, personId: documents.personId }).from(documents).where(and(eq(documents.ownerId, ownerId), isNull(documents.deletedAt)))
+      : await getDb().select({ kind: expiryItems.kind, personId: expiryItems.personId }).from(expiryItems).where(and(eq(expiryItems.ownerId, ownerId), isNull(expiryItems.deletedAt)));
+    owned = rows.map((r) => ({ kind: r.kind, personAlias: r.personId ? personAlias[r.personId] ?? "" : "me" })).filter((r) => r.personAlias);
+  }
+  return buildNavigation(nav, ctx, ids, owned);
+}
+
+/** Tap-to-choose: fill one field of one operation (e.g. which expiry to delete) → new preview version. Writes nothing else. */
+export async function choose(owner: { id: string }, proposalId: string, position: number, field: string, value: string) {
+  const p = await pendingProposal(owner.id, proposalId);
+  const aliases = (p.result as { aliases: AliasMap }).aliases;
+  if (!/^@[a-z]\d{1,3}$/.test(value) || !aliases[value.slice(1)]) throw new UserError("That option isn't available any more");
+  const current = await getDb().select().from(aiProposalOperations).where(and(eq(aiProposalOperations.proposalId, p.id), eq(aiProposalOperations.version, p.version))).orderBy(asc(aiProposalOperations.position));
+  const ops: ProposedOp[] = current.map((o) => {
+    const pl = o.payload as { input: Record<string, unknown>; assumed: string[] };
+    const input = toAliasForm(pl.input, aliases);
+    if (o.position === position) input[field] = value;
+    return { op: o.action, input, missing: o.position === position ? o.missingFields.filter((m) => m !== field) : o.missingFields, assumed: pl.assumed };
+  });
+  const version = p.version + 1;
+  await storeVersion(p.id, version, ops, aliases, p.inputText);
+  await getDb().update(aiProposals).set({ version, questions: [], updatedAt: new Date(), expiresAt: new Date(Date.now() + PROPOSAL_TTL_MIN * 60_000) }).where(eq(aiProposals.id, p.id));
+  return loadPreview(owner.id, p.id);
 }
 
 async function pendingProposal(ownerId: string, proposalId: string) {
@@ -216,7 +292,7 @@ export async function correct(owner: { id: string; timezone: string; defaultCurr
     throw new UserError("The assistant is unavailable right now. Your preview is unchanged.");
   }
   const version = p.version + 1;
-  await storeVersion(p.id, version, out.operations, aliases);
+  await storeVersion(p.id, version, out.operations, aliases, `${p.inputText} ${text}`);
   await getDb().update(aiProposals).set({
     version, questions: out.questions, updatedAt: new Date(),
     history: [...p.history, { role: "user", text: text.slice(0, 1000) }],

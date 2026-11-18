@@ -5,10 +5,17 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "./api";
 import { Glyph } from "./Glyph";
 
+type Choice = { field: string; question: string; options: { label: string; value: string }[] };
 type PreviewOp = {
   position: number; op: string; label: string; module: string; summary: string;
-  display: Record<string, string>; missing: string[]; assumed: string[]; valid: boolean; error: string | null;
+  display: Record<string, string>; missing: string[]; assumed: string[]; valid: boolean; error: string | null; choices: Choice[];
 };
+type Suggestion = { label: string; detail?: string; href: string };
+type NavResult = { question?: string; suggestions: Suggestion[] };
+type CommandOption = { label: string; description: string; action: { type: "download" | "navigate"; href: string }; confirm?: string };
+type CommandResult = { question?: string; options: CommandOption[] };
+type CaptureResponse = { kind: "proposal"; proposal: Proposal } | ({ kind: "search" } & SearchResult) | ({ kind: "navigate" } & NavResult) | ({ kind: "command" } & CommandResult);
+const SILENCE_MS = 1600;
 type Proposal = { id: string; version: number; status: string; questions: string[]; operations: PreviewOp[]; provider: string };
 type SearchResult = { answer: string; sources: { label: string; date: string; href: string }[]; calculation?: string };
 type Mode = "apply" | "draft" | "skip";
@@ -27,7 +34,7 @@ const MODULE_GLYPH: Record<string, Parameters<typeof Glyph>[0]["kind"]> = {
 };
 
 // Minimal typing for the Web Speech API (not in TS DOM lib everywhere)
-type SR = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
+type SR = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; abort(): void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
 
 export function CaptureSheet({ open, onClose, initialText = "", startVoice = false }: { open: boolean; onClose: () => void; initialText?: string; startVoice?: boolean }) {
   const router = useRouter();
@@ -37,17 +44,23 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [search, setSearch] = useState<SearchResult | null>(null);
+  const [nav, setNav] = useState<NavResult | null>(null);
+  const [command, setCommand] = useState<CommandResult | null>(null);
   const [choices, setChoices] = useState<Record<number, Mode>>({});
   const [fix, setFix] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const recRef = useRef<SR | null>(null);
+  const textRef = useRef(initialText);
+  const fixRef = useRef("");
+  useEffect(() => { textRef.current = text; }, [text]);
+  useEffect(() => { fixRef.current = fix; }, [fix]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 30); }, [open]);
   // Opened from a microphone button: start dictation straight away.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (open && startVoice) toggleMic(); }, [open, startVoice]);
+  useEffect(() => { if (open && startVoice) listen("main"); else if (open && initialText.trim()) send(initialText, "text"); }, [open, startVoice]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -56,37 +69,65 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
   });
 
   function reset() {
-    setText(""); setProposal(null); setSearch(null); setChoices({}); setFix(""); setError(null); setMode("text"); setVoiceNote(null);
+    setText(""); setProposal(null); setSearch(null); setNav(null); setCommand(null); setChoices({}); setFix(""); setError(null); setMode("text"); setVoiceNote(null);
   }
   async function close() {
-    recRef.current?.stop();
+    recRef.current?.abort();
     if (proposal && proposal.status === "pending") api("/api/ai/cancel", { proposalId: proposal.id }).catch(() => {});
     reset(); onClose();
   }
 
+  const isDelete = (o: PreviewOp) => /\.(delete|cancel)$/.test(o.op);
   function adopt(p: Proposal) {
     setProposal(p);
-    setChoices(Object.fromEntries(p.operations.map((o) => [o.position, o.valid ? "apply" : "draft"])));
+    // deletions are never "saved for later"; anything else incomplete defaults to Needs details
+    setChoices(Object.fromEntries(p.operations.map((o) => [o.position, o.valid ? "apply" : isDelete(o) ? "skip" : "draft"])));
   }
 
-  async function send() {
-    if (!text.trim()) return;
-    setBusy(true); setError(null); setSearch(null);
+  async function send(override?: string, how: "text" | "voice" = mode) {
+    const said = (override ?? textRef.current).trim();
+    if (!said) return;
+    setBusy(true); setError(null); setSearch(null); setNav(null); setCommand(null);
     try {
-      const r = await api<{ kind: "proposal"; proposal: Proposal } | ({ kind: "search" } & SearchResult)>("/api/ai/capture", { text, mode });
-      if (r.kind === "search") setSearch(r); else adopt(r.proposal);
+      const r = await api<CaptureResponse>("/api/ai/capture", { text: said, mode: how });
+      if (r.kind === "search") setSearch(r);
+      else if (r.kind === "navigate") setNav(r);
+      else if (r.kind === "command") setCommand(r);
+      else adopt(r.proposal);
     } catch (e) { setError(e instanceof ApiError ? e.message : "The assistant didn't respond. Nothing was saved."); }
     finally { setBusy(false); }
   }
 
-  async function applyFix() {
-    if (!proposal || !fix.trim()) return;
+  async function applyFix(override?: string) {
+    const said = (override ?? fixRef.current).trim();
+    if (!proposal || !said) return;
     setBusy(true); setError(null);
     try {
-      const r = await api<{ proposal: Proposal }>("/api/ai/correct", { proposalId: proposal.id, text: fix });
+      const r = await api<{ proposal: Proposal }>("/api/ai/correct", { proposalId: proposal.id, text: said });
       adopt(r.proposal); setFix("");
     } catch (e) { setError(e instanceof ApiError ? e.message : "Couldn't update the preview."); }
     finally { setBusy(false); }
+  }
+
+  async function pick(o: PreviewOp, c: Choice, value: string) {
+    if (!proposal) return;
+    setBusy(true); setError(null);
+    try {
+      const r = await api<{ proposal: Proposal }>("/api/ai/choose", { proposalId: proposal.id, position: o.position, field: c.field, value });
+      adopt(r.proposal);
+    } catch (e) { setError(e instanceof ApiError ? e.message : "Couldn't update the preview."); }
+    finally { setBusy(false); }
+  }
+
+  function go(href: string) { reset(); onClose(); router.push(href); }
+
+  function runCommand(c: CommandOption) {
+    if (c.confirm && !window.confirm(c.confirm)) return;
+    if (c.action.type === "navigate") return go(c.action.href);
+    const a = Object.assign(document.createElement("a"), { href: c.action.href, download: "" });
+    document.body.appendChild(a); a.click(); a.remove();
+    toast(`${c.label.replace(/^Download /, "Downloading ")}…`);
+    reset(); onClose();
   }
 
   async function confirm() {
@@ -103,24 +144,47 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
     finally { setBusy(false); }
   }
 
-  function toggleMic() {
+  /**
+   * Hands-free dictation: keeps listening while you talk and, once you've paused for a moment,
+   * stops by itself and sends what you said (to the main box, or as a correction to the preview).
+   */
+  function listen(target: "main" | "fix") {
     if (listening) { recRef.current?.stop(); return; }
     const W = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
     const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition;
     if (!Ctor) { setVoiceNote("Voice input isn't available in this browser. Tap the microphone on your keyboard to dictate instead."); inputRef.current?.focus(); return; }
     const rec = new Ctor();
-    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = false;
-    const base = text ? text.trimEnd() + " " : "";
+    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = true;
+    const base = target === "main" ? textRef.current.trimEnd() : "";
+    let heard = "";
+    let silence: ReturnType<typeof setTimeout> | null = null;
+    let failed = false;
+    const arm = () => { if (silence) clearTimeout(silence); silence = setTimeout(() => rec.stop(), SILENCE_MS); };
     rec.onresult = (e) => {
       let t = "";
       for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      setText(base + t); setMode("voice");
+      heard = t;
+      const full = (base ? base + " " : "") + t;
+      if (target === "main") { setText(full); textRef.current = full; setMode("voice"); } else { setFix(t); fixRef.current = t; }
+      arm();
     };
-    rec.onerror = (e) => setVoiceNote(e.error === "not-allowed" ? "Microphone permission was denied. You can allow it in your browser settings." : "Voice input stopped. You can keep typing.");
-    rec.onend = () => { setListening(false); setVoiceNote("Check the transcript, edit anything, then send."); };
+    rec.onerror = (e) => {
+      failed = true;
+      setVoiceNote(e.error === "not-allowed" ? "Microphone permission was denied. You can allow it in your browser settings." : e.error === "no-speech" ? "I didn't hear anything. Tap the microphone and try again." : "Voice input stopped. You can type instead.");
+    };
+    rec.onend = () => {
+      if (silence) clearTimeout(silence);
+      setListening(false);
+      if (failed) return;
+      if (!heard.trim()) { setVoiceNote("I didn't catch that. Tap the microphone and try again."); return; }
+      setVoiceNote(null);
+      if (target === "main") send(textRef.current, "voice"); else applyFix(fixRef.current);
+    };
     recRef.current = rec;
-    setVoiceNote(null);
+    setVoiceNote("Listening… I'll go ahead when you stop talking.");
     rec.start(); setListening(true);
+    arm(); // stops if nothing at all is said
+    if (silence) { clearTimeout(silence); silence = setTimeout(() => rec.stop(), 8000); }
   }
 
   if (!open) return null;
@@ -133,31 +197,67 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
       <div className="sheet-backdrop" onClick={close} />
       <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="capture-title">
         <div className="flex items-center justify-between gap-3 px-5 py-4 rule-b">
-          <h2 id="capture-title" className="t-h2 flex items-center gap-2"><Glyph kind="ai" accent="var(--mustard)" size={22} /> Capture</h2>
+          <h2 id="capture-title" className="t-h2 flex items-center gap-2"><Glyph kind="ai" accent="var(--mustard)" size={22} /> Ask AI</h2>
           <button className="btn btn-ghost btn-sm" onClick={close}>Close</button>
         </div>
 
         <div className="p-5 grid gap-4">
-          {!proposal && (
+          {!proposal && !nav && !command && !search && (
             <>
               <label htmlFor="capture-text" className="sr-only">What happened, or what do you want to find?</label>
               <textarea id="capture-text" ref={inputRef} className="textarea" style={{ minHeight: "7rem", fontSize: "1.05rem" }}
-                placeholder={"I donated 100 SAR via Ehsan today and changed my bedsheets\nWhen did I last get dental scaling?"}
+                placeholder={"I donated 100 SAR via Ehsan today\nOpen Ali's passport · Back up my data · When did I last wax?"}
                 value={text} onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }} maxLength={2000} />
               {voiceNote && <p className="t-meta" role="status">{voiceNote}</p>}
               <div className="flex flex-wrap gap-2">
-                <button className="btn btn-primary" onClick={send} disabled={busy || !text.trim()}>{busy ? "Reading…" : "Preview"}</button>
-                <button className={`btn ${listening ? "btn-accent" : ""}`} onClick={toggleMic} aria-pressed={listening}>
+                <button className={`btn ${listening ? "btn-accent" : "btn-primary"}`} onClick={() => listen("main")} aria-pressed={listening}>
                   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden><rect x="8" y="2" width="8" height="13" rx="4" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
-                  {listening ? "Stop" : "Dictate"}
+                  {listening ? "Listening… (tap to finish now)" : "Speak"}
                 </button>
+                <button className="btn" onClick={() => send(undefined, "text")} disabled={busy || listening || !text.trim()}>{busy ? "Working…" : "Send"}</button>
               </div>
-              <p className="t-meta prose-w">Nothing is saved until you review the preview and press Save. Period details, documents and passwords are never sent to the assistant.</p>
+              <p className="t-meta prose-w">Add something, go somewhere, run a command, or ask a question. Nothing is saved, deleted or downloaded until you confirm. Period details, documents and passwords are never sent to the assistant.</p>
             </>
           )}
 
           {error && <p role="alert" className="error">{error}</p>}
+          {busy && !proposal && <p className="t-small" role="status">Working on “{text.slice(0, 80)}”…</p>}
+
+          {nav && (
+            <div className="panel p-4 preview-enter grid gap-3" aria-live="polite">
+              <p className="t-meta">You said: “{text}”</p>
+              {nav.question && <p className="t-h3">{nav.question}</p>}
+              <ul className="grid gap-2">
+                {nav.suggestions.map((s, i) => (
+                  <li key={i}>
+                    <button className={`btn w-full justify-between ${i === 0 && !nav.question ? "btn-primary" : ""}`} onClick={() => go(s.href)}>
+                      <span>{s.label}{s.detail ? <span className="opacity-80">: {s.detail}</span> : null}</span><span aria-hidden>→</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button className="btn btn-sm btn-ghost justify-self-start" onClick={() => { setNav(null); setText(""); textRef.current = ""; }}>Ask something else</button>
+            </div>
+          )}
+
+          {command && (
+            <div className="panel p-4 preview-enter grid gap-3" aria-live="polite">
+              <p className="t-meta">You said: “{text}”</p>
+              <p className="t-h3">{command.question ?? "Do this?"}</p>
+              {command.options.length === 0 && <p className="t-small">I can't do that from here yet.</p>}
+              <ul className="grid gap-2">
+                {command.options.map((c, i) => (
+                  <li key={i} className="panel p-3 grid gap-2">
+                    <p className="t-small font-medium">{c.label}</p>
+                    <p className="t-small text-ink-2">{c.description}</p>
+                    <button className="btn btn-primary btn-sm justify-self-start" onClick={() => runCommand(c)}>Proceed</button>
+                  </li>
+                ))}
+              </ul>
+              <button className="btn btn-sm btn-ghost justify-self-start" onClick={() => { setCommand(null); setText(""); textRef.current = ""; }}>Cancel</button>
+            </div>
+          )}
 
           {search && (
             <div className="panel p-4 preview-enter" aria-live="polite">
@@ -173,7 +273,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
                   ))}
                 </ul>
               )}
-              <button className="btn btn-sm mt-3" onClick={() => { setSearch(null); }}>Ask something else</button>
+              <button className="btn btn-sm mt-3" onClick={() => { setSearch(null); setText(""); textRef.current = ""; }}>Ask something else</button>
             </div>
           )}
 
@@ -199,15 +299,23 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
                               </div>
                             ))}
                           </dl>
-                          {!o.valid && <p className="error mt-2">{o.missing.length ? `Missing: ${o.missing.map((m) => FIELD_LABELS[m] ?? m).join(", ")}` : o.error}</p>}
+                          {!o.valid && !o.choices.length && <p className="error mt-2">{o.missing.length ? `Missing: ${o.missing.map((m) => FIELD_LABELS[m] ?? m).join(", ")}` : o.error}</p>}
+                          {o.choices.map((c) => (
+                            <div key={c.field} className="mt-3 grid gap-2">
+                              <p className="t-small font-medium">{c.question}</p>
+                              <div className="flex flex-wrap gap-2">
+                                {c.options.map((opt) => <button key={opt.value} className="btn btn-sm" disabled={busy} onClick={() => pick(o, c, opt.value)}>{opt.label}</button>)}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                       <fieldset className="mt-3 flex flex-wrap gap-2">
                         <legend className="sr-only">What to do with “{o.label}”</legend>
-                        {(o.valid ? (["apply", "draft", "skip"] as Mode[]) : (["draft", "skip"] as Mode[])).map((m) => (
+                        {(isDelete(o) ? (o.valid ? (["apply", "skip"] as Mode[]) : []) : o.valid ? (["apply", "draft", "skip"] as Mode[]) : (["draft", "skip"] as Mode[])).map((m) => (
                           <label key={m} className={`btn btn-sm ${mode === m ? "btn-primary" : ""}`}>
                             <input type="radio" className="sr-only" name={`op-${o.position}`} checked={mode === m} onChange={() => setChoices({ ...choices, [o.position]: m })} />
-                            {m === "apply" ? "Save" : m === "draft" ? "Fill details later" : "Don't save"}
+                            {m === "apply" ? (isDelete(o) ? (o.op.endsWith(".cancel") ? "Yes, record it" : "Yes, delete") : "Save") : m === "draft" ? "Fill details later" : isDelete(o) ? "Keep it" : "Don't save"}
                           </label>
                         ))}
                       </fieldset>
@@ -215,7 +323,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
                   );
                 })}
               </ul>
-              {proposal.questions.length > 0 && (
+              {proposal.questions.length > 0 && !proposal.operations.some((o) => o.choices.length) && (
                 <div className="panel p-4" style={{ background: "var(--tint-mustard)" }}>
                   {proposal.questions.map((q, i) => <p key={i} className="t-small">{q}</p>)}
                 </div>
@@ -225,14 +333,18 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
                 <div className="flex gap-2">
                   <input id="fix" className="input" value={fix} onChange={(e) => setFix(e.target.value)} placeholder="e.g. make that 150 SAR, or: no, next Thursday"
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyFix(); } }} />
-                  <button className="btn" onClick={applyFix} disabled={busy || !fix.trim()}>Update</button>
+                  <button className={`btn ${listening ? "btn-accent" : ""}`} onClick={() => listen("fix")} aria-label={listening ? "Listening" : "Say the correction"} aria-pressed={listening}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden><rect x="8" y="2" width="8" height="13" rx="4" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
+                  </button>
+                  <button className="btn" onClick={() => applyFix()} disabled={busy || !fix.trim()}>Update</button>
                 </div>
+                {voiceNote && <p className="t-meta" role="status">{voiceNote}</p>}
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2 rule-b pb-4" style={{ borderBottom: "none", borderTop: "1.5px solid var(--rule)", paddingTop: "1rem" }}>
                 <button className="btn btn-accent" onClick={confirm} disabled={busy || selected.length === 0}>
-                  {busy ? "Saving…" : applyCount && draftCount ? `Save ${applyCount} + ${draftCount} draft${draftCount === 1 ? "" : "s"}` : applyCount ? `Save ${applyCount} entr${applyCount === 1 ? "y" : "ies"}` : draftCount ? `Save ${draftCount} draft${draftCount === 1 ? "" : "s"}` : "Save"}
+                  {busy ? "Saving…" : proposal.operations.filter((o) => choices[o.position] === "apply").every(isDelete) && applyCount ? "Confirm" : applyCount && draftCount ? `Save ${applyCount} + ${draftCount} draft${draftCount === 1 ? "" : "s"}` : applyCount ? `Save ${applyCount} entr${applyCount === 1 ? "y" : "ies"}` : draftCount ? `Save ${draftCount} draft${draftCount === 1 ? "" : "s"}` : "Save"}
                 </button>
-                <button className="btn" onClick={() => { api("/api/ai/cancel", { proposalId: proposal.id }).catch(() => {}); setProposal(null); }}>Start over</button>
+                <button className="btn" onClick={() => { api("/api/ai/cancel", { proposalId: proposal.id }).catch(() => {}); setProposal(null); setText(""); textRef.current = ""; }}>Start over</button>
                 <span className="t-meta">Version {proposal.version}{proposal.provider === "offline" ? ", read by the offline parser" : ""}</span>
               </div>
             </div>

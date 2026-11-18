@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { AiProvider, Interpretation, ProposedOp, SearchQuery } from "./types";
 import { allOps } from "../ops";
+import { PAGES, COMMANDS } from "./actions";
+import { CSV_KEYS } from "@/lib/csv-keys";
 
 /**
  * Claude adapter. Trust boundary:
@@ -22,9 +24,25 @@ function opCatalog() {
 
 const OUTPUT_SCHEMA = (opNames: string[]) => ({
   type: "object", additionalProperties: false,
-  required: ["intent", "operations", "questions", "query"],
+  required: ["intent", "operations", "questions", "query", "navigate", "command"],
   properties: {
-    intent: { type: "string", enum: ["capture", "search", "unsupported"] },
+    intent: { type: "string", enum: ["capture", "search", "navigate", "command", "unsupported"] },
+    navigate: {
+      anyOf: [{ type: "null" }, {
+        type: "object", additionalProperties: false, required: ["page", "q", "person", "kind", "year", "target"],
+        properties: {
+          page: { type: "string", enum: PAGES.map((p) => p.id) },
+          q: { type: ["string", "null"] }, person: { type: ["string", "null"], description: '"@f1"-style alias or "me"' },
+          kind: { type: ["string", "null"] }, year: { type: ["string", "null"] }, target: { type: ["string", "null"], description: '"@a1"-style application alias' },
+        },
+      }],
+    },
+    command: {
+      anyOf: [{ type: "null" }, {
+        type: "object", additionalProperties: false, required: ["command", "module"],
+        properties: { command: { type: "string", enum: [...COMMANDS] }, module: { type: ["string", "null"], enum: [...CSV_KEYS.map((k) => k.key), null] } },
+      }],
+    },
     operations: {
       type: "array",
       items: {
@@ -76,6 +94,12 @@ Rules:
 - Achievements: record only what the owner said happened. Never add metrics, numbers, outcomes, skills, organisations or dates she did not state; leave "outcome" empty rather than guess.
 - Period / menstrual tracking is not available through capture. If asked, return no operation and reply that she can log it on the Period page.
 - Features not in the catalog (passwords, document files or ID numbers, period log, subscriptions, zakat, achievements): intent "unsupported", explain briefly in questions.
+- GOING SOMEWHERE ("go to…", "open…", "show me my…", "take me to…", or just a page name): intent "navigate", operations [], fill "navigate" with a page id from PAGES.
+  Add filters only when said: person (family alias or "me" for "my"), kind (documents: passport|national_id|transcript|certificate|cv|application|letter; expiries: passport|national_id|license|bank_card|membership; achievements: award|certification|volunteering|project|publication|skill), year, q (search words), target (an application alias).
+  If it's unclear which page, pick the closest one; the app shows options.
+- APP COMMANDS: intent "command" with "command": backup.quick (records-only backup), backup.full (backup with documents), backup.choose (they asked for a backup without saying which), export.csv (with module if a section is named), export.json. The app asks before running.
+- DELETING / CANCELLING something: propose the matching *.delete op (or subscription.cancel for "I cancelled X") with id "@alias" when exactly one record clearly matches. If it's ambiguous, leave id out and list "id" in missing; the app shows the candidates to tap.
+  "the expiry reminder" means the expiry item. Never guess between two people's items.
 - CORRECTIONS: if PREVIOUS PROPOSAL is given, the new text corrects or extends it. Return the FULL updated list of operations
   (keep unchanged ones exactly, apply the change, drop ones the person removes).`;
 
@@ -91,7 +115,8 @@ export function anthropicProvider(): AiProvider {
       const prev = previous?.at(-1);
       const userContent = [
         `TODAY: ${ctx.today} (${ctx.weekday}), timezone ${ctx.tz}, default currency ${ctx.currency}`,
-        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries, people: ctx.people, applications: ctx.applications })}`,
+        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries, people: ctx.people, applications: ctx.applications, subscriptions: ctx.subscriptions, achievements: ctx.achievements, hobbies: ctx.hobbies })}`,
+        `PAGES: ${JSON.stringify(PAGES.map((p) => ({ id: p.id, label: p.label })))}`,
         `OP CATALOG: ${JSON.stringify(catalog)}`,
         prev ? `PREVIOUS PROPOSAL (from "${prev.text.slice(0, 500)}"): ${JSON.stringify(prev.operations)}` : "",
         `<owner_text>${text.slice(0, 2000)}</owner_text>`,
@@ -107,6 +132,8 @@ export function anthropicProvider(): AiProvider {
         intent: Interpretation["intent"]; questions: string[];
         operations: { op: string; input_json: string; missing: string[]; assumed: string[] }[];
         query: (Record<string, string | null> & { type: SearchQuery["type"] }) | null;
+        navigate: { page: string; q: string | null; person: string | null; kind: string | null; year: string | null; target: string | null } | null;
+        command: { command: string; module: string | null } | null;
       };
       const operations: ProposedOp[] = raw.operations.map((o) => {
         let input: Record<string, unknown> = {};
@@ -125,7 +152,10 @@ export function anthropicProvider(): AiProvider {
           text: { type: "text", q: q.q ?? text },
         } as Record<string, SearchQuery>)[q.type];
       }
-      return { intent: raw.intent, operations, questions: raw.questions.slice(0, 5), query };
+      const nv = raw.navigate;
+      const navigate = nv ? { page: nv.page, q: nv.q ?? undefined, person: nv.person ?? undefined, kind: nv.kind ?? undefined, year: nv.year ?? undefined, target: nv.target ?? undefined } : undefined;
+      const command = raw.command ? { command: raw.command.command, module: raw.command.module ?? undefined } : undefined;
+      return { intent: raw.intent, operations, questions: raw.questions.slice(0, 5), query, navigate, command };
     },
   };
 }

@@ -84,7 +84,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
               </Link>
             ))}
             <button type="button" onClick={() => openCapture()} className="btn-accent" style={{ background: "var(--accent-grad)", color: "#1E2418" }}>
-              <Icon d={SPARKLE} size={16} /> Log with AI <span className="t-meta" style={{ color: "inherit", opacity: 0.7 }}>⌘K</span>
+              <Icon d={SPARKLE} size={16} /> Ask AI
             </button>
           </nav>
           <ThemeToggle />
@@ -98,7 +98,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
 
       <nav aria-label="Main" className="md:hidden bottom-nav">
         {bottomLeft.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
-        <button type="button" onClick={() => openCapture()} aria-label="Capture with AI" className="capture-orb"><Icon d={SPARKLE} size={24} /></button>
+        <button type="button" onClick={() => openCapture()} aria-label="Ask AI" className="capture-orb"><Icon d={SPARKLE} size={24} /></button>
         {bottomRight.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
       </nav>
 
@@ -125,6 +125,6 @@ function MobileLink({ it, active }: { it: NavItem; active: boolean }) {
   );
 }
 
-export function OpenCaptureButton({ label = "Capture", className = "btn btn-accent" }: { label?: string; className?: string }) {
+export function OpenCaptureButton({ label = "Ask AI", className = "btn btn-accent" }: { label?: string; className?: string }) {
   return <button className={className} onClick={() => openCapture()}>{label}</button>;
 }

@@ -171,7 +171,7 @@ export const subscriptionReactivate = defineOp({
 });
 
 export const subscriptionDelete = defineOp({
-  name: "subscription.delete", module: "subscriptions", label: "Delete subscription", aiAllowed: false,
+  name: "subscription.delete", module: "subscriptions", label: "Delete subscription", aiAllowed: true,
   schema: z.object({ id: zId }),
   summarize: () => "Delete subscription",
   async run(ctx, i) {

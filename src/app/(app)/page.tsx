@@ -25,7 +25,8 @@ export default async function Dashboard() {
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const hm = (at: Date) => formatInstant(at, tz, { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  // Next 7 days: everything with a date, grouped by local day.
+  // Next 7 days: the actual dates of things (classes, expiries, deadlines, due dates, charges), grouped by
+  // local day. Reminders are deliberately not listed: they're notifications about these same things.
   const days: Day[] = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(s.today, i);
     const weekday = formatLocalDate(date, { weekday: "short" });
@@ -36,8 +37,8 @@ export default async function Dashboard() {
     const d = byDate.get(date);
     if (d && !d.items.some((x) => x.text === text)) d.items.push({ text, href });
   };
-  if (s.nextClass) add(instantToLocal(s.nextClass.startsAt, tz).date, `Quran class · ${hm(s.nextClass.startsAt)}`, "/quran");
-  for (const r of s.upcoming) add(instantToLocal(r.fireAt, tz).date, `${r.title} · ${hm(r.fireAt)}`);
+  for (const e of s.weekEvents) add(e.date, `${e.title} · ${hm(e.startsAt)}`, "/quran");
+  for (const h of s.openHomework) if (h.dueAt) add(instantToLocal(h.dueAt, tz).date, `Homework due: ${h.title}`, "/quran");
   for (const tk of s.tasksDueSoon) if (tk.dueOn) add(tk.dueOn, `Task: ${tk.title}`, "/projects");
   for (const e of s.expiring) add(e.expiresOn, `${e.label} expires`, "/admin/expiries");
   for (const d of s.debts) if (d.debt.status === "open" && d.debt.dueDate) {
