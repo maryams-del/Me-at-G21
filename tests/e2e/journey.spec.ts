@@ -6,7 +6,7 @@ import { addVirtualAuthenticator, lastEmailCode } from "./helpers";
 const EMAIL = "owner@example.com";
 mkdirSync("test-results/screens", { recursive: true });
 /** Click until the dialog appears (dev-mode hydration can lag behind the first click). */
-async function openCapture(page: Page, name = "Add entry by AI") {
+async function openCapture(page: Page, name = "Log with AI") {
   await expect(async () => {
     await page.getByRole("button", { name }).click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 2000 });

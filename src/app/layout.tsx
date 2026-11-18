@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
+import { THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,12 +13,14 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = {
   width: "device-width", initialScale: 1, viewportFit: "cover",
-  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#F2F1EE" }, { media: "(prefers-color-scheme: dark)", color: "#171C26" }],
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#FBF6E9" }, { media: "(prefers-color-scheme: dark)", color: "#12180F" }],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The owner's chosen mode (Dark or Light). Without a choice the device setting decides.
+  const theme = (await cookies()).get(THEME_COOKIE)?.value;
   return (
-    <html lang="en">
+    <html lang="en" data-theme={theme === "dark" || theme === "light" ? theme : undefined}>
       <body>{children}</body>
     </html>
   );

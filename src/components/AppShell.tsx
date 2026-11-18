@@ -2,14 +2,32 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Glyph, type GlyphKind } from "./Glyph";
 import { CaptureSheet } from "./Capture";
+import { ThemeToggle } from "./ThemeToggle";
 
-type NavItem = { href: string; label: string; glyph: GlyphKind; badge?: number };
+type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
-export function AppShell({ children, name, inboxCount }: { children: React.ReactNode; name: string; inboxCount: number }) {
+const ICONS = {
+  today: "M4 11 12 4l8 7v9H4z",
+  spaces: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  history: "M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16zM12 8v4l3 2",
+  inbox: "M5 5h10l4 4v10H5zM9 13h6M9 16h4",
+  settings: "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4",
+};
+export const SPARKLE = "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z";
+
+function Icon({ d, size = 22 }: { d: string; size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>;
+}
+
+/** Opens the AI capture sheet from anywhere. `text` pre-fills it; `voice` starts dictation. */
+export function openCapture(detail: { text?: string; voice?: boolean } = {}) {
+  window.dispatchEvent(new CustomEvent("ld-capture", { detail }));
+}
+
+export function AppShell({ children, inboxCount, dateLine, hijriLine }: { children: React.ReactNode; name: string; inboxCount: number; dateLine: string; hijriLine: string }) {
   const path = usePathname();
-  const [capture, setCapture] = useState(false);
+  const [capture, setCapture] = useState<{ open: boolean; key: number; text: string; voice: boolean }>({ open: false, key: 0, text: "", voice: false });
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: string }[]>([]);
 
   useEffect(() => {
@@ -19,8 +37,11 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
       setToasts((t) => [...t, { id, ...d }]);
       setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
     };
-    const onOpen = () => setCapture(true);
-    const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setCapture(true); } };
+    const onOpen = (e: Event) => {
+      const d = ((e as CustomEvent).detail ?? {}) as { text?: string; voice?: boolean };
+      setCapture((c) => ({ open: true, key: c.key + 1, text: d.text ?? "", voice: !!d.voice }));
+    };
+    const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openCapture(); } };
     window.addEventListener("ld-toast", onToast);
     window.addEventListener("ld-capture", onOpen);
     window.addEventListener("keydown", onKey);
@@ -28,67 +49,56 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
     return () => { window.removeEventListener("ld-toast", onToast); window.removeEventListener("ld-capture", onOpen); window.removeEventListener("keydown", onKey); };
   }, []);
 
-  const groups: { title: string; items: NavItem[] }[] = [
-    { title: "", items: [{ href: "/", label: "Today", glyph: "home" }, { href: "/inbox", label: "Needs details", glyph: "inbox", badge: inboxCount }] },
-    { title: "Finance", items: [{ href: "/finance/charity", label: "Charity", glyph: "charity" }, { href: "/finance/savings", label: "Savings", glyph: "savings" }, { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts" }, { href: "/finance/subscriptions", label: "Subscriptions", glyph: "subscriptions" }, { href: "/finance/zakat", label: "Zakat", glyph: "zakat" }] },
-    { title: "Personal care", items: [{ href: "/care/period", label: "Period log", glyph: "period" }, { href: "/care/routines", label: "Routines", glyph: "routines" }] },
-    { title: "Life admin", items: [{ href: "/admin/expiries", label: "Expiries", glyph: "expiries" }, { href: "/admin/documents", label: "Documents & IDs", glyph: "documents" }] },
-    { title: "Education & career", items: [{ href: "/education/applications", label: "Master's applications", glyph: "applications" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }, { href: "/education/achievements", label: "Achievements", glyph: "achievements" }] },
-    { title: "Faith", items: [{ href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" }] },
-    { title: "", items: [{ href: "/history", label: "History & search", glyph: "history" }, { href: "/vault", label: "Secure vault", glyph: "vault" }, { href: "/settings", label: "Settings", glyph: "settings" }] },
-  ];
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const mobile: NavItem[] = [
-    { href: "/", label: "Today", glyph: "home" }, { href: "/finance", label: "Money", glyph: "finance" },
-    { href: "/care", label: "Care", glyph: "care" }, { href: "/more", label: "More", glyph: "settings", badge: inboxCount },
+  const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education"];
+  const top: NavItem[] = [
+    { href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" },
+    { href: "/history", label: "History", icon: "history" }, { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
+    { href: "/settings", label: "Settings", icon: "settings" },
   ];
+  const bottomLeft: NavItem[] = [{ href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" }];
+  const bottomRight: NavItem[] = [{ href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount }, { href: "/settings", label: "Settings", icon: "settings" }];
+  const current = (it: NavItem) => isActive(it.href) || (it.href === "/more" && spacesPaths.some((p) => path.startsWith(p)));
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[248px_1fr]">
+    <div className="min-h-dvh">
       <a href="#main" className="skip-link btn btn-primary">Skip to content</a>
-      <aside className="hidden md:flex flex-col gap-1 border-r-[1.5px] border-ink px-4 py-5 sticky top-0 h-dvh overflow-y-auto">
-        <Link href="/" className="flex items-center gap-2 px-2 pb-4 no-underline">
-          <Glyph kind="home" size={28} accent="var(--mustard)" color="var(--ink)" />
-          <span className="t-h3">{name || "Me @ G21"}</span>
-        </Link>
-        <button className="btn btn-accent mb-3 justify-start" onClick={() => setCapture(true)}>
-          <Glyph kind="ai" size={20} color="var(--ink)" accent="var(--mustard)" /> Capture <span className="ml-auto t-meta" style={{ color: "inherit", opacity: 0.7 }}>⌘K</span>
-        </button>
-        <nav aria-label="Main" className="grid gap-4">
-          {groups.map((g, i) => (
-            <div key={i} className="grid gap-0.5">
-              {g.title && <p className="t-meta px-3 pb-1">{g.title}</p>}
-              {g.items.map((it) => (
-                <Link key={it.href} href={it.href} className="nav-link" aria-current={isActive(it.href) ? "page" : undefined}>
-                  <Glyph kind={it.glyph} size={18} accent="var(--rust)" />
-                  <span>{it.label}</span>
-                  {!!it.badge && <span className="ml-auto chip chip-mustard">{it.badge}</span>}
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      <main id="main" className="px-4 pt-5 pb-32 md:px-10 md:py-8 max-w-[1180px] w-full">{children}</main>
-
-      <nav aria-label="Main" className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-paper border-t-[1.5px] border-ink" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="grid grid-cols-5 items-end">
-          {mobile.slice(0, 2).map((it) => <MobileLink key={it.href} it={it} active={isActive(it.href)} />)}
-          <div className="flex justify-center">
-            <button onClick={() => setCapture(true)} aria-label="Capture with AI" className="-mt-6 w-16 h-16 rounded-full flex items-center justify-center border-[1.5px] border-ink" style={{ background: "var(--mustard)" }}>
-              <Glyph kind="ai" size={30} color="var(--ink)" accent="var(--mustard)" />
+      <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
+        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4 md:pt-6">
+          <Link href="/" className="min-w-0 no-underline pb-1">
+            <span className="logo block text-[31px] md:text-[40px]">Me @ G21</span>
+            <span className="block mt-2.5 text-[12px] md:text-[13px] font-semibold leading-snug text-ink-3">{dateLine}<br className="md:hidden" /><span className="hidden md:inline"> · </span>{hijriLine}</span>
+          </Link>
+          <nav aria-label="Main" className="hidden md:flex top-nav glass rounded-full items-center gap-1 p-[5px] order-none">
+            {top.map((it) => (
+              <Link key={it.href} href={it.href} aria-current={current(it) ? "page" : undefined}>
+                {it.label}{!!it.badge && <span className="chip chip-mustard" style={{ padding: "0 .45rem" }}>{it.badge}</span>}
+              </Link>
+            ))}
+            <button type="button" onClick={() => openCapture()} className="btn-accent" style={{ background: "var(--accent-grad)", color: "#1E2418" }}>
+              <Icon d={SPARKLE} size={16} /> Log with AI <span className="t-meta" style={{ color: "inherit", opacity: 0.7 }}>⌘K</span>
             </button>
-          </div>
-          {mobile.slice(2).map((it) => <MobileLink key={it.href} it={it} active={isActive(it.href) || (it.href === "/more" && ["/more", "/faith", "/quran", "/projects", "/inbox", "/history", "/settings", "/vault", "/admin", "/education"].some((p) => path.startsWith(p)))} />)}
+          </nav>
+          <ThemeToggle />
+        </header>
+        <div className="wave-line mt-3" aria-hidden>
+          <svg width="2340" height="16" viewBox="0 0 2340 16"><path d={"M0 8 " + Array.from({ length: 24 }, (_, i) => (i === 0 ? "Q48.75 16 97.5 8" : `T${97.5 * (i + 1)} 8`)).join(" ")} fill="none" stroke="var(--slate)" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </div>
+
+        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{children}</main>
+      </div>
+
+      <nav aria-label="Main" className="md:hidden bottom-nav">
+        {bottomLeft.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
+        <button type="button" onClick={() => openCapture()} aria-label="Capture with AI" className="capture-orb"><Icon d={SPARKLE} size={24} /></button>
+        {bottomRight.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
       </nav>
 
-      <CaptureSheet open={capture} onClose={() => setCapture(false)} />
+      <CaptureSheet key={capture.key} open={capture.open} initialText={capture.text} startVoice={capture.voice} onClose={() => setCapture((c) => ({ ...c, open: false }))} />
 
-      <div aria-live="polite" className="fixed z-[60] bottom-24 md:bottom-6 right-4 left-4 md:left-auto grid gap-2 md:w-96">
+      <div aria-live="polite" className="fixed z-[60] bottom-28 md:bottom-6 right-4 left-4 md:left-auto grid gap-2 md:w-96">
         {toasts.map((t) => (
-          <div key={t.id} role={t.tone === "error" ? "alert" : "status"} className="panel px-4 py-3 preview-enter" style={{ background: t.tone === "error" ? "var(--tint-rust)" : "var(--ink)", color: t.tone === "error" ? "var(--ink)" : "var(--paper)", borderColor: "var(--ink)" }}>
+          <div key={t.id} role={t.tone === "error" ? "alert" : "status"} className="glass px-4 py-3 preview-enter" style={{ background: t.tone === "error" ? "var(--tint-rust)" : "var(--btn-primary-bg)", color: t.tone === "error" ? "var(--ink)" : "var(--btn-primary-ink)" }}>
             {t.message}
           </div>
         ))}
@@ -99,14 +109,14 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
 
 function MobileLink({ it, active }: { it: NavItem; active: boolean }) {
   return (
-    <Link href={it.href} aria-current={active ? "page" : undefined} className="flex flex-col items-center gap-1 py-2 min-h-[56px] no-underline relative" style={{ color: active ? "var(--ink)" : "var(--ink-3)" }}>
-      <Glyph kind={it.glyph} size={22} accent={active ? "var(--rust)" : "currentColor"} />
-      <span className="text-[0.72rem] font-medium">{it.label}</span>
-      {!!it.badge && <span className="absolute top-1 right-[22%] w-2.5 h-2.5 rounded-full" style={{ background: "var(--rust)" }} aria-label={`${it.badge} need details`} />}
+    <Link href={it.href} aria-current={active ? "page" : undefined}>
+      <Icon d={ICONS[it.icon]} />
+      <span>{it.label}</span>
+      {!!it.badge && <span className="absolute top-1.5 right-[24%] w-2.5 h-2.5 rounded-full" style={{ background: "var(--mustard)" }} aria-label={`${it.badge} need details`} />}
     </Link>
   );
 }
 
 export function OpenCaptureButton({ label = "Capture", className = "btn btn-accent" }: { label?: string; className?: string }) {
-  return <button className={className} onClick={() => window.dispatchEvent(new Event("ld-capture"))}>{label}</button>;
+  return <button className={className} onClick={() => openCapture()}>{label}</button>;
 }

@@ -29,7 +29,7 @@ const MODULE_GLYPH: Record<string, Parameters<typeof Glyph>[0]["kind"]> = {
 // Minimal typing for the Web Speech API (not in TS DOM lib everywhere)
 type SR = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
 
-export function CaptureSheet({ open, onClose, initialText = "" }: { open: boolean; onClose: () => void; initialText?: string }) {
+export function CaptureSheet({ open, onClose, initialText = "", startVoice = false }: { open: boolean; onClose: () => void; initialText?: string; startVoice?: boolean }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
   const [mode, setMode] = useState<"text" | "voice">("text");
@@ -45,6 +45,9 @@ export function CaptureSheet({ open, onClose, initialText = "" }: { open: boolea
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 30); }, [open]);
+  // Opened from a microphone button: start dictation straight away.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open && startVoice) toggleMic(); }, [open, startVoice]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
