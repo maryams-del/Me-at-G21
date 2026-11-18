@@ -2,7 +2,7 @@ import Link from "next/link";
 import { pageOwner, dashboardState } from "@/server/queries";
 import { formatMoney } from "@/lib/money";
 import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
-import { relDays } from "@/lib/format";
+import { relDays, fmtDateTime, fmtShort } from "@/lib/format";
 import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
 import { AiBar } from "@/components/home/AiBar";
 import { OpButton } from "@/components/OpForm";
@@ -46,6 +46,12 @@ export default async function Dashboard() {
   for (const c of s.subscriptions.upcoming) add(c.date, `${c.name} renews · ${formatMoney(c.amountMinor, c.currency)}`, "/finance/subscriptions");
   for (const r of s.appDeadlines) if (r.app.deadlineAt) add(instantToLocal(r.app.deadlineAt, tz).date, `${r.app.university} deadline · ${hm(r.app.deadlineAt)}`, `/education/applications/${r.app.id}`);
 
+  const week = addDays(s.today, 6);
+  const later: { label: string; when: string; href: string }[] = [
+    ...s.appDeadlines.filter((r) => r.app.deadlineAt && instantToLocal(r.app.deadlineAt, tz).date > week).map((r) => ({ label: `${r.app.university}, ${r.app.program}`, when: `deadline ${fmtShort(instantToLocal(r.app.deadlineAt!, tz).date)}`, href: `/education/applications/${r.app.id}` })),
+    ...s.expiring.filter((e) => e.expiresOn > week).map((e) => ({ label: e.label, when: `expires ${fmtShort(e.expiresOn)}`, href: "/admin/expiries" })),
+  ].slice(0, 6);
+  const waxRoutine = s.routines.find((r) => r.routine.kind === "waxing");
   const nextRoutine = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
   const p = s.period;
   const periodStat = !p ? "" : p.open ? `Day ${p.openDay}` : p.estimate && p.settings.showEstimate ? `Next ${relDays(p.daysToEstimate)} (estimate)` : p.cycles[0] ? `Last started ${dmy(p.cycles[0].startDate)}` : "Nothing logged yet";
@@ -84,13 +90,15 @@ export default async function Dashboard() {
         <NextSevenDays days={days} />
         <AiBar />
 
-        {p && (
-          <div className="flex flex-wrap gap-2">
-            {p.open
-              ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
-              : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />}
-          </div>
-        )}
+        <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
+          {p && (p.open
+            ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
+            : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />)}
+          {waxRoutine && <OpButton op="routine.log" input={{ routineId: waxRoutine.routine.id, type: "completed", onDate: s.today }} label={`${waxRoutine.routine.name} done`} className="btn btn-sm" confirmText={`Log ${waxRoutine.routine.name.toLowerCase()} done today (${dmy(s.today)})? The next one is counted from today.`} />}
+          <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
+          <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
+        </nav>
 
         {(s.pendingAi > 0 || s.drafts.length > 0) && (
           <div className="flex flex-wrap gap-2">
@@ -105,6 +113,24 @@ export default async function Dashboard() {
             <Link href="/settings/notifications" className="btn btn-sm">Set up notifications</Link>
           </div>
         )}
+
+        {later.length > 0 && (
+          <section aria-labelledby="later-h" className="panel p-4">
+            <h2 id="later-h" className="t-h3 mb-1">Later on</h2>
+            <ul className="list">
+              {later.map((x, i) => <li key={i} className="py-2 flex justify-between gap-3 t-small"><Link href={x.href} className="hover:underline underline-offset-4">{x.label}</Link><span className="t-meta whitespace-nowrap">{x.when}</span></li>)}
+            </ul>
+          </section>
+        )}
+
+        <section aria-labelledby="rc-h" className="panel p-4">
+          <div className="flex justify-between items-baseline"><h2 id="rc-h" className="t-h3">Recent activity</h2><Link href="/history" className="t-small underline underline-offset-4">History</Link></div>
+          {s.recent.length ? (
+            <ul className="list mt-1">{s.recent.slice(0, 5).map((r) => (
+              <li key={r.id} className="py-2 t-small flex justify-between gap-3"><span>{r.sensitive ? "Private entry" : r.summary}</span><span className="t-meta whitespace-nowrap">{r.source === "ai" ? "AI, " : ""}{fmtDateTime(r.occurredAt, tz)}</span></li>
+            ))}</ul>
+          ) : <p className="t-meta mt-1">Your log is empty. Try the quick actions or the AI bar.</p>}
+        </section>
       </div>
 
       <section aria-labelledby="spaces-h" className="spaces-panel px-[18px] pt-6 pb-5 md:px-8 md:pt-8 -mx-[18px] md:mx-0">
