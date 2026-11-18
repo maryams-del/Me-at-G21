@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "Me @ G21",
   description: "Private personal dashboard",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/favicon.png", apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }, { url: "/favicon.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
