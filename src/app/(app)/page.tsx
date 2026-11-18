@@ -122,6 +122,14 @@ export default async function Dashboard() {
           ) : <p className="t-small mt-3 text-ink-2">{s.routines.length ? "Log the last time you did each routine to see what's due." : "Add the routines you want to track: waxing, dental scaling, bedsheets, anything."}</p>}
         </Link>
 
+        {s.subscriptions.active.length > 0 && (
+          <Link href="/finance/subscriptions" className="tile col-span-2">
+            <p className="t-small text-ink-2">Subscriptions</p>
+            <p className="t-num text-[2rem] mt-2">{Object.entries(s.subscriptions.totals).map(([c, v]) => formatMoney(v.monthly, c)).join(" + ")}<span className="t-small text-ink-2"> / month</span></p>
+            {s.subscriptions.upcoming[0] && <p className="t-small text-ink-2">Next: {s.subscriptions.upcoming[0].name}, {formatMoney(s.subscriptions.upcoming[0].amountMinor, s.subscriptions.upcoming[0].currency)} on {fmtShort(s.subscriptions.upcoming[0].date)}</p>}
+          </Link>
+        )}
+
         <Link href="/finance/savings" className="tile col-span-2">
           <p className="t-small text-ink-2">Savings</p>
           {s.savings.length ? (

@@ -277,6 +277,29 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await shot(page, "21-achievements");
   });
 
+  test("Subscriptions and zakat", async () => {
+    await page.goto("/finance/subscriptions?add=1");
+    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Save subscription" }) });
+    await form.getByLabel("Service").fill("Music streaming");
+    await form.getByLabel("Cost per charge").fill("21.99");
+    await form.getByLabel("Next charge date").fill("2026-12-05");
+    await form.getByLabel(/Paid with/).fill("Mada ending 1234");
+    await form.getByRole("button", { name: "Save subscription" }).click();
+    await expect(page.getByRole("heading", { name: /Music streaming/ })).toBeVisible();
+    await expect(page.getByText("21.99 SAR").first()).toBeVisible();
+    await shot(page, "22-subscriptions");
+
+    await page.goto("/finance/zakat");
+    await page.getByLabel("Assets you count 1 amount (SAR)").fill("20000");
+    await page.getByLabel(/Silver price per gram/).fill("4.10");
+    await expect(page.getByText("500 SAR", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Nisab \(595 g silver/)).toBeVisible();
+    await page.getByRole("button", { name: "Save estimate" }).click();
+    await expect(page.getByText(/Estimate saved: 500 SAR\. This is not a payment\./)).toBeVisible();
+    await expect(page.getByText("none yet")).toBeVisible();
+    await shot(page, "23-zakat");
+  });
+
   test("mobile layout", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

@@ -752,3 +752,79 @@ export const hobbies = pgTable("hobbies", {
   updatedAt: updatedAt(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
+
+/* ───────────────────────────── Subscriptions ───────────────────────────── */
+
+export const subscriptions = pgTable("subscriptions", {
+  id: id(),
+  ownerId: owner(),
+  name: text("name").notNull(),
+  category: text("category"),
+  amountMinor: money("amount_minor").notNull(),
+  currency: text("currency").notNull().default("SAR"),
+  /** monthly | yearly | weekly | custom (custom uses intervalValue + intervalUnit) */
+  cadence: text("cadence").notNull().default("monthly"),
+  intervalValue: integer("interval_value").notNull().default(1),
+  intervalUnit: text("interval_unit").notNull().default("month"),
+  /** A known billing date; later charges are projected from it in whole intervals (no drift at month ends). */
+  anchorDate: date("anchor_date").notNull(),
+  /** Payment method LABEL only, e.g. "Visa ending 4821". Never a card number. */
+  paymentLabel: text("payment_label"),
+  renewal: text("renewal").notNull().default("auto"), // auto | manual
+  trialEndsOn: date("trial_ends_on"),
+  url: text("url"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"), // active | cancelled
+  cancelledOn: date("cancelled_on"),
+  reminderOffsetsDays: jsonb("reminder_offsets_days").$type<number[]>().notNull().default([-3]),
+  trialOffsetsDays: jsonb("trial_offsets_days").$type<number[]>().notNull().default([-3, -1]),
+  reminderTime: text("reminder_time").notNull().default("09:00"),
+  remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+/* ───────────────────────────── Zakat ───────────────────────────── */
+
+/** An immutable snapshot of an estimate. Never a payment. */
+export const zakatCalculations = pgTable("zakat_calculations", {
+  id: id(),
+  ownerId: owner(),
+  evaluationDate: date("evaluation_date").notNull(),
+  currency: text("currency").notNull().default("SAR"),
+  assets: jsonb("assets").$type<{ label: string; amount: string }[]>().notNull().default([]),
+  liabilities: jsonb("liabilities").$type<{ label: string; amount: string }[]>().notNull().default([]),
+  nisabBasis: text("nisab_basis").notNull(), // gold | silver | manual
+  pricePerGram: text("price_per_gram"),
+  nisabGrams: text("nisab_grams"),
+  priceSource: text("price_source"), // where/when the owner got the price
+  assetsMinor: money("assets_minor").notNull(),
+  liabilitiesMinor: money("liabilities_minor").notNull(),
+  netMinor: money("net_minor").notNull(),
+  nisabMinor: money("nisab_minor").notNull(),
+  aboveNisab: boolean("above_nisab").notNull(),
+  rateBp: integer("rate_bp").notNull(),
+  zakatMinor: money("zakat_minor").notNull(),
+  steps: jsonb("steps").$type<string[]>().notNull().default([]),
+  remindNextYear: boolean("remind_next_year").notNull().default(false),
+  notes: text("notes"),
+  createdAt: createdAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+export const zakatPayments = pgTable("zakat_payments", {
+  id: id(),
+  ownerId: owner(),
+  paidOn: date("paid_on").notNull(),
+  amountMinor: money("amount_minor").notNull(),
+  currency: text("currency").notNull().default("SAR"),
+  recipient: text("recipient").notNull(),
+  calculationId: uuid("calculation_id").references(() => zakatCalculations.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});

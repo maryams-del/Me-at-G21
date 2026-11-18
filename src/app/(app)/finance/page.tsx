@@ -7,6 +7,8 @@ export default function FinanceIndex() {
     { href: "/finance/charity", label: "Charity", glyph: "charity" as const, d: "Donations, monthly and yearly totals" },
     { href: "/finance/savings", label: "Savings", glyph: "savings" as const, d: "Goals and actual deposits" },
     { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts" as const, d: "Who owes whom, repayments, reminders" },
+    { href: "/finance/subscriptions", label: "Subscriptions", glyph: "subscriptions" as const, d: "Monthly cost, upcoming charges, trial ends" },
+    { href: "/finance/zakat", label: "Zakat", glyph: "zakat" as const, d: "Step-by-step estimate and payments" },
   ];
   return (
     <>

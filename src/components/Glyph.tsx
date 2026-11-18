@@ -2,7 +2,7 @@
 export type GlyphKind =
   | "home" | "fasts" | "waxing" | "dental" | "routines" | "charity" | "savings" | "debts"
   | "quran" | "projects" | "inbox" | "history" | "settings" | "finance" | "care" | "vault" | "ai"
-  | "expiries" | "documents" | "admin" | "applications" | "education" | "period" | "achievements";
+  | "expiries" | "documents" | "admin" | "applications" | "education" | "period" | "achievements" | "subscriptions" | "zakat";
 
 export function Glyph({ kind, size = 22, color = "currentColor", accent, className, title }: {
   kind: GlyphKind; size?: number; color?: string; accent?: string; className?: string; title?: string;
@@ -31,6 +31,8 @@ export function Glyph({ kind, size = 22, color = "currentColor", accent, classNa
     applications: <><path d="M12 3 L22 8 L12 13 L2 8 Z" fill={color} /><path d="M6 10.5 V16 C6 18 18 18 18 16 V10.5" fill="none" stroke={color} strokeWidth="2.2" /><rect x="20.5" y="8" width="1.8" height="7" fill={a} /></>,
     period: <><circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.5" /><path d="M12 3 A9 9 0 0 1 21 12 L12 12 Z" fill={a} /></>,
     achievements: <><path d="M12 2 L14.6 8.6 L21.5 9.2 L16.2 13.7 L17.9 20.5 L12 16.8 L6.1 20.5 L7.8 13.7 L2.5 9.2 L9.4 8.6 Z" fill={color} /><circle cx="12" cy="11.5" r="2.4" fill={a} /></>,
+    subscriptions: <><path d="M20 12 A8 8 0 1 1 16 5.07" fill="none" stroke={color} strokeWidth="2.5" /><path d="M14 2 L19 5.5 L14 9 Z" fill={a} /><rect x="9" y="9" width="6" height="6" fill={color} /></>,
+    zakat: <><rect x="3" y="13" width="18" height="8" fill={color} /><path d="M12 2 L17 11 H7 Z" fill={a} /></>,
     education: <><path d="M12 3 L22 8 L12 13 L2 8 Z" fill={color} /><rect x="6" y="14" width="12" height="6" fill={a} /></>,
     ai: <><circle cx="12" cy="12" r="9" fill={color} /><path d="M12 6 L13.6 10.4 L18 12 L13.6 13.6 L12 18 L10.4 13.6 L6 12 L10.4 10.4 Z" fill={a} /></>,
   };

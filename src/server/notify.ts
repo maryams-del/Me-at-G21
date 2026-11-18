@@ -7,11 +7,12 @@ import { and, eq, inArray, isNull, lte, or, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   reminders, notificationDeliveries, pushSubscriptions, notificationPreferences, users,
-  recurringEvents, jobRuns, aiProposals, routines,
+  recurringEvents, jobRuns, aiProposals, routines, subscriptions,
 } from "@/db/schema";
 import { sendEmail } from "./email";
 import { ensureOccurrences } from "./ops/planning";
 import { applyAnnualFastRules, syncRoutine } from "./ops/care";
+import { syncSubscription } from "./ops/subscriptions";
 import { instantToLocal, localToInstant, addDays } from "@/lib/time";
 
 function configurePush() {
@@ -128,7 +129,7 @@ export async function housekeeping(now = new Date(), force = false) {
   const [last] = await db.select().from(jobRuns).where(eq(jobRuns.job, "housekeeping")).orderBy(desc(jobRuns.startedAt)).limit(1);
   if (!force && last && now.getTime() - last.startedAt.getTime() < 55 * 60_000) return { skipped: true };
   const [run] = await db.insert(jobRuns).values({ job: "housekeeping", startedAt: now }).returning({ id: jobRuns.id });
-  const stats = { events: 0, fastAdditions: 0, expired: 0, routines: 0 };
+  const stats = { events: 0, fastAdditions: 0, expired: 0, routines: 0, subscriptions: 0 };
   try {
     const owners = await db.select().from(users).where(eq(users.onboardingStep, "complete"));
     for (const u of owners) {
@@ -140,6 +141,9 @@ export async function housekeeping(now = new Date(), force = false) {
         // idempotent: keeps every routine's reminders in step (also picks up routines migrated from the old waxing/dental pages)
         const rs = await tx.select({ id: routines.id }).from(routines).where(eq(routines.ownerId, u.id));
         for (const r of rs) { await syncRoutine(ctx, r.id); stats.routines++; }
+        // rolls each active subscription's reminders forward to its next charge
+        const ss = await tx.select({ id: subscriptions.id }).from(subscriptions).where(and(eq(subscriptions.ownerId, u.id), eq(subscriptions.status, "active"), isNull(subscriptions.deletedAt)));
+        for (const x of ss) { await syncSubscription(ctx, x.id); stats.subscriptions++; }
       });
     }
     const exp = await db.update(aiProposals).set({ status: "expired" }).where(and(eq(aiProposals.status, "pending"), lte(aiProposals.expiresAt, now))).returning({ id: aiProposals.id });

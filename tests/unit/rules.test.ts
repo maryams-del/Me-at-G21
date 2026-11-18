@@ -164,3 +164,33 @@ describe("period estimate (PRD 4.3: estimate, not a medical assertion)", () => {
     expect(e).toMatchObject({ avgCycle: 29, basedOn: 2, nextStart: "2026-10-25", avgLength: 5 });
   });
 });
+
+import { chargesBetween, monthlyEquivalentMinor, nextCharge } from "@/server/ops/subscriptions";
+import { computeZakat, percentToBp } from "@/lib/zakat";
+describe("subscriptions (PRD 4.10)", () => {
+  it("monthly charges from a 31st keep to month ends without drifting", () => {
+    expect(chargesBetween("2026-01-31", { value: 1, unit: "month" }, "2026-01-01", "2026-05-31")).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31"]);
+  });
+  it("next charge rolls forward from an old anchor", () => {
+    expect(nextCharge("2023-03-15", { value: 12, unit: "month" }, "2026-11-18")).toBe("2027-03-15");
+    expect(nextCharge("2026-11-01", { value: 1, unit: "week" }, "2026-11-18")).toBe("2026-11-22");
+  });
+  it("monthly equivalent", () => {
+    expect(monthlyEquivalentMinor(119_88, { value: 12, unit: "month" })).toBe(9_99);
+    expect(monthlyEquivalentMinor(10_00, { value: 1, unit: "week" })).toBe(43_48);
+  });
+});
+describe("zakat estimate (PRD 4.17)", () => {
+  it("transparent integer arithmetic with silver nisab", () => {
+    const r = computeZakat({ currency: "SAR", assets: [{ label: "Bank", amount: "20000" }, { label: "Cash", amount: "1500.50" }], liabilities: [{ label: "Debt", amount: "1500.50" }], nisabBasis: "silver", pricePerGram: "4.10", ratePercent: "2.5" });
+    expect(r).toMatchObject({ assetsMinor: 2_150_050, liabilitiesMinor: 150_050, netMinor: 2_000_000, nisabMinor: 243_950, aboveNisab: true, rateBp: 250, zakatMinor: 50_000 });
+    expect(r.steps).toHaveLength(5);
+  });
+  it("below nisab gives zero; liabilities never make net negative", () => {
+    const r = computeZakat({ currency: "SAR", assets: [{ label: "Cash", amount: "100" }], liabilities: [{ label: "Debt", amount: "500" }], nisabBasis: "gold", pricePerGram: "300", ratePercent: "2.5" });
+    expect(r.netMinor).toBe(0);
+    expect(r.zakatMinor).toBe(0);
+    expect(r.aboveNisab).toBe(false);
+  });
+  it("rate parsing", () => { expect(percentToBp("2.5")).toBe(250); expect(percentToBp("2.58")).toBe(258); expect(() => percentToBp("abc")).toThrow(); });
+});

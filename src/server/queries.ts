@@ -8,6 +8,7 @@ import { fastBalance, routineAnchor, routineDue, applyAnnualFastRules } from "./
 import { debtOutstanding } from "./ops/finance";
 import { decPeriodField, periodEstimate, periodSettingsOf } from "./ops/period";
 import { cvBullet } from "./ops/career";
+import { periodOf, chargesBetween, nextCharge, monthlyEquivalentMinor } from "./ops/subscriptions";
 import { ensureOccurrences } from "./ops/planning";
 import { addDays, daysBetween, todayLocal, dmy } from "@/lib/time";
 
@@ -157,6 +158,7 @@ export async function dashboardState(o: Owner) {
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },
     period: periodSettingsOf(o.settings).showOnDashboard ? await periodState(o) : null,
+    subscriptions: await subscriptionsState(o),
   };
 }
 
@@ -346,5 +348,44 @@ export async function achievementsState(o: Owner, f: { q?: string; kind?: string
   return {
     rows: rows.map((a) => ({ ...a, bullet: cvBullet(a), project: projectRows.find((p) => p.id === a.projectId) ?? null, application: appRows.find((x) => x.id === a.applicationId) ?? null, docs: docRows.filter((d) => a.documentIds.includes(d.id)) })),
     total: all.length, hobbies: hobbyRows, tags, years, projects: projectRows, applications: appRows, documents: docRows,
+  };
+}
+
+export async function subscriptionsState(o: Owner) {
+  const today = todayLocal(o.timezone);
+  const all = await db().select().from(t.subscriptions).where(and(eq(t.subscriptions.ownerId, o.id), isNull(t.subscriptions.deletedAt))).orderBy(asc(t.subscriptions.name));
+  const rows = all.map((s) => {
+    const p = periodOf(s);
+    const next = s.status === "active" ? nextCharge(s.anchorDate, p, today) : null;
+    return { sub: s, next, daysLeft: next ? daysBetween(today, next) : null, monthlyMinor: monthlyEquivalentMinor(s.amountMinor, p), inTrial: !!s.trialEndsOn && s.trialEndsOn >= today };
+  }).sort((a, b) => (a.next ?? "9999").localeCompare(b.next ?? "9999"));
+  const active = rows.filter((r) => r.sub.status === "active");
+  const totals: Record<string, { monthly: number; yearly: number }> = {};
+  for (const r of active) {
+    const c = r.sub.currency;
+    totals[c] ??= { monthly: 0, yearly: 0 };
+    totals[c].monthly += r.monthlyMinor;
+    totals[c].yearly += r.monthlyMinor * 12;
+  }
+  const horizon = addDays(today, 60);
+  const upcoming = active.flatMap((r) => chargesBetween(r.sub.anchorDate, periodOf(r.sub), today, horizon, 10)
+    .filter((d) => !r.sub.trialEndsOn || d >= r.sub.trialEndsOn)
+    .map((d) => ({ date: d, id: r.sub.id, name: r.sub.name, amountMinor: r.sub.amountMinor, currency: r.sub.currency, renewal: r.sub.renewal })))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return { today, rows, active, totals, upcoming, horizon };
+}
+
+export async function zakatState(o: Owner) {
+  const [calcs, pays] = await Promise.all([
+    db().select().from(t.zakatCalculations).where(and(eq(t.zakatCalculations.ownerId, o.id), isNull(t.zakatCalculations.deletedAt))).orderBy(desc(t.zakatCalculations.evaluationDate), desc(t.zakatCalculations.createdAt)),
+    db().select().from(t.zakatPayments).where(and(eq(t.zakatPayments.ownerId, o.id), isNull(t.zakatPayments.deletedAt))).orderBy(desc(t.zakatPayments.paidOn)),
+  ]);
+  const paidFor = (id: string) => pays.filter((p) => p.calculationId === id);
+  return {
+    calcs: calcs.map((c) => {
+      const ps = paidFor(c.id).filter((p) => p.currency === c.currency);
+      return { calc: c, paidMinor: ps.reduce((a, p) => a + p.amountMinor, 0), payments: ps.length };
+    }),
+    payments: pays.map((p) => ({ ...p, calc: calcs.find((c) => c.id === p.calculationId) ?? null })),
   };
 }

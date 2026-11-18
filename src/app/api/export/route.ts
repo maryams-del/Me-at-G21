@@ -37,6 +37,11 @@ export async function GET() {
       db.select().from(t.documents).where(eq(t.documents.ownerId, o)),
       db.select({ id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename, contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, sha256: t.documentFiles.sha256, createdAt: t.documentFiles.createdAt, deletedAt: t.documentFiles.deletedAt }).from(t.documentFiles).where(eq(t.documentFiles.ownerId, o)),
     ]);
+    const [subs, zakatCalcs, zakatPays] = await Promise.all([
+      db.select().from(t.subscriptions).where(eq(t.subscriptions.ownerId, o)),
+      db.select().from(t.zakatCalculations).where(eq(t.zakatCalculations.ownerId, o)),
+      db.select().from(t.zakatPayments).where(eq(t.zakatPayments.ownerId, o)),
+    ]);
     const [apps, appReqs, appEvents, achievements, hobbies, periods, people] = await Promise.all([
       db.select().from(t.mastersApplications).where(eq(t.mastersApplications.ownerId, o)),
       db.select().from(t.applicationRequirements).where(eq(t.applicationRequirements.ownerId, o)),
@@ -59,6 +64,8 @@ export async function GET() {
       expiries: { items: expiries, renewals }, people,
       applications: { applications: apps, requirements: appReqs, statusEvents: appEvents },
       achievements: { achievements, hobbies },
+      subscriptions: subs,
+      zakat: { note: "Calculations are estimates, never payments.", calculations: zakatCalcs, payments: zakatPays },
       periodLog: { note: "Private. Decrypted for this export only; keep this file somewhere safe.", entries: periodLog },
       documents: { note: "Metadata only. Full ID numbers and file contents are excluded; download files individually.", documents: docs, files },
     };

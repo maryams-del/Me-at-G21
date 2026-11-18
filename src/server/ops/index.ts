@@ -11,6 +11,8 @@ import "./admin";
 import "./education";
 import "./period";
 import "./career";
+import "./subscriptions";
+import "./zakat";
 
 export { getOp, allOps };
 

@@ -20,7 +20,7 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.7 | Fast calendar view, fast targets/reminders | ⏳ B | Ledger list shows Hijri equivalents today |
 | 4.8 | Savings: multiple goals, ledger, progress, milestones, month-by-month, planned ≠ saved, monthly reminder | ✅ | Test 6 |
 | 4.9 | Lent/borrowed, partial repayments, audited corrections, collect vs repay reminders, overdue repeats | ✅ | Test 5 |
-| 4.10 | Subscriptions | ⏳ B | |
+| 4.10 | Subscriptions: cost, currency, monthly/yearly/weekly/custom cadence, next charge, payment label only (card numbers refused), auto/manual renewal, trial end, URL, notes, active/cancelled; renewal and trial reminders with editable lead times; monthly-equivalent totals; 60-day calendar of charges; no cancellation automation | ✅ | `ops/subscriptions.ts`, `finance/subscriptions`. Charges projected from an anchor in whole calendar months (no month-end drift); hourly housekeeping rolls reminders forward. `money.test.ts`, `rules.test.ts`, E2E |
 | 4.11 | Expiries & renewals: 90/30/7 reminders (editable), renewal history, passports/IDs/licences/cards/memberships/custom, digits redacted from notifications | ✅ | `ops/admin.ts`, `admin.test.ts`, E2E |
 | 4.12 | Documents: metadata, version history, private Vercel Blob storage with server-side AES-256-GCM, sniffed file types, 4 MB limit, owner-checked download, share sheet, protected ID numbers (encrypted, masked, reveal/copy after passkey step-up, audit) | ✅ | `storage.ts`, `documents.ts`, `admin.test.ts`, E2E |
 | 4.13 | Master's applications | ⏳ B | |
@@ -28,7 +28,7 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.14 | Task attachments, checklist editing UI | ⏳ B | Checklist stored; editor UI pending |
 | 4.15 | Achievements bank & hobbies: kinds, areas, dates, outcome, CV line, skills, tags, links, attached documents, links to projects/applications, filters, CV/portfolio bullet export | ✅ | `ops/career.ts`, `education/achievements`. Bullets built only from stored fields; AI prompt forbids invented metrics; AI can't mark featured. `personal.test.ts`, E2E |
 | 4.16 | Quran class Sun 19:00 Riyadh, 60-min reminder (editable), per-occurrence homework, translation study suggestion (Sat 19:00, inactive until owner activates), cancel one vs all future, other weekly classes | ✅ | Tests 7 & 25 |
-| 4.17 | Zakat | ⏳ B | |
+| 4.17 | Zakat: owner-entered assets and deductions, currency, evaluation date, gold/silver/manual nisab with manually entered, labelled prices; step-by-step estimate; configurable rate (default 2.5%); saved snapshots; separate payments log; optional reminder one lunar year later | ✅ | `lib/zakat.ts` (integer-only, shared by browser and server; server recomputes on save), `ops/zakat.ts`, `finance/zakat`. Calculations not AI-allowed; disclaimer on page; estimates never counted as payments. `money.test.ts`, E2E |
 | 4.18 | AI capture: text and editable dictation, multi-action, preview, questions, NL corrections, Fill details later → draft only after confirm, per-entry confirm, transactional, idempotent, auditable, server-enforced | ✅ | Tests 8/9/10/22; `ai.test.ts`; E2E |
 | 4.18 | Smart search grounded in records, calculation shown, honest no-results | ✅ | Test 11 |
 | 4.18 | Prompt-injection posture, op allowlist, server validation, no LLM-trusted IDs | ✅ | "Trust boundary" tests |
