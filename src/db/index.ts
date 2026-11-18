@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 /** DATABASE_URL, or the name the Vercel–Neon integration created with the ME_AT_G21 prefix. */
 export function databaseUrl(): string | undefined {
-  return process.env.DATABASE_URL || process.env.ME_AT_G21_URL;
+  return process.env.DATABASE_URL || process.env.ME_AT_G21_DATABASE_URL || process.env.ME_AT_G21_URL;
 }
 
 export type DB = NodePgDatabase<typeof schema>;
