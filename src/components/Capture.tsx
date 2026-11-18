@@ -18,7 +18,7 @@ const FIELD_LABELS: Record<string, string> = {
   completedOn: "Date", onDate: "Date", dueDate: "Due", dueOn: "Due", dueTime: "Time", counterparty: "Person",
   direction: "Type", routineId: "Routine", goalId: "Goal", type: "Action", title: "Title", reference: "Surah / verses",
   projectId: "Project", name: "Name", reminderOffsetsDays: "Reminder days before",
-  label: "Item", expiresOn: "Expires", newExpiresOn: "New expiry", itemId: "Item", renewedOn: "Renewed",
+  label: "Item", personId: "Belongs to", expiresOn: "Expires", newExpiresOn: "New expiry", itemId: "Item", renewedOn: "Renewed",
 };
 const MODULE_GLYPH: Record<string, Parameters<typeof Glyph>[0]["kind"]> = {
   charity: "charity", debts: "debts", fasts: "fasts", routines: "routines", waxing: "waxing", dental: "dental",

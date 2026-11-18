@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-or
 import { getDb } from "@/db";
 import {
   aiProposals, aiProposalOperations, captureDrafts, routines, savingsGoals, debts, projects, tasks,
-  charityPayments, maintenanceActivities, expiryItems, maintenanceCompletionEvents, routineEvents, fastLedgerEvents,
+  charityPayments, maintenanceActivities, expiryItems, people, maintenanceCompletionEvents, routineEvents, fastLedgerEvents,
   savingsTransactions, auditEvents, homeworkTasks,
 } from "@/db/schema";
 import { getOp, runOpInTx } from "../ops";
@@ -30,14 +30,16 @@ type AliasMap = Record<string, { id: string; kind: string; name: string }>;
 
 async function buildContext(ownerId: string, tz: string, currency: string): Promise<{ ctx: AiContext; aliases: AliasMap }> {
   const db = getDb();
-  const [rs, gs, ds, ps, ts, es] = await Promise.all([
+  const [rs, gs, ds, ps, ts, es, fam] = await Promise.all([
     db.select({ id: routines.id, name: routines.name, kind: routines.kind }).from(routines).where(eq(routines.ownerId, ownerId)).orderBy(asc(routines.createdAt)),
     db.select({ id: savingsGoals.id, name: savingsGoals.name }).from(savingsGoals).where(and(eq(savingsGoals.ownerId, ownerId), eq(savingsGoals.status, "active"))).orderBy(asc(savingsGoals.createdAt)),
     db.select({ id: debts.id, counterparty: debts.counterparty, direction: debts.direction }).from(debts).where(and(eq(debts.ownerId, ownerId), eq(debts.status, "open"), isNull(debts.deletedAt))).orderBy(asc(debts.createdAt)),
     db.select({ id: projects.id, name: projects.name }).from(projects).where(and(eq(projects.ownerId, ownerId), eq(projects.status, "active"), isNull(projects.deletedAt))).orderBy(asc(projects.createdAt)),
     db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(and(eq(tasks.ownerId, ownerId), isNull(tasks.deletedAt), sql`${tasks.status} <> 'done'`)).orderBy(desc(tasks.createdAt)).limit(30),
-    db.select({ id: expiryItems.id, label: expiryItems.label, kind: expiryItems.kind }).from(expiryItems).where(and(eq(expiryItems.ownerId, ownerId), isNull(expiryItems.deletedAt), eq(expiryItems.status, "active"))).orderBy(asc(expiryItems.expiresOn)),
+    db.select({ id: expiryItems.id, label: expiryItems.label, kind: expiryItems.kind, personId: expiryItems.personId }).from(expiryItems).where(and(eq(expiryItems.ownerId, ownerId), isNull(expiryItems.deletedAt), eq(expiryItems.status, "active"))).orderBy(asc(expiryItems.expiresOn)),
+    db.select({ id: people.id, name: people.name, relation: people.relation }).from(people).where(and(eq(people.ownerId, ownerId), isNull(people.deletedAt))).orderBy(asc(people.createdAt)),
   ]);
+  const famName = new Map(fam.map((f) => [f.id, f.name]));
   const aliases: AliasMap = {};
   const tag = <T extends { id: string }>(prefix: string, rows: T[], kind: string, name: (r: T) => string) =>
     rows.map((r, i) => { const a = `${prefix}${i + 1}`; aliases[a] = { id: r.id, kind, name: name(r) }; return { ...r, alias: a }; });
@@ -53,7 +55,8 @@ async function buildContext(ownerId: string, tz: string, currency: string): Prom
       projects: tag("p", ps, "project", (p) => p.name).map(({ alias, name }) => ({ alias, name })),
       tasks: tag("t", ts, "task", (t) => t.title).map(({ alias, title }) => ({ alias, title })),
       // Labels only (e.g. "Passport") — never ID numbers, dates of documents or files.
-      expiries: tag("e", es, "expiry", (e) => e.label).map(({ alias, label, kind }) => ({ alias, label: label.replace(/\d[\d\s-]{4,}\d/g, "•••"), kind })),
+      expiries: tag("e", es, "expiry", (e) => (e.personId ? `${famName.get(e.personId) ?? ""}'s ${e.label}` : e.label)).map(({ alias, label, kind, personId }) => ({ alias, label: (personId ? `${famName.get(personId) ?? ""}'s ${label}` : label).replace(/\d[\d\s-]{4,}\d/g, "•••"), kind })),
+      people: tag("f", fam, "person", (f) => f.name).map(({ alias, name, relation }) => ({ alias, name, relation })),
     },
   };
 }

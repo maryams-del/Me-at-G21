@@ -1,19 +1,23 @@
-import { pageOwner, expiriesState, remindersFor } from "@/server/queries";
+import { pageOwner, expiriesState, remindersFor, peopleList } from "@/server/queries";
+import { PeopleManager, personLabel, personOptions } from "../People";
 import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { fmtDate, relDays } from "@/lib/format";
 
 const KINDS = [{ value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "license", label: "Driving licence" }, { value: "bank_card", label: "Bank card" }, { value: "membership", label: "Membership" }, { value: "custom", label: "Other" }];
 
-export default async function ExpiriesPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; sort?: string }> }) {
+export default async function ExpiriesPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; sort?: string; person?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
   const kind = KINDS.some((k) => k.value === sp.kind) ? sp.kind : undefined;
   const sort = sp.sort === "latest" ? "latest" : "soonest";
-  const s = await expiriesState(o, { kind, sort });
+  const people = await peopleList(o.id);
+  const person = sp.person === "me" || people.some((p) => p.id === sp.person) ? sp.person : undefined;
+  const s = await expiriesState(o, { kind, sort, person });
   const rem = await remindersFor(o.id, "expiry", s.items.map((x) => x.item.id));
   const fields: FieldDef[] = [
     { name: "label", label: "What is it?", required: true, placeholder: "Passport", help: "Don't type the ID or card number here; store it in Documents instead." },
+    { name: "personId", label: "Belongs to", type: "select", nullable: true, options: personOptions(people) },
     { name: "kind", label: "Type", type: "select", required: true, options: KINDS },
     { name: "expiresOn", label: "Expiry date", type: "date", required: true },
     { name: "issuer", label: "Issued by", nullable: true },
@@ -28,20 +32,23 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader glyph="expiries" title="Expiries & renewals" intro="Reminders say only the item name on your lock screen, never numbers." />
-      <div className="mb-8">
+      <div className="mb-8 flex flex-wrap gap-3 items-start">
         <Reveal label="Track something" buttonClass="btn btn-primary" open={sp.add === "1"}>
           <OpForm op="expiry.create" fields={fields} initial={{ kind: "passport", reminderOffsetsDays: [-90, -30, -7], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Start tracking" />
         </Reveal>
+        <PeopleManager people={people} />
       </div>
       <form className="panel p-3 mb-6 flex flex-wrap gap-3 items-end" aria-label="Filter and sort">
         <label className="field"><span className="label">Type</span>
           <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
+        <label className="field"><span className="label">Belongs to</span>
+          <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
         <label className="field"><span className="label">Sort</span>
           <select name="sort" defaultValue={sort} className="select"><option value="soonest">Closest expiry first</option><option value="latest">Farthest expiry first</option></select></label>
         <button className="btn">Apply</button>
-        {(kind || sort === "latest") && <a href="/admin/expiries" className="btn btn-ghost">Clear</a>}
+        {(kind || person || sort === "latest") && <a href="/admin/expiries" className="btn btn-ghost">Clear</a>}
       </form>
-      {active.length === 0 && kind ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
+      {active.length === 0 && (kind || person) ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
         <ul className="grid gap-3">
           {active.map(({ item: it, daysLeft, renewals }) => {
             const tone = daysLeft < 0 ? "rust" : daysLeft <= 30 ? "rust" : daysLeft <= 90 ? "mustard" : "";
@@ -49,7 +56,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
               <li key={it.id} className="panel p-4 grid gap-3" style={tone ? { boxShadow: `inset 6px 0 0 var(--${tone})` } : undefined}>
                 <div className="flex flex-wrap justify-between gap-3">
                   <div>
-                    <h2 className="t-h3">{it.label} {KINDS.find((k) => k.value === it.kind)?.label !== it.label && <span className="t-meta font-normal">{KINDS.find((k) => k.value === it.kind)?.label}</span>}</h2>
+                    <h2 className="t-h3">{it.personId ? `${personLabel(people, it.personId)}'s ` : ""}{it.label} {KINDS.find((k) => k.value === it.kind)?.label !== it.label && <span className="t-meta font-normal">{KINDS.find((k) => k.value === it.kind)?.label}</span>}</h2>
                     <p className="t-small text-ink-2">{it.issuer ? `${it.issuer}. ` : ""}Reminders {it.remindersEnabled ? it.reminderOffsetsDays.map((d) => `${-d}d`).join(", ") + " before" : "off"}</p>
                   </div>
                   <div className="text-right">

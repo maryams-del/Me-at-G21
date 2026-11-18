@@ -110,3 +110,33 @@ describe("PRD 4.12 / Test 23 — documents and protected IDs", () => {
     expect(await getDb().select().from(protectedIdFields)).toHaveLength(0);
   });
 });
+
+describe("Belongs to (family members)", () => {
+  it("assigns documents/expiries to a person, words reminders with their name, filters and searches by them", async () => {
+    const ali = await op(at("2026-11-18"), "person.create", { name: "Ali", relation: "child" });
+    await op(at("2026-11-18"), "expiry.create", { label: "Passport", kind: "passport", personId: ali.id, expiresOn: "2027-06-30" });
+    const rem = await getDb().select().from(reminders).where(eq(reminders.sourceType, "expiry"));
+    expect(rem.every((r) => r.title.startsWith("Ali's Passport"))).toBe(true);
+    await op(at("2026-11-18"), "document.create", { title: "Passport", kind: "passport", personId: ali.id });
+    await op(at("2026-11-18"), "document.create", { title: "Passport", kind: "passport" });
+    const { documentsState, expiriesState } = await import("@/server/queries");
+    const me = { ...owner, displayName: "Maryam" };
+    expect((await documentsState(me, { person: ali.id! })).map((d) => d.doc.personId)).toEqual([ali.id]);
+    expect((await documentsState(me, { person: "me" })).every((d) => d.doc.personId === null)).toBe(true);
+    const ranked = await documentsState(me, { q: "ali passport" });
+    expect(ranked[0].doc.personId).toBe(ali.id);
+    const mine = await documentsState(me, { q: "maryam passport" });
+    expect(mine[0].doc.personId).toBeNull();
+    expect((await expiriesState(me, { person: ali.id! })).items).toHaveLength(1);
+    // another owner can't attach their records to my family member
+    const other = await makeOwner("other@example.com");
+    await expect(op(at("2026-11-18"), "document.create", { title: "X", personId: ali.id }, () => other.id)).rejects.toThrow(/Person not found/);
+  });
+  it("Capture understands “Ali's passport expires on …”", async () => {
+    await op(at("2026-11-18"), "person.create", { name: "Ali", relation: "child" });
+    const res = await interpret({ id: owner.id, timezone: "Asia/Riyadh", defaultCurrency: "SAR" }, "Ali's passport expires on 1 June 2028", "text");
+    if (res.kind !== "proposal") throw new Error("expected proposal");
+    expect(res.proposal.operations[0].valid).toBe(true);
+    expect(res.proposal.operations[0].display.personId).toBe("Ali");
+  });
+});

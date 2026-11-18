@@ -66,7 +66,7 @@ Rules:
 - For things already done ("I donated", "I waxed", "I completed a fast") with no date stated, use today's date and list that field in "assumed".
 - Resolve relative dates ("yesterday", "next Thursday", "Friday") against TODAY in the owner's timezone. Dates are YYYY-MM-DD.
 - Amounts are decimal strings without currency ("150", "150.50"). Default currency is the owner's default unless stated.
-- To reference an existing routine/goal/debt/project/task, use "@alias" from CONTEXT (e.g. "@r1"). Never invent IDs.
+- To reference an existing routine/goal/debt/project/task/expiry/family member, use "@alias" from CONTEXT (e.g. "@r1", "@f1"). For something belonging to a family member ("Ali's passport"), set personId to their alias. Never invent IDs.
 - If something needed for safe accuracy is missing, add ONE short, specific question per gap to "questions" (keep it minimal).
 - For questions about stored data ("when did I last…", "how much did I donate…"), set intent "search", operations [], and fill "query".
   Use query.type "last_event" with target waxing|dental|fasts|charity|savings|debts|routine:@alias. Use charity_total with from/to dates.
@@ -86,7 +86,7 @@ export function anthropicProvider(): AiProvider {
       const prev = previous?.at(-1);
       const userContent = [
         `TODAY: ${ctx.today} (${ctx.weekday}), timezone ${ctx.tz}, default currency ${ctx.currency}`,
-        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries })}`,
+        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries, people: ctx.people })}`,
         `OP CATALOG: ${JSON.stringify(catalog)}`,
         prev ? `PREVIOUS PROPOSAL (from "${prev.text.slice(0, 500)}"): ${JSON.stringify(prev.operations)}` : "",
         `<owner_text>${text.slice(0, 2000)}</owner_text>`,

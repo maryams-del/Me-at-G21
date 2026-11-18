@@ -205,11 +205,12 @@ function parseClause(c: string, ctx: AiContext, ops: ProposedOp[], questions: st
     return;
   }
   if (expKind || /\bexpir/.test(t)) {
+    const who = ctx.people.find((f) => { const n = f.name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""); return !!n && new RegExp(`(^|[^\\p{L}])${n}('s|s)?(?![\\p{L}])`, "u").test(t); });
     const kind = expKind?.[1] ?? "custom";
     const label = expKind?.[2] ?? cap(stripDates(c.replace(/^(add|track|remind me( about)?|my)\s+/i, "").replace(/\b(expiry|expires?|expiring|expiration)\b.*$/i, "")).trim() || "Item");
     const date = resolveDatePhrase(t.replace(/^.*?\b(expir\w*|valid until|until|on)\b/, ""), ctx.today) ?? resolveDatePhrase(t, ctx.today);
-    ops.push({ op: "expiry.create", input: { label, kind, expiresOn: date ?? undefined, reminderOffsetsDays: [-90, -30, -7] }, missing: date ? [] : ["expiresOn"] });
-    if (!date) questions.push(`When does your ${label.toLowerCase()} expire? You can also save it now and fill in the date later.`);
+    ops.push({ op: "expiry.create", input: { label, kind, personId: who ? `@${who.alias}` : null, expiresOn: date ?? undefined, reminderOffsetsDays: [-90, -30, -7] }, missing: date ? [] : ["expiresOn"] });
+    if (!date) questions.push(`When does ${who ? `${who.name}'s` : "your"} ${label.toLowerCase()} expire? You can also save it now and fill in the date later.`);
     return;
   }
   if (/(document|subscription|zakat|period|application|achievement)/.test(t)) {

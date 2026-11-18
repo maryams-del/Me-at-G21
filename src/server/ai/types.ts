@@ -37,6 +37,8 @@ export type AiContext = {
   projects: { alias: string; name: string }[];
   tasks: { alias: string; title: string }[];
   expiries: { alias: string; label: string; kind: string }[];
+  /** family members (first names only) for "Ali's passport" */
+  people: { alias: string; name: string; relation: string }[];
 };
 
 export interface AiProvider {

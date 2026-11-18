@@ -1,4 +1,5 @@
-import { pageOwner, documentsState, documentStorageBytes } from "@/server/queries";
+import { pageOwner, documentsState, documentStorageBytes, peopleList } from "@/server/queries";
+import { PeopleManager, personLabel, personOptions } from "../People";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { fmtDate, fmtDateTime } from "@/lib/format";
@@ -19,31 +20,36 @@ const baseFields: FieldDef[] = [
 ];
 const kb = (n: number) => (n === 0 ? "0 MB" : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; q?: string; sort?: string }> }) {
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; q?: string; sort?: string; person?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
   const kind = KINDS.some((k) => k.value === sp.kind) ? sp.kind : undefined;
   const q = sp.q?.trim().slice(0, 80) || undefined;
-  const rows = await documentsState(o, { kind, q, sort: sp.sort });
-  const filtered = !!(kind || q);
+  const people = await peopleList(o.id);
+  const person = sp.person === "me" || people.some((p) => p.id === sp.person) ? sp.person : undefined;
+  const rows = await documentsState(o, { kind, q, sort: sp.sort, person });
+  const filtered = !!(kind || q || person);
   const used = await documentStorageBytes(o.id);
   const LIMIT = 1024 * 1024 * 1024; // Vercel Blob free (Hobby) allowance
   const pct = Math.min(100, (used / LIMIT) * 100);
   return (
     <>
       <PageHeader glyph="documents" title="Documents & IDs" intro="Files are encrypted before they're stored and only open after you sign in. ID numbers are stored separately and need Face ID / Touch ID to reveal. Nothing here is ever sent to the AI assistant." />
-      <div className="mb-8">
+      <div className="mb-8 flex flex-wrap gap-3 items-start">
         <Reveal label="Add a document" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <NewDocumentForm />
+          <NewDocumentForm people={people} />
         </Reveal>
+        <PeopleManager people={people} />
       </div>
       <div className="mb-6 grid gap-1 max-w-md" aria-label="File storage used">
         <div className="flex justify-between t-small"><span>File storage</span><span>{kb(used)} of 1 GB free</span></div>
         <div className="bar" role="img" aria-label={`${pct.toFixed(1)}% used`}><i style={{ width: `${Math.max(pct, used ? 0.5 : 0)}%`, background: pct > 80 ? "var(--rust)" : "var(--ink)" }} /></div>
         {pct > 80 && <p className="t-small" style={{ color: "var(--danger)" }}>Nearly full. Delete old file versions you don&apos;t need; going over the free limit pauses file access for up to 30 days.</p>}
       </div>
-      <form className="panel p-3 mb-6 grid gap-3 sm:grid-cols-[2fr_1.2fr_1.2fr_auto_auto] items-end" role="search" aria-label="Filter documents">
+      <form className="panel p-3 mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter documents">
         <label className="field"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. maryam passport" /></label>
+        <label className="field"><span className="label">Belongs to</span>
+          <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
         <label className="field"><span className="label">Type</span>
           <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
         <label className="field"><span className="label">Sort</span>
@@ -58,6 +64,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
               <div className="flex justify-between gap-3">
                 <div>
                   <h2 className="t-h3">{d.title}</h2>
+                  {d.personId && <span className="chip chip-mustard mt-1">{personLabel(people, d.personId)}</span>}
                   <p className="t-meta">{[KINDS.find((k) => k.value === d.kind)?.label, d.issuer].filter((x) => x && x !== d.title).join(", ")}</p>
                 </div>
                 {d.expiresOn && <p className="t-small text-right">Expires<br /><span className="font-medium">{fmtDate(d.expiresOn)}</span>{tracked && <span className="block t-meta">reminders on</span>}</p>}
@@ -83,11 +90,13 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                   </ul>
                 ) : <p className="t-meta">No file uploaded.</p>}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <UploadButton documentId={d.id} hasFiles={files.length > 0} />
+              <UploadButton documentId={d.id} hasFiles={files.length > 0} />
+              <div className="flex flex-wrap gap-2 pt-2" style={{ borderTop: "1px solid var(--hair)" }}>
                 <Reveal label="Edit details" buttonClass="btn btn-sm">
                   <OpForm op="document.update" fixed={{ id: d.id }} initial={{ ...d, idNumber: "" }} submitLabel="Save" fields={[
-                    ...baseFields.slice(0, 5),
+                    baseFields[0],
+                    { name: "personId", label: "Belongs to", type: "select", nullable: true, options: personOptions(people) },
+                    ...baseFields.slice(1, 5),
                     { name: "idNumber", label: d.idMasked ? "Replace ID number" : "ID number", help: d.idMasked ? "Leave empty to keep the current number." : undefined },
                     ...(d.idMasked ? [{ name: "clearId", label: "Remove the stored ID number", type: "checkbox", wide: true } as FieldDef] : []),
                     baseFields[5],

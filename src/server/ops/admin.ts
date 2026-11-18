@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, isNull, max } from "drizzle-orm";
-import { expiryItems, renewalEvents, documents, protectedIdFields, documentFiles } from "@/db/schema";
+import { expiryItems, renewalEvents, documents, protectedIdFields, documentFiles, people } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
 import { addDays, localToInstant, todayLocal, dmy } from "@/lib/time";
@@ -14,12 +14,70 @@ export const DOC_KINDS = ["passport", "national_id", "transcript", "certificate"
 /** Lock-screen safety: never show long digit runs (ID / card numbers) in notification text. */
 export const redactDigits = (s: string) => s.replace(/\d[\d\s-]{4,}\d/g, "•••");
 
+/* ───────────── Family members ───────────── */
+
+export const RELATIONS = ["spouse", "child", "parent", "sibling", "other"] as const;
+
+export async function ownPerson(ctx: Pick<Ctx, "tx" | "ownerId">, personId: string | null | undefined) {
+  if (!personId) return null;
+  const [p] = await ctx.tx.select().from(people).where(and(eq(people.id, personId), eq(people.ownerId, ctx.ownerId), isNull(people.deletedAt)));
+  if (!p) throw new UserError("Person not found", "personId");
+  return p;
+}
+
+/** "Ali's Passport" unless the label already names them. */
+export function withOwnerName(label: string, personName: string | null | undefined) {
+  if (!personName) return label;
+  return label.toLowerCase().includes(personName.toLowerCase()) ? label : `${personName}'s ${label}`;
+}
+
+export const personCreate = defineOp({
+  name: "person.create", module: "people", label: "Add family member", aiAllowed: false,
+  schema: z.object({ name: zText(60), relation: z.enum(RELATIONS).default("other") }),
+  summarize: (i) => `Add ${i.name} (${i.relation})`,
+  async run(ctx, i) {
+    const [p] = await ctx.tx.insert(people).values({ ownerId: ctx.ownerId, name: i.name, relation: i.relation }).returning({ id: people.id });
+    await audit(ctx, "people", "created", "person", p.id, `Added ${i.name} (${i.relation})`);
+    return { id: p.id, message: `${i.name} added` };
+  },
+});
+
+export const personUpdate = defineOp({
+  name: "person.update", module: "people", label: "Edit family member", aiAllowed: false,
+  schema: z.object({ id: zId, name: zText(60), relation: z.enum(RELATIONS) }),
+  summarize: (i) => `Update ${i.name}`,
+  async run(ctx, i) {
+    await ownPerson(ctx, i.id);
+    await ctx.tx.update(people).set({ name: i.name, relation: i.relation, updatedAt: ctx.now }).where(eq(people.id, i.id));
+    const items = await ctx.tx.select({ id: expiryItems.id }).from(expiryItems).where(and(eq(expiryItems.personId, i.id), isNull(expiryItems.deletedAt)));
+    for (const it of items) await syncExpiry(ctx, it.id); // reminder wording uses the name
+    await audit(ctx, "people", "edited", "person", i.id, `Renamed/edited ${i.name}`);
+    return { id: i.id, message: "Saved" };
+  },
+});
+
+export const personDelete = defineOp({
+  name: "person.delete", module: "people", label: "Remove family member", aiAllowed: false,
+  schema: z.object({ id: zId }),
+  summarize: () => "Remove person (their documents stay, marked as yours)",
+  async run(ctx, i) {
+    const p = await ownPerson(ctx, i.id);
+    await ctx.tx.update(people).set({ deletedAt: ctx.now }).where(eq(people.id, p!.id));
+    await ctx.tx.update(documents).set({ personId: null }).where(eq(documents.personId, p!.id));
+    const items = await ctx.tx.update(expiryItems).set({ personId: null }).where(eq(expiryItems.personId, p!.id)).returning({ id: expiryItems.id });
+    for (const it of items) await syncExpiry(ctx, it.id);
+    await audit(ctx, "people", "deleted", "person", p!.id, `Removed ${p!.name}`);
+    return { id: p!.id, message: `${p!.name} removed` };
+  },
+});
+
 /* ───────────── Expiries & renewals ───────────── */
 
 async function syncExpiry(ctx: Ctx, itemId: string) {
   const [it] = await ctx.tx.select().from(expiryItems).where(eq(expiryItems.id, itemId));
   if (!it || it.deletedAt || it.status !== "active" || !it.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "expiry", itemId);
-  const label = redactDigits(it.label);
+  const person = it.personId ? await ownPerson(ctx, it.personId).catch(() => null) : null;
+  const label = redactDigits(withOwnerName(it.label, person?.name));
   await syncReminders(ctx.tx, ctx.ownerId, "expiry", it.id, it.reminderOffsetsDays.map((off) => ({
     dedupeKey: `expiry:${it.id}:${it.expiresOn}:o${off}`,
     fireAt: localToInstant(addDays(it.expiresOn, off), it.reminderTime, ctx.tz),
@@ -30,7 +88,7 @@ async function syncExpiry(ctx: Ctx, itemId: string) {
 }
 
 const expiryInput = z.object({
-  label: zText(120), kind: z.enum(EXPIRY_KINDS).default("custom"), expiresOn: zDate,
+  label: zText(120), personId: zId.optional().nullable(), kind: z.enum(EXPIRY_KINDS).default("custom"), expiresOn: zDate,
   issuer: zOptText(200), documentId: zId.optional().nullable(),
   reminderOffsetsDays: z.array(z.number().int().min(-365).max(0)).max(8).default([-90, -30, -7]),
   reminderTime: zTime.default("09:00"), remindersEnabled: z.boolean().default(true), notes: zOptText(),
@@ -42,7 +100,8 @@ export const expiryCreate = defineOp({
   summarize: (i) => `Track “${i.label}” expiring ${dmy(i.expiresOn)}; reminders ${i.reminderOffsetsDays.map((o) => (o === 0 ? "on the day" : `${-o} days before`)).join(", ")}`,
   async run(ctx, i) {
     if (i.documentId) await ownDocument(ctx, i.documentId);
-    const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, ...i, documentId: i.documentId ?? null, source: ctx.source }).returning({ id: expiryItems.id });
+    await ownPerson(ctx, i.personId);
+    const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, ...i, personId: i.personId ?? null, documentId: i.documentId ?? null, source: ctx.source }).returning({ id: expiryItems.id });
     await syncExpiry(ctx, it.id);
     await audit(ctx, "expiries", "created", "expiry_item", it.id, `Tracking “${redactDigits(i.label)}”, expires ${dmy(i.expiresOn)}`);
     return { id: it.id, message: `Tracking ${i.label}` };
@@ -55,7 +114,8 @@ export const expiryUpdate = defineOp({
   summarize: (i) => `Update “${i.label}”`,
   async run(ctx, i) {
     const { id: itemId, ...rest } = i;
-    const res = await ctx.tx.update(expiryItems).set({ ...rest, documentId: rest.documentId ?? null, updatedAt: ctx.now })
+    await ownPerson(ctx, rest.personId);
+    const res = await ctx.tx.update(expiryItems).set({ ...rest, personId: rest.personId ?? null, documentId: rest.documentId ?? null, updatedAt: ctx.now })
       .where(and(eq(expiryItems.id, itemId), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt))).returning({ id: expiryItems.id });
     if (!res.length) throw new UserError("Item not found");
     await syncExpiry(ctx, itemId);
@@ -121,7 +181,7 @@ async function setProtectedId(ctx: Ctx, documentId: string, idNumber: string | n
 }
 
 const docInput = z.object({
-  title: zText(160), kind: z.enum(DOC_KINDS).default("other"), issuer: zOptText(200),
+  title: zText(160), personId: zId.optional().nullable(), kind: z.enum(DOC_KINDS).default("other"), issuer: zOptText(200),
   issuedOn: zDate.optional().nullable(), expiresOn: zDate.optional().nullable(),
   /** Full ID number: encrypted server-side, never logged, never sent to AI. Omit to keep, "" to clear. */
   idNumber: z.string().trim().max(64).optional(),
@@ -134,13 +194,14 @@ export const documentCreate = defineOp({
   schema: docInput,
   summarize: (i) => `Add document “${i.title}”`,
   async run(ctx, i) {
+    await ownPerson(ctx, i.personId);
     const [d] = await ctx.tx.insert(documents).values({
-      ownerId: ctx.ownerId, title: i.title, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes,
+      ownerId: ctx.ownerId, title: i.title, personId: i.personId ?? null, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes,
     }).returning({ id: documents.id });
     await setProtectedId(ctx, d.id, i.idNumber || undefined);
     if (i.trackExpiry && i.expiresOn) {
       const kind = (EXPIRY_KINDS as readonly string[]).includes(i.kind) ? (i.kind as (typeof EXPIRY_KINDS)[number]) : "custom";
-      const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: i.title, kind, expiresOn: i.expiresOn, issuer: i.issuer, documentId: d.id }).returning({ id: expiryItems.id });
+      const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: i.title, personId: i.personId ?? null, kind, expiresOn: i.expiresOn, issuer: i.issuer, documentId: d.id }).returning({ id: expiryItems.id });
       await syncExpiry(ctx, it.id);
     }
     await audit(ctx, "documents", "created", "document", d.id, `Added document “${i.title}”`);
@@ -154,7 +215,8 @@ export const documentUpdate = defineOp({
   summarize: (i) => `Update “${i.title}”`,
   async run(ctx, i) {
     await ownDocument(ctx, i.id);
-    await ctx.tx.update(documents).set({ title: i.title, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes, updatedAt: ctx.now }).where(eq(documents.id, i.id));
+    await ownPerson(ctx, i.personId);
+    await ctx.tx.update(documents).set({ title: i.title, personId: i.personId ?? null, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes, updatedAt: ctx.now }).where(eq(documents.id, i.id));
     await setProtectedId(ctx, i.id, i.clearId ? null : i.idNumber || undefined);
     await audit(ctx, "documents", "edited", "document", i.id, `Edited document “${i.title}”${i.idNumber || i.clearId ? " (ID number changed)" : ""}`);
     return { id: i.id, message: "Saved" };

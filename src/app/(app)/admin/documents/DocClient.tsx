@@ -4,34 +4,68 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
 import { useRevealClose } from "@/components/OpForm";
 
+/**
+ * Optional, owner-chosen compression for photos: resize to ≤2000 px on the long side and re-encode as
+ * JPEG (quality 0.82). Done in the browser, before upload. PDFs are never changed. If the result
+ * isn't smaller, or the browser can't decode the image (e.g. HEIC on some browsers), the original is kept.
+ */
+export async function compressIfImage(file: File): Promise<{ file: File; note: string | null }> {
+  if (!file.type.startsWith("image/")) return { file, note: "PDFs are uploaded as they are." };
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const g = canvas.getContext("2d");
+    if (!g) return { file, note: null };
+    g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+    g.drawImage(bmp, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return { file, note: "Already small; kept the original." };
+    const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return { file: new File([blob], name, { type: "image/jpeg" }), note: `Compressed ${Math.round(file.size / 1024)} KB → ${Math.round(blob.size / 1024)} KB` };
+  } catch {
+    return { file, note: "This browser couldn't compress that image; uploaded the original." };
+  }
+}
+
+async function uploadFile(documentId: string, file: File) {
+  const fd = new FormData();
+  fd.set("documentId", documentId);
+  fd.set("file", file);
+  const res = await fetch("/api/documents/upload", { method: "POST", body: fd, credentials: "same-origin" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Upload failed");
+  return data as { message?: string };
+}
+
 /** Upload a new file version. Bytes go to our server, which encrypts them before storage. */
 export function UploadButton({ documentId, hasFiles }: { documentId: string; hasFiles: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [compress, setCompress] = useState(false);
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const picked = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) { toast("Files must be 4 MB or smaller", "error"); return; }
+    if (!picked) return;
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.set("documentId", documentId);
-      fd.set("file", file);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd, credentials: "same-origin" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      toast(data.message ?? "Uploaded");
+      const { file, note } = compress ? await compressIfImage(picked) : { file: picked, note: null };
+      if (file.size > 4 * 1024 * 1024) throw new Error(file.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress” to shrink a photo." : "Files must be 4 MB or smaller");
+      const data = await uploadFile(documentId, file);
+      toast([data.message ?? "Uploaded", compress ? note : null].filter(Boolean).join(". "));
       router.refresh();
     } catch (err) { toast((err as Error).message, "error"); }
     finally { setBusy(false); }
   }
   return (
-    <>
+    <span className="inline-flex flex-wrap items-center gap-2">
       <input ref={input} type="file" accept="application/pdf,image/jpeg,image/png,image/heic,image/webp" className="sr-only" onChange={onPick} aria-label="Choose a file to upload" />
       <button className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Encrypting & uploading…" : hasFiles ? "Upload new version" : "Upload file"}</button>
-    </>
+      <label className="check t-small" style={{ minHeight: 36 }}><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size</label>
+    </span>
   );
 }
 
@@ -93,11 +127,14 @@ const DOC_KIND_OPTIONS = [
 ];
 
 /** New document with an optional file chosen up front: saves the details, then encrypts + uploads the file. */
-export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
+export type PersonOpt = { id: string; name: string; relation: string };
+
+export function NewDocumentForm({ onDone, people = [] }: { onDone?: () => void; people?: PersonOpt[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [compress, setCompress] = useState(false);
   const close = useRevealClose();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -105,9 +142,11 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
-    if (file && file.size > 4 * 1024 * 1024) { setError("Files must be 4 MB or smaller."); return; }
+    let toSend = file, note: string | null = null;
+    if (file && compress) ({ file: toSend, note } = await compressIfImage(file));
+    if (toSend && toSend.size > 4 * 1024 * 1024) { setError(toSend.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress file to reduce size” to shrink a photo." : "Files must be 4 MB or smaller."); return; }
     const input: Record<string, unknown> = {
-      title: v("title"), kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
+      title: v("title"), personId: v("personId") || null, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
       notes: v("notes") || null, trackExpiry: fd.get("trackExpiry") === "on",
     };
     if (v("idNumber")) input.idNumber = v("idNumber");
@@ -116,16 +155,12 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
     try {
       const r = await api<{ id: string }>("/api/ops/document.create", input);
       docId = r.id;
-      if (file) {
+      if (toSend) {
         setBusy("Encrypting & uploading…");
-        const up = new FormData();
-        up.set("documentId", r.id);
-        up.set("file", file);
-        const res = await fetch("/api/documents/upload", { method: "POST", body: up, credentials: "same-origin" });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(`Document saved, but the file didn't upload: ${data.error ?? "upload failed"}. Use “Upload file” on its card to try again.`);
+        try { await uploadFile(r.id, toSend); }
+        catch (up) { throw new Error(`Document saved, but the file didn't upload: ${(up as Error).message}. Use “Upload file” on its card to try again.`); }
       }
-      toast(file ? "Document saved with its file" : "Document saved");
+      toast([toSend ? "Document saved with its file" : "Document saved", note].filter(Boolean).join(". "));
       onDone?.();
       close?.();
       router.refresh();
@@ -139,6 +174,8 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
     <form className="grid gap-4" onSubmit={submit} noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" /></label>
+        <label className="field"><span className="label">Belongs to</span>
+          <select className="select" name="personId" defaultValue=""><option value="">Me</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.relation})</option>)}</select></label>
         <label className="field"><span className="label">Type</span>
           <select className="select" name="kind" defaultValue="passport">{DOC_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
         <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" /></label>
@@ -156,6 +193,8 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
             <span className="t-small text-ink-2">{file ? `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)` : "No file chosen"}</span>
             {file && <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFile(null)}>Remove</button>}
           </div>
+          <label className="check t-small"><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size
+            <span className="t-meta">(photos only; leave unticked to keep full quality)</span></label>
         </div>
         <label className="check sm:col-span-2"><input type="checkbox" name="trackExpiry" defaultChecked />Remind me before it expires (adds it to Expiries)</label>
         <label className="field sm:col-span-2"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" name="notes" /></label>

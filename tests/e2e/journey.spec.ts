@@ -198,10 +198,25 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     expect((await ok.body()).toString()).toContain("test file only");
     const anon = await (await page.context().browser()!.newContext()).request.get(new URL(href!, "http://localhost:3100").toString());
     expect(anon.status()).toBe(401);
+    // Family member + compressed photo upload
+    await page.getByRole("button", { name: /^Family members/ }).click();
+    await page.getByRole("textbox", { name: "Name" }).fill("Ali");
+    await page.getByRole("button", { name: "Add person" }).click();
+    await expect(page.getByText("Ali added")).toBeVisible();
+    await page.getByRole("button", { name: "Add a document" }).click();
+    await page.getByLabel("Title").fill("Passport");
+    await page.getByRole("combobox", { name: "Belongs to" }).first().selectOption({ label: "Ali (child)" });
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    await page.getByLabel("Choose a file for this document").setInputFiles({ name: "ali.png", mimeType: "image/png", buffer: png });
+    await page.getByLabel(/Compress file to reduce size/).first().check();
+    await page.getByRole("button", { name: "Save document" }).click();
+    await expect(page.getByText(/Document saved with its file/)).toBeVisible();
+    await page.goto("/admin/documents?q=ali+passport");
+    await expect(page.locator("main li").first().getByText("Ali", { exact: true })).toBeVisible();
     await page.goto("/admin/documents?kind=certificate");
     await expect(page.getByText(/No documents match type “Certificate”/)).toBeVisible();
     await page.goto("/admin/documents?q=passport+4567");
-    await expect(page.getByRole("heading", { name: "Passport", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Passport", level: 2 }).first()).toBeVisible();
     await page.goto("/admin/expiries");
     const order = await page.locator("main li h2").allInnerTexts();
     expect(order.findIndex((x) => x.startsWith("Driving licence"))).toBeLessThan(order.findIndex((x) => x.startsWith("Passport")));

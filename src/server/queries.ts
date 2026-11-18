@@ -153,7 +153,8 @@ export async function dashboardState(o: Owner) {
   const charityMonth = await db().select({ cur: t.charityPayments.currency, sum: sql<string>`sum(${t.charityPayments.amountMinor})` }).from(t.charityPayments)
     .where(and(eq(t.charityPayments.ownerId, o.id), eq(t.charityPayments.status, "completed"), isNull(t.charityPayments.deletedAt), gte(t.charityPayments.paidOn, monthStart))).groupBy(t.charityPayments.currency);
 
-  const expiring = await expiringSoon(o, 90);
+  const names = new Map((await peopleList(o.id)).map((p) => [p.id, p.name]));
+  const expiring = (await expiringSoon(o, 90)).map((e) => ({ ...e, label: e.personId && names.get(e.personId) ? `${names.get(e.personId)}'s ${e.label}` : e.label }));
   const overdue: { label: string; detail: string; href: string }[] = [];
   for (const e of expiring) if (e.expiresOn < today) overdue.push({ label: e.label, detail: `Expired ${dmy(e.expiresOn)}`, href: "/admin/expiries" });
   if (wax.overdue && wax.day) overdue.push({ label: "Waxing", detail: `Day ${wax.day} — past your ${wax.rule.windowDays}-day window`, href: "/care/waxing" });
@@ -195,9 +196,18 @@ export async function remindersFor(ownerId: string, sourceType: string, sourceId
 
 /* ───── life admin ───── */
 
-export async function expiriesState(o: Owner, f: { kind?: string; sort?: string } = {}) {
+export async function peopleList(ownerId: string) {
+  return db().select().from(t.people).where(and(eq(t.people.ownerId, ownerId), isNull(t.people.deletedAt))).orderBy(asc(t.people.createdAt));
+}
+/** "me" = the owner's own items (person_id is null); a UUID = that family member. */
+const personCond = (col: typeof t.documents.personId | typeof t.expiryItems.personId, person?: string) =>
+  person === "me" ? isNull(col) : person ? eq(col, person) : undefined;
+
+export async function expiriesState(o: Owner, f: { kind?: string; sort?: string; person?: string } = {}) {
   const conds = [eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt)];
   if (f.kind) conds.push(eq(t.expiryItems.kind, f.kind));
+  const pc = personCond(t.expiryItems.personId, f.person);
+  if (pc) conds.push(pc);
   const items = await db().select().from(t.expiryItems).where(and(...conds))
     .orderBy(asc(t.expiryItems.status), f.sort === "latest" ? desc(t.expiryItems.expiresOn) : asc(t.expiryItems.expiresOn));
   const renewals = items.length ? await db().select().from(t.renewalEvents).where(inArray(t.renewalEvents.itemId, items.map((i) => i.id))).orderBy(desc(t.renewalEvents.renewedOn)) : [];
@@ -206,13 +216,19 @@ export async function expiriesState(o: Owner, f: { kind?: string; sort?: string 
   return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id) })), docs, today };
 }
 
-export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string } = {}) {
+export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; person?: string } = {}) {
   const conds = [eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)];
   if (f.kind) conds.push(eq(t.documents.kind, f.kind));
+  const pc = personCond(t.documents.personId, f.person);
+  if (pc) conds.push(pc);
   const order = f.sort === "expiry" ? [sql`${t.documents.expiresOn} asc nulls last`, asc(t.documents.title)]
     : f.sort === "recent" ? [desc(t.documents.updatedAt)] : [asc(t.documents.kind), asc(t.documents.title)];
   let docs = await db().select().from(t.documents).where(and(...conds)).orderBy(...order);
-  if (f.q) docs = rankDocuments(docs, f.q);
+  if (f.q) {
+    const names = new Map((await peopleList(o.id)).map((p) => [p.id, p.name]));
+    const self = o.displayName ?? "me";
+    docs = rankDocuments(docs.map((d) => ({ ...d, personName: d.personId ? names.get(d.personId) ?? "" : self })), f.q);
+  }
   const files = docs.length ? await db().select({
     id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename,
     contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, createdAt: t.documentFiles.createdAt,
@@ -232,11 +248,11 @@ const DOC_KIND_WORDS: Record<string, string> = {
  * "certificate"), issuer, notes, tags or the last 4 digits of an ID. Documents matching more words
  * rank higher; a title hit counts most. "maryam passport" → title has "maryam" + type is passport → top.
  */
-export function rankDocuments<T extends { title: string; kind: string; issuer: string | null; notes: string | null; tags: string[]; idMasked: string | null }>(docs: T[], q: string): T[] {
+export function rankDocuments<T extends { title: string; kind: string; issuer: string | null; notes: string | null; tags: string[]; idMasked: string | null; personName?: string }>(docs: T[], q: string): T[] {
   const words = q.toLowerCase().normalize("NFKD").split(/[\s,]+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")).filter((w) => w.length >= 2).slice(0, 8);
   if (!words.length) return docs;
   const scored = docs.map((d) => {
-    const title = d.title.toLowerCase();
+    const title = `${d.title} ${d.personName ?? ""}`.toLowerCase();
     const kind = `${d.kind.replace("_", " ")} ${DOC_KIND_WORDS[d.kind] ?? ""}`.toLowerCase();
     const rest = [d.issuer, d.notes, d.tags.join(" "), d.idMasked?.replace(/\D/g, "")].filter(Boolean).join(" ").toLowerCase();
     let score = 0, matched = 0;

@@ -535,12 +535,25 @@ export const jobRuns = pgTable("job_runs", {
   error: text("error"),
 });
 
+/* ───────────────────────────── Family members ("Belongs to") ───────────────────────────── */
+
+export const people = pgTable("people", {
+  id: id(),
+  ownerId: owner(),
+  name: text("name").notNull(),
+  relation: text("relation").notNull().default("other"), // spouse | child | parent | sibling | other
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
 /* ───────────────────────────── Phase B: expiries & renewals ───────────────────────────── */
 
 export const expiryItems = pgTable("expiry_items", {
   id: id(),
   ownerId: owner(),
   label: text("label").notNull(),
+  personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }), // null = the owner
   kind: text("kind").notNull().default("custom"), // passport | national_id | license | bank_card | membership | custom
   expiresOn: date("expires_on").notNull(),
   issuer: text("issuer"),
@@ -573,6 +586,7 @@ export const documents = pgTable("documents", {
   id: id(),
   ownerId: owner(),
   title: text("title").notNull(),
+  personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }), // null = the owner
   kind: text("kind").notNull().default("other"), // passport | national_id | transcript | certificate | cv | application | letter | other
   issuer: text("issuer"),
   issuedOn: date("issued_on"),
