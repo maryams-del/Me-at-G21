@@ -28,7 +28,8 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
   const rows = await routinesState(o);
   const today = todayLocal(o.timezone);
   const have = new Set(rows.map((r) => r.routine.kind));
-  const templates = (Object.keys(ROUTINE_TEMPLATES) as TemplateKey[]).filter((k) => !have.has(k));
+  // Waxing isn't offered as a quick-add; it's still available via a custom routine or Capture ("I waxed today").
+  const templates = (Object.keys(ROUTINE_TEMPLATES) as TemplateKey[]).filter((k) => k !== "waxing" && !have.has(k));
 
   return (
     <>

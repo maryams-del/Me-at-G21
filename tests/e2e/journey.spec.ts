@@ -151,10 +151,11 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
   test("tracker pages render with real data", async () => {
     await page.goto("/care/waxing"); // old link redirects into Routines
     await expect(page).toHaveURL(/\/care\/routines/);
-    await expect(async () => {
-      await page.getByRole("button", { name: "+ Waxing" }).click();
-      await expect(page.getByRole("heading", { name: /^Waxing/ })).toBeVisible({ timeout: 3000 });
-    }).toPass();
+    await expect(page.getByRole("button", { name: "+ Waxing" })).toHaveCount(0); // not offered as a quick-add
+    // logging waxing (as Capture does) starts tracking it with the waxing settings
+    await page.evaluate(() => fetch("/api/ops/waxing.complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completedOn: "2026-11-10" }) }));
+    await page.reload();
+    await expect(page.getByRole("heading", { name: /^Waxing/ })).toBeVisible();
     await page.getByRole("button", { name: "+ Dental scaling" }).click();
     await expect(page.getByRole("heading", { name: /^Dental scaling/ })).toBeVisible();
     const wax = page.locator("li.panel").filter({ has: page.getByRole("heading", { name: /^Waxing/ }) });
