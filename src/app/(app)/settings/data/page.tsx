@@ -1,23 +1,24 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { pageOwner } from "@/server/queries";
 import { getDb } from "@/db";
-import { backups } from "@/db/schema";
+import { backups, documentFiles } from "@/db/schema";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpButton } from "@/components/OpForm";
 import { CSV_MODULES } from "@/server/csv";
 import { listTrash, RETENTION_DAYS } from "@/server/ops/trash";
 import { KEEP_AUTOMATIC } from "@/server/backup";
 import { fmtDateTime } from "@/lib/format";
-import { PrivateCsvLink, RestorePanel } from "./DataClient";
+import { PrivateCsvLink, RestorePanel, FullBackupPanel } from "./DataClient";
 
 const KIND: Record<string, string> = { automatic: "Nightly", manual: "Made by you", "pre-restore": "Safety copy before a restore" };
 const size = (b: number) => b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
 
 export default async function DataPage() {
   const o = await pageOwner();
-  const [list, trash] = await Promise.all([
+  const [list, trash, pendingRows] = await Promise.all([
     getDb().select().from(backups).where(and(eq(backups.ownerId, o.id))).orderBy(desc(backups.createdAt)).limit(40),
     listTrash(o.id),
+    getDb().select({ id: documentFiles.id }).from(documentFiles).where(and(eq(documentFiles.ownerId, o.id), like(documentFiles.storageKey, "pending:%"))),
   ]);
   const groups = [...new Set(CSV_MODULES.map((m) => m.group))];
   const items = (b: (typeof list)[number]) => Object.entries(b.counts).filter(([k]) => !["audit_events", "reminders", "notification_deliveries", "notification_preferences"].includes(k)).reduce((a, [, v]) => a + v, 0);
@@ -45,12 +46,19 @@ export default async function DataPage() {
         <p className="t-small mt-4"><a href="/api/export" download>Everything as one JSON file</a> <span className="text-ink-2">(for moving to another app)</span></p>
       </Section>
 
-      <Section title="Backups" aside={<a className="btn btn-primary" href="/api/backup/download?id=new" download>Download a backup now</a>}>
+      <Section title="Full backup (with your documents)">
+        <div className="panel p-4 grid gap-4">
+          <p className="t-small prose-w">Everything in one file: all your records <strong>and</strong> every uploaded document, locked with a password you choose. Your browser builds it, so the password never leaves this device. It doesn't depend on anything stored on the server, so it can be restored even into a brand-new installation of the app.</p>
+          <p className="t-small text-ink-2 prose-w">Keep the file in iCloud or on your laptop, and the password in your password manager or with your recovery codes. Make a new one every month or two, and after adding important documents. On a phone, large backups can take a while; a laptop is faster.</p>
+          <FullBackupPanel />
+        </div>
+      </Section>
+
+      <Section title="Quick backups" aside={<a className="btn" href="/api/backup/download?id=new" download>Download a quick backup</a>}>
         <p className="t-small text-ink-2 mb-4 prose-w">
-          A backup is every record you've entered (not your uploaded files, which stay in private storage) in one encrypted file. Only this app can open it, and only for your account.
-          The app makes one every night and keeps the last {KEEP_AUTOMATIC}. Downloading one now and then and keeping it in iCloud or on your laptop protects you even if this hosting account has a problem.
+          Records only (not document files), made automatically every night; the last {KEEP_AUTOMATIC} are kept. They're for undoing a mistake inside this app, and can only be opened by this installation. For a copy you keep yourself, use the full backup above.
         </p>
-        {list.length === 0 ? <Empty>No backups yet. The first nightly backup appears within a day, or download one now.</Empty> : (
+        {list.length === 0 ? <Empty>No quick backups yet. The first nightly one appears within the hour.</Empty> : (
           <ul className="list">
             {list.map((b) => (
               <li key={b.id} className="py-2.5 flex flex-wrap justify-between gap-3 t-small">
@@ -63,8 +71,9 @@ export default async function DataPage() {
       </Section>
 
       <Section title="Restore from a backup">
-        <div className="panel p-4">
-          <RestorePanel stored={list.map((b) => ({ id: b.id, label: `${fmtDateTime(b.createdAt, o.timezone)} (${KIND[b.kind] ?? b.kind})` }))} />
+        <div className="panel p-4 grid gap-3">
+          {pendingRows.length > 0 && <p role="alert" className="error">{pendingRows.length} document file{pendingRows.length === 1 ? " is" : "s are"} still waiting from your last full-backup restore. Choose that backup file below, enter its password, press “Check backup”, then “Only restore the missing document files”.</p>}
+          <RestorePanel pending={pendingRows.length} stored={list.map((b) => ({ id: b.id, label: `${fmtDateTime(b.createdAt, o.timezone)} (${KIND[b.kind] ?? b.kind})` }))} />
         </div>
       </Section>
 

@@ -65,7 +65,8 @@ The daily Vercel cron in `vercel.json` is only a backstop.
 
 ## Backups and restore
 - **In the app (Settings → Data & backups):** an encrypted backup of all records is made every night (last 14 kept, stored in private Blob storage). "Download a backup now" saves a `.mebackup` file to keep elsewhere. "Restore from a backup" checks the file's integrity, shows what's in it, and after a passkey check replaces all records in one transaction, saving a safety copy first.
-- Backups are encrypted with a key derived from `DATA_ENCRYPTION_KEY`. **Keep that key safe and never rotate it casually**: without it, backups (and encrypted fields) can't be opened. Uploaded file contents are not inside backups; they stay in Blob storage.
+- **Full backup (recommended for keeping elsewhere):** records *and* every document file, built in the browser and locked with a password the owner chooses (PBKDF2-SHA256 600k + AES-256-GCM, format `LDP1`, see `src/lib/portable.ts`). It does not depend on `DATA_ENCRYPTION_KEY`: restoring it on a brand-new installation re-encrypts everything with that installation's key (ids are re-assigned when the account differs). Lose the password and the file can't be opened.
+- Quick (nightly) backups are encrypted with a key derived from `DATA_ENCRYPTION_KEY` **Keep that key safe and never rotate it casually**: without it, backups (and encrypted fields) can't be opened. Uploaded file contents are not inside backups; they stay in Blob storage.
 - Deleted items are recoverable for 30 days (Recently deleted), then purged by the hourly housekeeping, including file contents.
 - Spreadsheet (CSV) export per section and a full JSON export are on the same page.
 - Neon also keeps short point-in-time history (window depends on plan); restore by branching from a timestamp in the Neon console.

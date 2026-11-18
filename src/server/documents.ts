@@ -38,6 +38,7 @@ export async function uploadDocumentFile(ownerId: string, documentId: string, fi
 export async function readDocumentFile(ownerId: string, fileId: string) {
   const [f] = await getDb().select().from(documentFiles).where(and(eq(documentFiles.id, fileId), eq(documentFiles.ownerId, ownerId), isNull(documentFiles.deletedAt)));
   if (!f) throw new UserError("File not found");
+  if (f.storageKey.startsWith("pending:")) throw new UserError("This file hasn't been restored yet. Finish restoring your full backup in Settings → Data & backups.");
   const bytes = await readDecrypted(f.storageKey, f.sha256);
   return { file: f, bytes };
 }

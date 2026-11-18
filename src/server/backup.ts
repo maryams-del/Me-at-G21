@@ -1,11 +1,12 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, randomUUID } from "node:crypto";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getDb, type Tx } from "@/db";
 import { backups } from "@/db/schema";
 import { storeEncrypted, readDecrypted, removeStored } from "./storage";
+import { backupItems } from "@/lib/backup-labels";
 
 /*
  * Backups of one owner's records.
@@ -146,14 +147,7 @@ export async function readStoredBackup(ownerId: string, id: string): Promise<Buf
 
 /** Human summary for the confirm screen. */
 export function summarize(p: BackupPayload) {
-  const label: Record<string, string> = {
-    charity_payments: "charity entries", savings_goals: "savings goals", savings_transactions: "savings deposits/withdrawals", debts: "lent/borrowed records",
-    routines: "routines", routine_events: "routine log entries", fast_ledger_events: "fast ledger entries", projects: "projects", tasks: "tasks",
-    expiry_items: "expiries", documents: "documents", masters_applications: "applications", achievements: "achievements", hobbies: "hobbies",
-    subscriptions: "subscriptions", zakat_calculations: "zakat estimates", zakat_payments: "zakat payments", period_cycles: "period entries",
-    people: "family members", recurring_events: "recurring events", homework_tasks: "homework items", capture_drafts: "drafts", reminders: "reminders",
-  };
-  return { createdAt: p.createdAt, items: Object.entries(label).map(([k, l]) => ({ label: l, count: p.counts[k] ?? 0 })).filter((x) => x.count > 0) };
+  return { createdAt: p.createdAt, items: backupItems(p.counts) };
 }
 
 /**
@@ -162,28 +156,127 @@ export function summarize(p: BackupPayload) {
  */
 export async function restoreBackup(ownerId: string, p: BackupPayload) {
   if (p.ownerId !== ownerId) throw new BackupError("This backup belongs to a different account.");
+  return replaceAll(ownerId, p.tables, p.settings, `Restored a backup from ${p.createdAt.slice(0, 10)}`);
+}
+
+async function replaceAll(ownerId: string, tables: BackupPayload["tables"], settings: BackupPayload["settings"], auditSummary: string) {
   const safety = await createStoredBackup(ownerId, "pre-restore");
   const db = getDb();
   await db.transaction(async (tx) => {
     const order = await ownerTables(tx);
-    const unknown = Object.keys(p.tables).filter((t) => t !== "notification_deliveries" && !order.includes(t));
+    const unknown = Object.keys(tables).filter((t) => t !== "notification_deliveries" && !order.includes(t));
     if (unknown.length) throw new BackupError(`This backup has data this version of the app doesn't know (${unknown.join(", ")}).`);
     // children first when deleting; deliveries cascade with reminders
     for (const t of [...order].reverse()) await tx.execute(sql.raw(`delete from ${ident(t)} where owner_id = '${ownerId.replace(/[^0-9a-f-]/g, "")}'`));
     for (const t of [...order, "notification_deliveries"]) {
-      const data = p.tables[t];
+      const data = tables[t];
       if (!data?.length) continue;
       if (t !== "notification_deliveries" && data.some((r) => r.owner_id !== ownerId)) throw new BackupError("Backup contains records for another account.");
-      // jsonb_populate_recordset lets Postgres convert every value back to its column type exactly.
       // Only columns present in the backup; columns added since then fall back to their defaults.
       const cols = (await rows<{ c: string }>(tx, sql`select column_name as c from information_schema.columns where table_schema = 'public' and table_name = ${t}`)).map((r) => r.c);
       const present = cols.filter((c) => c in data[0]).map(ident).join(", ");
       for (let i = 0; i < data.length; i += 500) {
+        // jsonb_populate_recordset lets Postgres convert every value back to its column type exactly.
         await tx.execute(sql`insert into ${sql.raw(ident(t))} (${sql.raw(present)}) select ${sql.raw(present)} from jsonb_populate_recordset(null::${sql.raw(ident(t))}, ${JSON.stringify(data.slice(i, i + 500))}::jsonb)`);
       }
     }
-    await tx.execute(sql`insert into audit_events (owner_id, category, action, entity_type, entity_id, summary, source, sensitive, occurred_at) values (${ownerId}, 'settings', 'restored', 'backup', ${safety.id}, ${`Restored a backup from ${p.createdAt.slice(0, 10)}`}, 'manual', false, now())`);
-    await tx.execute(sql`update users set display_name = ${p.settings.displayName}, timezone = ${p.settings.timezone}, default_currency = ${p.settings.defaultCurrency}, settings = ${JSON.stringify(p.settings.settings ?? {})}::jsonb, updated_at = now() where id = ${ownerId}`);
+    await tx.execute(sql`insert into audit_events (owner_id, category, action, entity_type, entity_id, summary, source, sensitive, occurred_at) values (${ownerId}, 'settings', 'restored', 'backup', ${safety.id}, ${auditSummary}, 'manual', false, now())`);
+    await tx.execute(sql`update users set display_name = ${settings.displayName}, timezone = ${settings.timezone}, default_currency = ${settings.defaultCurrency}, settings = ${JSON.stringify(settings.settings ?? {})}::jsonb, updated_at = now() where id = ${ownerId}`);
   });
   return { safetyBackupId: safety.id };
+}
+
+/* ───────────── Portable (full) backups ─────────────
+ * The browser builds these: it fetches the records below plus every document file, and encrypts
+ * everything with the owner's own backup password (the server never sees it). So the server must
+ * hand over records with sensitive fields UNLOCKED (only after a fresh passkey check), and accept
+ * them back, locking them again with this installation's key — possibly on a fresh installation
+ * with a different account id.
+ */
+export type PortablePayload = Omit<BackupPayload, "format"> & {
+  format: "me-at-g21-portable";
+  files: { id: string; documentId: string; filename: string; contentType: string; sizeBytes: number; sha256: string }[];
+};
+
+export async function buildPortable(ownerId: string): Promise<PortablePayload> {
+  const { decryptField } = await import("@/lib/crypto");
+  const key = process.env.DATA_ENCRYPTION_KEY!;
+  const p = await buildPayload(ownerId);
+  const tables = { ...p.tables };
+  // unlock protected ID numbers
+  tables.protected_id_fields = (tables.protected_id_fields ?? []).map((r) => {
+    const { value_enc, ...rest } = r as { value_enc: string } & Record<string, unknown>;
+    return { ...rest, __value: decryptField(value_enc, key, `docid:${ownerId}:${rest.document_id}`) };
+  });
+  // unlock period notes/symptoms
+  const { decPeriodField } = await import("./ops/period");
+  tables.period_cycles = (tables.period_cycles ?? []).map((r) => {
+    const { notes_enc, symptoms_enc, ...rest } = r as { notes_enc: string | null; symptoms_enc: string | null } & Record<string, unknown>;
+    return { ...rest, __notes: decPeriodField(ownerId, String(rest.id), "notes", notes_enc), __symptoms: decPeriodField(ownerId, String(rest.id), "symptoms", symptoms_enc) };
+  });
+  // files: storage locations are installation-specific; only live files travel (their bytes come separately)
+  const live = (tables.document_files ?? []).filter((f) => !f.deleted_at);
+  tables.document_files = live.map(({ storage_key: _k, ...rest }) => { void _k; return rest; });
+  const counts = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, v.length]));
+  return {
+    ...p, format: "me-at-g21-portable", tables, counts,
+    sha256: createHash("sha256").update(canonical(tables)).digest("hex"),
+    files: live.map((f) => ({ id: String(f.id), documentId: String(f.document_id), filename: String(f.filename), contentType: String(f.content_type), sizeBytes: Number(f.size_bytes), sha256: String(f.sha256) })),
+  };
+}
+
+export const PENDING = "pending:";
+
+/** Restore a portable payload into this account: remap the owner, lock sensitive fields with this installation's key. */
+export async function restorePortable(ownerId: string, p: PortablePayload) {
+  if (p.format !== "me-at-g21-portable" || p.version !== 1) throw new BackupError("This isn't a Me @ G21 full backup.");
+  if (createHash("sha256").update(canonical(p.tables)).digest("hex") !== p.sha256) throw new BackupError("Integrity check failed: the contents don't match their checksum.");
+  const { encryptField } = await import("@/lib/crypto");
+  const key = process.env.DATA_ENCRYPTION_KEY!;
+  // Restoring into a different account (e.g. a fresh installation, or the same server after starting
+  // over): give every record a new id and rewrite every reference to it, so nothing can clash.
+  const map = new Map<string, string>([[p.ownerId, ownerId]]);
+  const originalFileId = new Map<string, string>();
+  if (p.ownerId !== ownerId) {
+    for (const data of Object.values(p.tables)) for (const r of data) if (typeof r.id === "string") map.set(r.id, randomUUID());
+  }
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const remap = (v: unknown): unknown =>
+    typeof v === "string" ? v.replace(UUID, (m) => map.get(m) ?? m)
+      : Array.isArray(v) ? v.map(remap)
+      : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, remap(x)]))
+      : v;
+  for (const f of p.tables.document_files ?? []) originalFileId.set(map.get(String(f.id)) ?? String(f.id), String(f.id));
+  const tables: BackupPayload["tables"] = {};
+  for (const [t, data] of Object.entries(p.tables)) tables[t] = data.map((r) => remap(r) as Record<string, unknown>);
+  tables.protected_id_fields = (tables.protected_id_fields ?? []).map((r) => {
+    const { __value, ...rest } = r as { __value: string } & Record<string, unknown>;
+    return { ...rest, value_enc: encryptField(String(__value), key, `docid:${ownerId}:${rest.document_id}`) };
+  });
+  const aadP = (id: unknown, f: string) => `period:${ownerId}:${id}:${f}`;
+  tables.period_cycles = (tables.period_cycles ?? []).map((r) => {
+    const { __notes, __symptoms, ...rest } = r as { __notes: string | null; __symptoms: string | null } & Record<string, unknown>;
+    return { ...rest, notes_enc: __notes ? encryptField(__notes, key, aadP(rest.id, "notes")) : null, symptoms_enc: __symptoms ? encryptField(__symptoms, key, aadP(rest.id, "symptoms")) : null };
+  });
+  // file rows wait for their bytes, uploaded one by one afterwards (keyed by the id inside the backup file)
+  tables.document_files = (tables.document_files ?? []).map((r) => ({ ...r, storage_key: `${PENDING}${originalFileId.get(String(r.id))}` }));
+  return replaceAll(ownerId, tables, p.settings, `Restored a full backup from ${p.createdAt.slice(0, 10)}`);
+}
+
+/** Store one restored file's bytes, verified against the checksum recorded in the backup. */
+export async function restorePortableFile(ownerId: string, fileId: string, bytes: Buffer) {
+  const { documentFiles } = await import("@/db/schema");
+  const { storeEncrypted } = await import("./storage");
+  const db = getDb();
+  // fileId is the id inside the backup file; the row may have a new id after restoring into another account
+  const [f] = await db.select().from(documentFiles).where(and(eq(documentFiles.ownerId, ownerId), eq(documentFiles.storageKey, `${PENDING}${fileId}`)));
+  if (!f) {
+    const [done] = await db.select({ id: documentFiles.id }).from(documentFiles).where(and(eq(documentFiles.ownerId, ownerId), eq(documentFiles.id, fileId)));
+    if (done) return { already: true };
+    throw new BackupError("That file isn't part of the restored backup, or it's already been restored.");
+  }
+  if (createHash("sha256").update(bytes).digest("hex") !== f.sha256) throw new BackupError(`“${f.filename}” failed its integrity check.`);
+  const { storageKey } = await storeEncrypted(ownerId, bytes);
+  await db.update(documentFiles).set({ storageKey }).where(eq(documentFiles.id, f.id));
+  return { already: false };
 }

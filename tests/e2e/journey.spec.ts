@@ -304,7 +304,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await page.goto("/settings/data");
     const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("main").getByRole("link", { name: "Charity", exact: true }).click()]);
     expect(csv.suggestedFilename()).toMatch(/^me-at-g21-charity-.*\.csv$/);
-    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download a backup now" }).click()]);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download a quick backup" }).click()]);
     const path = test.info().outputPath("backup.mebackup");
     await dl.saveAs(path);
     await page.reload();
@@ -320,6 +320,29 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(page.getByText("Safety copy before a restore").first()).toBeVisible();
     await page.goto("/finance/charity");
     await expect(page.getByText("150 SAR").first()).toBeVisible();
+
+    // full backup: records + document files, locked with a password, restored in the browser
+    await page.goto("/settings/data");
+    await page.getByLabel("Backup password").fill("demo backup password only");
+    await page.getByLabel("Type it again").fill("demo backup password only");
+    await page.getByLabel(/I've saved this password/).check();
+    const [full] = await Promise.all([page.waitForEvent("download", { timeout: 60_000 }), page.getByRole("button", { name: "Create full backup (Face ID)" }).click()]);
+    expect(full.suggestedFilename()).toMatch(/^me-at-g21-full-backup-.*\.mebackup$/);
+    const fullPath = test.info().outputPath("full.mebackup");
+    await full.saveAs(fullPath);
+    await page.getByLabel("A backup file from your device").setInputFiles(fullPath);
+    await page.getByLabel("This is a full backup. Its password:").fill("wrong password here");
+    await page.getByRole("button", { name: "Check backup" }).click();
+    await expect(page.getByText("Wrong password, or the file is damaged.")).toBeVisible();
+    await page.getByLabel("This is a full backup. Its password:").fill("demo backup password only");
+    await page.getByRole("button", { name: "Check backup" }).click();
+    await expect(page.getByText(/Including the contents of [1-9]\d* document file/)).toBeVisible();
+    await shot(page, "25-full-backup");
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Restore this backup (Face ID)" }).click();
+    await expect(page.getByText(/Full backup restored, documents included/)).toBeVisible({ timeout: 60_000 });
+    await page.goto("/admin/documents");
+    await expect(page.locator("main")).not.toContainText("hasn't been restored");
   });
 
   test("mobile layout", async () => {
