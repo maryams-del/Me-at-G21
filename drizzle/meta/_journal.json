@@ -50,6 +50,13 @@
       "when": 1795034738157,
       "tag": "0006_phase_b_subscriptions_zakat",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795035894242,
+      "tag": "0007_backups",
+      "breakpoints": true
     }
   ]
 }

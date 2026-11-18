@@ -64,8 +64,11 @@ Passkeys are tied to the domain `me-at-g21.vercel.app`. Moving to a different do
 The daily Vercel cron in `vercel.json` is only a backstop.
 
 ## Backups and restore
-- Neon keeps point-in-time history (the window depends on plan); restore by branching from a timestamp in the Neon console.
-- Settings → Your data → **Download JSON export** gives a portable copy of all non-secret data.
+- **In the app (Settings → Data & backups):** an encrypted backup of all records is made every night (last 14 kept, stored in private Blob storage). "Download a backup now" saves a `.mebackup` file to keep elsewhere. "Restore from a backup" checks the file's integrity, shows what's in it, and after a passkey check replaces all records in one transaction, saving a safety copy first.
+- Backups are encrypted with a key derived from `DATA_ENCRYPTION_KEY`. **Keep that key safe and never rotate it casually**: without it, backups (and encrypted fields) can't be opened. Uploaded file contents are not inside backups; they stay in Blob storage.
+- Deleted items are recoverable for 30 days (Recently deleted), then purged by the hourly housekeeping, including file contents.
+- Spreadsheet (CSV) export per section and a full JSON export are on the same page.
+- Neon also keeps short point-in-time history (window depends on plan); restore by branching from a timestamp in the Neon console.
 - Keep printed recovery codes offline. They are never stored in plaintext and can't be re-shown.
 
 ## Operational checklist

@@ -189,7 +189,7 @@ export async function debtOutstanding(ctx: Pick<Ctx, "tx" | "ownerId">, debtId: 
   return { debt: d, outstanding: d.originalMinor + Number(adj) - Number(paid) };
 }
 
-async function syncDebtReminders(ctx: Ctx, debtId: string) {
+export async function syncDebtReminders(ctx: Ctx, debtId: string) {
   const { debt: d, outstanding } = await debtOutstanding(ctx, debtId);
   if (d.status === "settled" || outstanding <= 0 || !d.remindersEnabled || !d.dueDate) {
     return cancelReminders(ctx.tx, ctx.ownerId, "debt", d.id);

@@ -828,3 +828,17 @@ export const zakatPayments = pgTable("zakat_payments", {
   updatedAt: updatedAt(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
+
+/* ───────────────────────────── Backups ───────────────────────────── */
+
+export const backups = pgTable("backups", {
+  id: id(),
+  ownerId: owner(),
+  kind: text("kind").notNull(), // automatic | manual | pre-restore
+  storageKey: text("storage_key").notNull(),
+  sha256: text("sha256").notNull(), // of the sealed file (storage integrity)
+  payloadSha256: text("payload_sha256").notNull(), // of the records inside
+  sizeBytes: integer("size_bytes").notNull(),
+  counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
+  createdAt: createdAt(),
+}, (t) => [index("backups_owner_created_idx").on(t.ownerId, t.createdAt)]);

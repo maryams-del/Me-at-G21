@@ -39,7 +39,7 @@ export const projectUpdate = defineOp({
   },
 });
 
-async function syncTaskReminders(ctx: Ctx, taskId: string) {
+export async function syncTaskReminders(ctx: Ctx, taskId: string) {
   const [t] = await ctx.tx.select().from(tasks).where(eq(tasks.id, taskId));
   if (!t || t.status === "done" || t.deletedAt || !t.dueOn || !t.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "task", taskId);
   const time = t.dueTime ?? t.reminderTime;

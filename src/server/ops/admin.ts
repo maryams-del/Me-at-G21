@@ -6,7 +6,6 @@ import { audit, UserError, type Ctx } from "../audit";
 import { addDays, localToInstant, todayLocal, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders } from "../reminders";
 import { encryptField } from "@/lib/crypto";
-import { removeStored } from "../storage";
 
 export const EXPIRY_KINDS = ["passport", "national_id", "license", "bank_card", "membership", "custom"] as const;
 export const DOC_KINDS = ["passport", "national_id", "transcript", "certificate", "cv", "application", "letter", "other"] as const;
@@ -73,7 +72,7 @@ export const personDelete = defineOp({
 
 /* ───────────── Expiries & renewals ───────────── */
 
-async function syncExpiry(ctx: Ctx, itemId: string) {
+export async function syncExpiry(ctx: Ctx, itemId: string) {
   const [it] = await ctx.tx.select().from(expiryItems).where(eq(expiryItems.id, itemId));
   if (!it || it.deletedAt || it.status !== "active" || !it.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "expiry", itemId);
   const person = it.personId ? await ownPerson(ctx, it.personId).catch(() => null) : null;
@@ -226,14 +225,14 @@ export const documentUpdate = defineOp({
 export const documentDelete = defineOp({
   name: "document.delete", module: "documents", label: "Delete document", aiAllowed: false,
   schema: z.object({ id: zId }),
-  summarize: () => "Delete document and its files",
+  summarize: () => "Delete document and its files (recoverable for 30 days; the full ID number is erased now)",
   async run(ctx, i) {
     const d = await ownDocument(ctx, i.id);
     const files = await ctx.tx.select().from(documentFiles).where(and(eq(documentFiles.documentId, d.id), isNull(documentFiles.deletedAt)));
-    await ctx.tx.update(documentFiles).set({ deletedAt: ctx.now }).where(eq(documentFiles.documentId, d.id));
+    await ctx.tx.update(documentFiles).set({ deletedAt: ctx.now }).where(and(eq(documentFiles.documentId, d.id), isNull(documentFiles.deletedAt)));
     await ctx.tx.delete(protectedIdFields).where(eq(protectedIdFields.documentId, d.id));
     await ctx.tx.update(documents).set({ deletedAt: ctx.now, idMasked: null }).where(eq(documents.id, d.id));
-    for (const f of files) await removeStored(f.storageKey);
+    void files; // file contents are kept for 30 days (undo from Recently deleted), then purged
     await audit(ctx, "documents", "deleted", "document", d.id, `Deleted document “${d.title}” and ${files.length} file${files.length === 1 ? "" : "s"}`);
     return { id: d.id, message: "Document deleted" };
   },
@@ -246,8 +245,7 @@ export const documentFileDelete = defineOp({
   async run(ctx, i) {
     const [f] = await ctx.tx.select().from(documentFiles).where(and(eq(documentFiles.id, i.fileId), eq(documentFiles.ownerId, ctx.ownerId), isNull(documentFiles.deletedAt)));
     if (!f) throw new UserError("File not found");
-    await ctx.tx.update(documentFiles).set({ deletedAt: ctx.now }).where(eq(documentFiles.id, f.id));
-    await removeStored(f.storageKey);
+    await ctx.tx.update(documentFiles).set({ deletedAt: ctx.now }).where(eq(documentFiles.id, f.id)); // contents purged after 30 days
     await audit(ctx, "documents", "file_deleted", "document_file", f.id, `Deleted file ${f.filename} (v${f.version})`);
     return { id: f.id, message: "File deleted" };
   },

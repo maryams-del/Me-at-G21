@@ -25,7 +25,7 @@ export async function ownApplication(ctx: Pick<Ctx, "tx" | "ownerId">, id: strin
 }
 
 /** Reminders N days before the deadline instant (same clock time as the deadline), only while not yet submitted. */
-async function syncApplication(ctx: Ctx, id: string) {
+export async function syncApplication(ctx: Ctx, id: string) {
   const [a] = await ctx.tx.select().from(mastersApplications).where(eq(mastersApplications.id, id));
   if (!a || a.deletedAt || !a.deadlineAt || !a.remindersEnabled || !OPEN.has(a.status)) return cancelReminders(ctx.tx, ctx.ownerId, "application", id);
   const local = formatInstant(a.deadlineAt, ctx.tz, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });

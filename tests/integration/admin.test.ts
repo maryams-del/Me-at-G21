@@ -102,12 +102,15 @@ describe("PRD 4.12 / Test 23 — documents and protected IDs", () => {
     await expect(uploadDocumentFile(owner.id, d.id!, { name: "big.pdf", bytes: Buffer.concat([PDF, Buffer.alloc(4 * 1024 * 1024)]) })).rejects.toThrow(/4 MB/);
   });
 
-  it("deleting a document removes its files from storage and its ID", async () => {
+  it("deleting a document erases its ID number now and its files after the 30-day undo window", async () => {
     const d = await op(at("2026-11-18"), "document.create", { title: "ID", kind: "national_id", idNumber: "1098765432" });
     await uploadDocumentFile(owner.id, d.id!, { name: "id.pdf", bytes: PDF });
     await op(at("2026-11-18"), "document.delete", { id: d.id });
-    expect(allFiles("/tmp/ld-test-blobs")).toHaveLength(0);
     expect(await getDb().select().from(protectedIdFields)).toHaveLength(0);
+    expect(allFiles("/tmp/ld-test-blobs")).toHaveLength(1); // still recoverable
+    const { purgeDeleted } = await import("@/server/ops/trash");
+    await purgeDeleted(new Date(Date.now() + 31 * 86400_000));
+    expect(allFiles("/tmp/ld-test-blobs")).toHaveLength(0);
   });
 });
 

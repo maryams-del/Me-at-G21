@@ -300,6 +300,28 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await shot(page, "23-zakat");
   });
 
+  test("Data & backups: CSV, download a backup, check it, restore it with a passkey", async () => {
+    await page.goto("/settings/data");
+    const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("main").getByRole("link", { name: "Charity", exact: true }).click()]);
+    expect(csv.suggestedFilename()).toMatch(/^me-at-g21-charity-.*\.csv$/);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download a backup now" }).click()]);
+    const path = test.info().outputPath("backup.mebackup");
+    await dl.saveAs(path);
+    await page.reload();
+    await expect(page.getByText("Made by you").first()).toBeVisible();
+    await page.getByLabel("A backup file from your device").setInputFiles(path);
+    await page.getByRole("button", { name: "Check backup" }).click();
+    await expect(page.getByText("Backup is complete and intact.")).toBeVisible();
+    await expect(page.getByText(/charity entries/)).toBeVisible();
+    await shot(page, "24-data-backups");
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Restore this backup (Face ID)" }).click();
+    await expect(page.getByText(/Restored the backup from/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Safety copy before a restore").first()).toBeVisible();
+    await page.goto("/finance/charity");
+    await expect(page.getByText("150 SAR").first()).toBeVisible();
+  });
+
   test("mobile layout", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

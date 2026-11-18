@@ -7,12 +7,14 @@ import { and, eq, inArray, isNull, lte, or, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   reminders, notificationDeliveries, pushSubscriptions, notificationPreferences, users,
-  recurringEvents, jobRuns, aiProposals, routines, subscriptions,
+  recurringEvents, jobRuns, aiProposals, routines, subscriptions, backups,
 } from "@/db/schema";
 import { sendEmail } from "./email";
 import { ensureOccurrences } from "./ops/planning";
 import { applyAnnualFastRules, syncRoutine } from "./ops/care";
 import { syncSubscription } from "./ops/subscriptions";
+import { purgeDeleted } from "./ops/trash";
+import { createStoredBackup } from "./backup";
 import { instantToLocal, localToInstant, addDays } from "@/lib/time";
 
 function configurePush() {
@@ -129,7 +131,7 @@ export async function housekeeping(now = new Date(), force = false) {
   const [last] = await db.select().from(jobRuns).where(eq(jobRuns.job, "housekeeping")).orderBy(desc(jobRuns.startedAt)).limit(1);
   if (!force && last && now.getTime() - last.startedAt.getTime() < 55 * 60_000) return { skipped: true };
   const [run] = await db.insert(jobRuns).values({ job: "housekeeping", startedAt: now }).returning({ id: jobRuns.id });
-  const stats = { events: 0, fastAdditions: 0, expired: 0, routines: 0, subscriptions: 0 };
+  const stats = { events: 0, fastAdditions: 0, expired: 0, routines: 0, subscriptions: 0, backups: 0, backupErrors: 0, purged: 0 };
   try {
     const owners = await db.select().from(users).where(eq(users.onboardingStep, "complete"));
     for (const u of owners) {
@@ -146,6 +148,13 @@ export async function housekeeping(now = new Date(), force = false) {
         for (const x of ss) { await syncSubscription(ctx, x.id); stats.subscriptions++; }
       });
     }
+    // nightly encrypted backup per owner (keeps the last 14); a failure here never blocks reminders
+    for (const u of owners) {
+      const [lastB] = await db.select({ createdAt: backups.createdAt }).from(backups).where(and(eq(backups.ownerId, u.id), eq(backups.kind, "automatic"))).orderBy(desc(backups.createdAt)).limit(1);
+      if (lastB && now.getTime() - lastB.createdAt.getTime() < 23 * 3600_000) continue;
+      try { await createStoredBackup(u.id, "automatic"); stats.backups++; } catch (e) { stats.backupErrors++; console.error("[backup] automatic backup failed:", (e as Error).message); }
+    }
+    stats.purged = await purgeDeleted(now);
     const exp = await db.update(aiProposals).set({ status: "expired" }).where(and(eq(aiProposals.status, "pending"), lte(aiProposals.expiresAt, now))).returning({ id: aiProposals.id });
     stats.expired = exp.length;
     await db.update(jobRuns).set({ finishedAt: new Date(), stats }).where(eq(jobRuns.id, run.id));

@@ -36,7 +36,7 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.19 | Durable scheduling, dedupe, quiet hours, redacted previews, delivery status, iPhone install guidance, honest permission state | ✅ / 🟡 | Logic tested; real iPhone delivery 🟡 |
 | 4.19 | Optional email fallback | ✅ | Needs `RESEND_API_KEY` |
 | 4.20 | Needs Details, global timeline + search, JSON export | ✅ | Inbox / history / `/api/export` |
-| 4.20 | CSV export, backup/restore tooling | ⏳ B | Neon point-in-time restore available now (see README) |
+| 4.20 | CSV export by module; backup and restore with integrity checks; deletion with defined retention | ✅ | `server/csv.ts` (dd/mm/yyyy, BOM, formula-injection guard, period opt-in); `server/backup.ts` (AES-GCM + gzip, sha256 + counts, owner-bound; nightly keep 14; manual download; restore = preview, passkey step-up, safety backup, single transaction); `ops/trash.ts` (30-day undo, hourly purge incl. files). `backup.test.ts`, E2E |
 
 ## Section 5: auth and vault
 
