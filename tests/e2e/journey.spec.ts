@@ -249,14 +249,14 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(page.getByRole("gridcell", { name: /, period$/ }).first()).toBeVisible();
     // not on Today unless opted in
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Period ended" })).toHaveCount(0);
+    await expect(page.locator('main a[href="/care/period"]')).toHaveCount(0);
     await page.goto("/care/period");
-    await page.getByLabel("Show period status and quick buttons on the Today page").check();
+    await page.getByLabel("Show period status on the Today page").check();
     await page.getByRole("button", { name: "Save privacy settings" }).click();
     await expect(page.getByText("Settings saved")).toBeVisible();
     await shot(page, "20-period");
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Period ended" })).toBeVisible();
+    await expect(page.locator('main a[href="/care/period"]')).toHaveCount(1);
     // capture keeps it away from the AI
     await openCapture(page);
     await page.getByRole("dialog").getByLabel(/What happened/).fill("when did my period start?");

@@ -146,7 +146,7 @@ export default async function PeriodPage() {
 
       <Section title="Privacy">
         <OpForm op="period.settings" initial={settings} submitLabel="Save privacy settings" compact fields={[
-          { name: "showOnDashboard", label: "Show period status and quick buttons on the Today page", type: "checkbox", wide: true },
+          { name: "showOnDashboard", label: "Show period status on the Today page", type: "checkbox", wide: true },
           { name: "showEstimate", label: "Show estimates on this page", type: "checkbox", wide: true },
         ]} />
       </Section>

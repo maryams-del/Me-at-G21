@@ -5,7 +5,6 @@ import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/
 import { relDays, fmtDateTime, fmtShort } from "@/lib/format";
 import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
 import { AiBar } from "@/components/home/AiBar";
-import { OpButton } from "@/components/OpForm";
 import { SpacesWave, type Space } from "@/components/home/SpacesWave";
 import { FrequentlyVisited } from "@/components/home/FrequentlyVisited";
 
@@ -52,7 +51,6 @@ export default async function Dashboard() {
     ...s.appDeadlines.filter((r) => r.app.deadlineAt && instantToLocal(r.app.deadlineAt, tz).date > week).map((r) => ({ label: `${r.app.university}, ${r.app.program}`, when: `deadline ${fmtShort(instantToLocal(r.app.deadlineAt!, tz).date)}`, href: `/education/applications/${r.app.id}` })),
     ...s.expiring.filter((e) => e.expiresOn > week).map((e) => ({ label: e.label, when: `expires ${fmtShort(e.expiresOn)}`, href: "/admin/expiries" })),
   ].slice(0, 6);
-  const waxRoutine = s.routines.find((r) => r.routine.kind === "waxing");
   const nextRoutine = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
   const p = s.period;
   const periodStat = !p ? "" : p.open ? `Day ${p.openDay}` : p.estimate && p.settings.showEstimate ? `Next ${relDays(p.daysToEstimate)} (estimate)` : p.cycles[0] ? `Last started ${dmy(p.cycles[0].startDate)}` : "Nothing logged yet";
@@ -89,16 +87,6 @@ export default async function Dashboard() {
 
         <NextSevenDays days={days} />
         <AiBar />
-
-        <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-          <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
-          {p && (p.open
-            ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
-            : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />)}
-          {waxRoutine && <OpButton op="routine.log" input={{ routineId: waxRoutine.routine.id, type: "completed", onDate: s.today }} label={`${waxRoutine.routine.name} done`} className="btn btn-sm" confirmText={`Log ${waxRoutine.routine.name.toLowerCase()} done today (${dmy(s.today)})? The next one is counted from today.`} />}
-          <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
-          <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
-        </nav>
 
         <FrequentlyVisited />
 
