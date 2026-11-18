@@ -69,11 +69,17 @@ export function nextWeekday(from: LocalDate, weekday: number): LocalDate {
   return addDays(from, diff);
 }
 
-export function formatLocalDate(date: LocalDate, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) {
+/** "YYYY-MM-DD" → "DD/MM/YYYY" (the owner's preferred display format). */
+export function dmy(date: LocalDate | null | undefined): string {
+  if (!date || !ISO_DATE.test(date)) return date ?? "";
+  return `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
+}
+
+export function formatLocalDate(date: LocalDate, opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   return new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "UTC" }).format(d(date).toJSDate());
 }
 
-export function formatInstant(at: Date, tz = DEFAULT_TZ, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) {
+export function formatInstant(at: Date, tz = DEFAULT_TZ, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) {
   return new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: tz }).format(at);
 }
 

@@ -1,3 +1,4 @@
+import { dmy } from "@/lib/time";
 import Link from "next/link";
 import { pageOwner, dashboardState } from "@/server/queries";
 import { Glyph } from "@/components/Glyph";
@@ -29,7 +30,7 @@ export default async function Dashboard() {
     <div className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="t-small text-ink-2">{formatLocalDate(s.today, { weekday: "long", day: "numeric", month: "long" })}, {formatHijri(s.today)}</p>
+          <p className="t-small text-ink-2">{formatLocalDate(s.today, { weekday: "long" })} {dmy(s.today)}, {formatHijri(s.today)}</p>
           <h1 className="t-display mt-1">{greet}{o.displayName ? `, ${o.displayName}` : ""}</h1>
         </div>
         <OpenCaptureButton label="Add entry by AI" />
@@ -37,8 +38,8 @@ export default async function Dashboard() {
 
       <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
-        <OpButton op="waxing.complete" input={{ completedOn: s.today }} label="Waxing completed" className="btn btn-sm" confirmText={`Log waxing completed today (${s.today})? This restarts the 40-day cycle.`} />
-        <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${s.today})?`} />
+        <OpButton op="waxing.complete" input={{ completedOn: s.today }} label="Waxing completed" className="btn btn-sm" confirmText={`Log waxing completed today (${dmy(s.today)})? This restarts the 40-day cycle.`} />
+        <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
         <Link href="/finance/savings?add=1" className="btn btn-sm">Add savings</Link>
         <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
       </nav>

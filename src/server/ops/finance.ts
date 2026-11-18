@@ -4,7 +4,7 @@ import { charityPayments, savingsGoals, savingsTransactions, debts, debtRepaymen
 import { defineOp, zDate, zAmount, zCurrency, zId, zText, zOptText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
 import { toMinor, formatMoney } from "@/lib/money";
-import { addDays, localToInstant, todayLocal, addMonths } from "@/lib/time";
+import { addDays, localToInstant, todayLocal, addMonths, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders, type DesiredReminder } from "../reminders";
 
 /* ───────────── Charity ───────────── */
@@ -23,7 +23,7 @@ const charityInput = z.object({
 export const charityCreate = defineOp({
   name: "charity.create", module: "charity", label: "Log charity", aiAllowed: true,
   schema: charityInput, draftable: ["amount", "recipient", "paidOn"],
-  summarize: (i) => `${i.status === "planned" ? "Plan" : "Log"} donation of ${i.amount} ${i.currency} to ${i.recipient}${i.cause ? ` for ${i.cause}` : ""} on ${i.paidOn}`,
+  summarize: (i) => `${i.status === "planned" ? "Plan" : "Log"} donation of ${i.amount} ${i.currency} to ${i.recipient}${i.cause ? ` for ${i.cause}` : ""} on ${dmy(i.paidOn)}`,
   async run(ctx, i) {
     const [row] = await ctx.tx.insert(charityPayments).values({
       ownerId: ctx.ownerId, paidOn: i.paidOn, recipient: i.recipient, cause: i.cause,
@@ -39,7 +39,7 @@ export const charityCreate = defineOp({
 export const charityUpdate = defineOp({
   name: "charity.update", module: "charity", label: "Edit charity entry", aiAllowed: true,
   schema: charityInput.extend({ id: zId }),
-  summarize: (i) => `Update donation to ${i.recipient}: ${i.amount} ${i.currency} on ${i.paidOn} (${i.status})`,
+  summarize: (i) => `Update donation to ${i.recipient}: ${i.amount} ${i.currency} on ${dmy(i.paidOn)} (${i.status})`,
   async run(ctx, i) {
     const res = await ctx.tx.update(charityPayments).set({
       paidOn: i.paidOn, recipient: i.recipient, cause: i.cause, amountMinor: toMinor(i.amount, i.currency),
@@ -109,7 +109,7 @@ const goalInput = z.object({
 export const savingsGoalCreate = defineOp({
   name: "savings.goal.create", module: "savings", label: "Create savings goal", aiAllowed: true,
   schema: goalInput, draftable: ["target"],
-  summarize: (i) => `Create savings goal “${i.name}” — target ${i.target} ${i.currency}${i.targetDate ? ` by ${i.targetDate}` : ""}`,
+  summarize: (i) => `Create savings goal “${i.name}” — target ${i.target} ${i.currency}${i.targetDate ? ` by ${dmy(i.targetDate)}` : ""}`,
   async run(ctx, i) {
     const [g] = await ctx.tx.insert(savingsGoals).values({
       ownerId: ctx.ownerId, name: i.name, targetMinor: toMinor(i.target, i.currency), currency: i.currency,
@@ -147,7 +147,7 @@ const txnInput = z.object({ goalId: zId, amount: zAmount, onDate: zDate, notes: 
 export const savingsDeposit = defineOp({
   name: "savings.deposit", module: "savings", label: "Add savings", aiAllowed: true,
   schema: txnInput, draftable: ["amount", "goalId"],
-  summarize: (i) => `Deposit ${i.amount} into savings goal on ${i.onDate}`,
+  summarize: (i) => `Deposit ${i.amount} into savings goal on ${dmy(i.onDate)}`,
   async run(ctx, i) {
     const { goal } = await goalBalance(ctx, i.goalId);
     const [t] = await ctx.tx.insert(savingsTransactions).values({
@@ -163,7 +163,7 @@ export const savingsDeposit = defineOp({
 export const savingsWithdraw = defineOp({
   name: "savings.withdraw", module: "savings", label: "Withdraw savings", aiAllowed: true,
   schema: txnInput, draftable: ["amount", "goalId"],
-  summarize: (i) => `Withdraw ${i.amount} from savings goal on ${i.onDate}`,
+  summarize: (i) => `Withdraw ${i.amount} from savings goal on ${dmy(i.onDate)}`,
   async run(ctx, i) {
     const { goal, balance } = await goalBalance(ctx, i.goalId);
     const amt = toMinor(i.amount, goal.currency);
@@ -228,7 +228,7 @@ const debtInput = z.object({
 export const debtCreate = defineOp({
   name: "debt.create", module: "debts", label: "Record lent/borrowed", aiAllowed: true,
   schema: debtInput, draftable: ["amount", "counterparty", "dueDate"],
-  summarize: (i) => `${i.direction === "lent" ? "I lent" : "I borrowed from"} ${i.counterparty} ${i.amount} ${i.currency} on ${i.onDate}${i.dueDate ? `; due ${i.dueDate} (reminders ${i.reminderOffsetsDays.map((o) => (o === 0 ? "on due date" : `${-o}d before`)).join(", ")})` : ""}`,
+  summarize: (i) => `${i.direction === "lent" ? "I lent" : "I borrowed from"} ${i.counterparty} ${i.amount} ${i.currency} on ${dmy(i.onDate)}${i.dueDate ? `; due ${dmy(i.dueDate)} (reminders ${i.reminderOffsetsDays.map((o) => (o === 0 ? "on due date" : `${-o}d before`)).join(", ")})` : ""}`,
   async run(ctx, i) {
     const [d] = await ctx.tx.insert(debts).values({
       ownerId: ctx.ownerId, direction: i.direction, counterparty: i.counterparty,
@@ -264,7 +264,7 @@ export const debtRepay = defineOp({
   name: "debt.repay", module: "debts", label: "Record repayment", aiAllowed: true,
   schema: z.object({ debtId: zId, amount: zAmount, onDate: zDate, notes: zOptText() }),
   draftable: ["amount"],
-  summarize: (i) => `Record repayment of ${i.amount} on ${i.onDate}`,
+  summarize: (i) => `Record repayment of ${i.amount} on ${dmy(i.onDate)}`,
   async run(ctx, i) {
     const { debt: d, outstanding } = await debtOutstanding(ctx, i.debtId);
     const amt = toMinor(i.amount, d.currency);

@@ -12,7 +12,12 @@ type Overview = {
   sessions: { id: string; device: string; method: string; createdAt: string; lastSeenAt: string; current: boolean }[];
   events: { type: string; at: string; ua: string | null }[];
 };
-const d = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "never");
+const d = (s: string | null) => {
+  if (!s) return "never";
+  const t = new Date(s);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(t.getDate())}/${p(t.getMonth() + 1)}/${t.getFullYear()}, ${p(t.getHours())}:${p(t.getMinutes())}`;
+};
 
 export function SecurityClient({ recovered }: { recovered: boolean }) {
   const [o, setO] = useState<Overview | null>(null);

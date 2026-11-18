@@ -6,7 +6,7 @@ import {
 } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { addDays, addMonths, addInterval, localToInstant, todayLocal, toHijri, fromHijri, type LocalDate } from "@/lib/time";
+import { addDays, addMonths, addInterval, localToInstant, todayLocal, toHijri, fromHijri, type LocalDate, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders, type DesiredReminder } from "../reminders";
 
 /* ───────────── Waxing & dental (maintenance activities) ───────────── */
@@ -78,7 +78,7 @@ function completeOp(kind: "waxing" | "dental") {
     name: `${kind}.complete`, module: kind, label: kind === "waxing" ? "Waxing completed" : "Dental scaling completed",
     aiAllowed: true,
     schema: z.object({ completedOn: zDate, detail: zOptText(200), notes: zOptText() }),
-    summarize: (i) => `Log ${kind === "waxing" ? "waxing" : "dental scaling"} done on ${i.completedOn}; restart the ${kind === "waxing" ? "40-day cycle (reminders on days 27, 30, 35, 38, 40)" : "six-month cadence"} from that date`,
+    summarize: (i) => `Log ${kind === "waxing" ? "waxing" : "dental scaling"} done on ${dmy(i.completedOn)}; restart the ${kind === "waxing" ? "40-day cycle (reminders on days 27, 30, 35, 38, 40)" : "six-month cadence"} from that date`,
     async run(ctx, i) {
       if (i.completedOn > todayLocal(ctx.tz, ctx.now)) throw new UserError("Completion date can't be in the future", "completedOn");
       const a = await ensureActivity(ctx, kind);
@@ -86,7 +86,7 @@ function completeOp(kind: "waxing" | "dental") {
         ownerId: ctx.ownerId, activityId: a.id, completedOn: i.completedOn, detail: i.detail, notes: i.notes, source: ctx.source,
       }).returning({ id: maintenanceCompletionEvents.id });
       await syncMaintenance(ctx, a.id);
-      const msg = `${a.name} completed on ${i.completedOn}`;
+      const msg = `${a.name} completed on ${dmy(i.completedOn)}`;
       await audit(ctx, kind, "completed", "maintenance_event", e.id, msg, kind === "waxing");
       return { id: e.id, message: msg };
     },
@@ -105,7 +105,7 @@ export const maintenanceVoid = defineOp({
       .returning({ activityId: maintenanceCompletionEvents.activityId, on: maintenanceCompletionEvents.completedOn });
     if (!res.length) throw new UserError("Entry not found");
     await syncMaintenance(ctx, res[0].activityId); // recalculates from the remaining latest entry
-    await audit(ctx, "care", "corrected", "maintenance_event", i.eventId, `Removed entry for ${res[0].on}: ${i.reason}`, true);
+    await audit(ctx, "care", "corrected", "maintenance_event", i.eventId, `Removed entry for ${dmy(res[0].on)}: ${i.reason}`, true);
     return { id: i.eventId, message: "Entry removed and schedule recalculated" };
   },
 });
@@ -211,7 +211,7 @@ export const routineLog = defineOp({
     onDate: zDate, notes: zOptText(),
   }),
   draftable: ["routineId"],
-  summarize: (i) => `${{ completed: "Mark done", skipped: "Skip this cycle", purchased: "Record purchase", first_use: "Record first use" }[i.type]} on ${i.onDate}`,
+  summarize: (i) => `${{ completed: "Mark done", skipped: "Skip this cycle", purchased: "Record purchase", first_use: "Record first use" }[i.type]} on ${dmy(i.onDate)}`,
   async run(ctx, i) {
     const [r] = await ctx.tx.select().from(routines).where(and(eq(routines.id, i.routineId), eq(routines.ownerId, ctx.ownerId)));
     if (!r) throw new UserError("Routine not found");
@@ -220,7 +220,7 @@ export const routineLog = defineOp({
     if (r.snoozedUntil) await ctx.tx.update(routines).set({ snoozedUntil: null }).where(eq(routines.id, r.id));
     await syncRoutine(ctx, r.id);
     const verb = { completed: "done", skipped: "skipped", purchased: "purchased", first_use: "first used" }[i.type];
-    const msg = `${r.name} — ${verb} on ${i.onDate}`;
+    const msg = `${r.name} — ${verb} on ${dmy(i.onDate)}`;
     await audit(ctx, "routines", i.type, "routine_event", e.id, msg);
     return { id: e.id, message: msg };
   },
@@ -229,14 +229,14 @@ export const routineLog = defineOp({
 export const routineSnooze = defineOp({
   name: "routine.snooze", module: "routines", label: "Snooze routine", aiAllowed: false,
   schema: z.object({ routineId: zId, until: zDate }),
-  summarize: (i) => `Snooze until ${i.until}`,
+  summarize: (i) => `Snooze until ${dmy(i.until)}`,
   async run(ctx, i) {
     const res = await ctx.tx.update(routines).set({ snoozedUntil: i.until, updatedAt: ctx.now })
       .where(and(eq(routines.id, i.routineId), eq(routines.ownerId, ctx.ownerId))).returning({ name: routines.name });
     if (!res.length) throw new UserError("Routine not found");
     await syncRoutine(ctx, i.routineId);
-    await audit(ctx, "routines", "snoozed", "routine", i.routineId, `${res[0].name} snoozed until ${i.until}`);
-    return { id: i.routineId, message: `Snoozed until ${i.until}` };
+    await audit(ctx, "routines", "snoozed", "routine", i.routineId, `${res[0].name} snoozed until ${dmy(i.until)}`);
+    return { id: i.routineId, message: `Snoozed until ${dmy(i.until)}` };
   },
 });
 
@@ -266,7 +266,7 @@ export async function fastBalance(ctx: Pick<Ctx, "tx" | "ownerId">) {
 export const fastComplete = defineOp({
   name: "fasts.complete", module: "fasts", label: "Fast completed", aiAllowed: true,
   schema: z.object({ onDate: zDate, historicalCorrection: z.boolean().default(false), notes: zOptText() }),
-  summarize: (i) => `Record one make-up fast completed on ${i.onDate} (balance −1)`,
+  summarize: (i) => `Record one make-up fast completed on ${dmy(i.onDate)} (balance −1)`,
   async run(ctx, i) {
     if (i.onDate > todayLocal(ctx.tz, ctx.now)) throw new UserError("Date can't be in the future", "onDate");
     const balance = await fastBalance(ctx);
@@ -274,12 +274,12 @@ export const fastComplete = defineOp({
     const [dup] = await ctx.tx.select({ id: fastLedgerEvents.id }).from(fastLedgerEvents).where(and(
       eq(fastLedgerEvents.ownerId, ctx.ownerId), eq(fastLedgerEvents.type, "completed"),
       eq(fastLedgerEvents.onDate, i.onDate), isNull(fastLedgerEvents.voidedAt)));
-    if (dup && !i.historicalCorrection) throw new UserError(`A fast is already recorded on ${i.onDate}`, "onDate");
+    if (dup && !i.historicalCorrection) throw new UserError(`A fast is already recorded on ${dmy(i.onDate)}`, "onDate");
     const [e] = await ctx.tx.insert(fastLedgerEvents).values({
       ownerId: ctx.ownerId, type: "completed", delta: -1, onDate: i.onDate, reason: i.notes,
       overrideNegative: balance <= 0, source: ctx.source,
     }).returning({ id: fastLedgerEvents.id });
-    const msg = `Fast completed on ${i.onDate} — ${balance - 1} remaining`;
+    const msg = `Fast completed on ${dmy(i.onDate)} — ${balance - 1} remaining`;
     await audit(ctx, "fasts", "completed", "fast_ledger_event", e.id, msg);
     return { id: e.id, message: msg };
   },
@@ -288,13 +288,13 @@ export const fastComplete = defineOp({
 export const fastInitial = defineOp({
   name: "fasts.initial", module: "fasts", label: "Set opening balance", aiAllowed: false,
   schema: z.object({ count: z.number().int().min(0).max(5000), asOf: zDate, notes: zOptText() }),
-  summarize: (i) => `Set opening balance of ${i.count} as of ${i.asOf}`,
+  summarize: (i) => `Set opening balance of ${i.count} as of ${dmy(i.asOf)}`,
   async run(ctx, i) {
     const [existing] = await ctx.tx.select({ id: fastLedgerEvents.id }).from(fastLedgerEvents)
       .where(and(eq(fastLedgerEvents.ownerId, ctx.ownerId), eq(fastLedgerEvents.type, "initial"), isNull(fastLedgerEvents.voidedAt)));
     if (existing) throw new UserError("An opening balance already exists. Use an adjustment with a reason instead.");
     const [e] = await ctx.tx.insert(fastLedgerEvents).values({ ownerId: ctx.ownerId, type: "initial", delta: i.count, onDate: i.asOf, reason: i.notes }).returning({ id: fastLedgerEvents.id });
-    await audit(ctx, "fasts", "created", "fast_ledger_event", e.id, `Opening balance ${i.count} as of ${i.asOf}`);
+    await audit(ctx, "fasts", "created", "fast_ledger_event", e.id, `Opening balance ${i.count} as of ${dmy(i.asOf)}`);
     return { id: e.id, message: "Opening balance saved" };
   },
 });
@@ -321,7 +321,7 @@ export const fastVoid = defineOp({
       .where(and(eq(fastLedgerEvents.id, i.eventId), eq(fastLedgerEvents.ownerId, ctx.ownerId), isNull(fastLedgerEvents.voidedAt)))
       .returning({ type: fastLedgerEvents.type, on: fastLedgerEvents.onDate });
     if (!res.length) throw new UserError("Entry not found");
-    await audit(ctx, "fasts", "corrected", "fast_ledger_event", i.eventId, `Removed ${res[0].type} entry dated ${res[0].on}`);
+    await audit(ctx, "fasts", "corrected", "fast_ledger_event", i.eventId, `Removed ${res[0].type} entry dated ${dmy(res[0].on)}`);
     return { id: i.eventId, message: "Entry removed" };
   },
 });

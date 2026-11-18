@@ -1,9 +1,16 @@
-import { formatLocalDate } from "./time";
-export const fmtDate = (d: string | null | undefined) => (d ? formatLocalDate(d, { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "—");
-export const fmtShort = (d: string | null | undefined) => (d ? formatLocalDate(d, { day: "numeric", month: "short" }) : "—");
+import { dmy, instantToLocal } from "./time";
+
+/** All dates display as DD/MM/YYYY. */
+export const fmtDate = (d: string | null | undefined) => (d ? dmy(d) : "—");
+export const fmtShort = fmtDate;
+
+/** "Wed 18/11/2026, 19:00" in the owner's timezone. */
 export function fmtDateTime(at: Date, tz: string) {
-  return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz }).format(at);
+  const { date, time } = instantToLocal(at, tz);
+  const wd = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: tz }).format(at);
+  return `${wd} ${dmy(date)}, ${time}`;
 }
+
 export function relDays(n: number | null) {
   if (n === null) return "";
   if (n === 0) return "today";

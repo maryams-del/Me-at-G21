@@ -134,6 +134,11 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
   );
 }
 
+/** Close the surrounding <Reveal> panel, if any (for custom forms). */
+export function useRevealClose() {
+  return useContext(RevealCtx)?.close;
+}
+
 /** One-tap op button (e.g. “Waxing completed today”). */
 export function OpButton({ op, input, label, className = "btn", confirmText, successMessage, ariaLabel }: { op: string; input: unknown; label: string; className?: string; confirmText?: string; successMessage?: string; ariaLabel?: string }) {
   const router = useRouter();

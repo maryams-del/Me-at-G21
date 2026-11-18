@@ -60,7 +60,12 @@ export function NotificationsClient({ vapidKey, prefs: initial, devices, schedul
   }
 
   const canSubscribe = env && env.pushApi && (!env.ios || env.standalone);
-  const fmt = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "never");
+  const fmt = (s: string | null) => {
+  if (!s) return "never";
+  const t = new Date(s);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(t.getDate())}/${p(t.getMonth() + 1)}/${t.getFullYear()}, ${p(t.getHours())}:${p(t.getMinutes())}`;
+};
 
   return (
     <div>

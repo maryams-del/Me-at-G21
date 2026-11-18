@@ -12,7 +12,8 @@ import { fastBalance, routineAnchor, routineDue } from "../ops/care";
 import { debtOutstanding } from "../ops/finance";
 import { nextClassOccurrence } from "../ops/planning";
 import { formatMoney } from "@/lib/money";
-import { todayLocal, formatLocalDate, formatInstant, daysBetween } from "@/lib/time";
+import { todayLocal, dmy, daysBetween } from "@/lib/time";
+import { fmtDateTime } from "@/lib/format";
 import type { AiContext, AiProvider, Interpretation, ProposedOp, SearchQuery } from "./types";
 import { offlineProvider } from "./offline";
 import { anthropicProvider } from "./anthropic";
@@ -89,7 +90,7 @@ function describe(op: ProposedOp & { input: Record<string, unknown> }, aliases: 
   for (const [k, v] of Object.entries(op.input)) {
     if (v === null || v === undefined || (Array.isArray(v) && !v.length)) continue;
     display[k] = typeof v === "string" && names[v] ? names[v]
-      : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? formatLocalDate(v, { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+      : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? dmy(v)
       : Array.isArray(v) ? v.join(", ") : String(v);
   }
   if (!def || !def.aiAllowed) return { def: null, display, valid: false, error: "This action isn't allowed from AI capture", summary: op.op };
@@ -270,7 +271,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
   const db = getDb();
   const ownerId = owner.id;
   const tz = owner.timezone;
-  const fmt = (d: string) => formatLocalDate(d, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const fmt = (d: string) => dmy(d);
   switch (q.type) {
     case "last_event": {
       if (q.target === "waxing" || q.target === "dental") {
@@ -284,18 +285,18 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
         const ago = daysBetween(last.completedOn, todayLocal(tz));
         return {
           answer: `Your last ${label} was on ${fmt(last.completedOn)} (${ago} day${ago === 1 ? "" : "s"} ago).`,
-          sources: rows.map((r) => ({ label: `${label[0].toUpperCase() + label.slice(1)} logged`, date: r.e.completedOn, href: `/care/${q.target}` })),
+          sources: rows.map((r) => ({ label: `${label[0].toUpperCase() + label.slice(1)} logged`, date: dmy(r.e.completedOn), href: `/care/${q.target}` })),
         };
       }
       if (q.target === "fasts") {
         const rows = await db.select().from(fastLedgerEvents).where(and(eq(fastLedgerEvents.ownerId, ownerId), eq(fastLedgerEvents.type, "completed"), isNull(fastLedgerEvents.voidedAt))).orderBy(desc(fastLedgerEvents.onDate)).limit(3);
         if (!rows.length) return { answer: "No completed make-up fasts are logged yet.", sources: [] };
-        return { answer: `Your last make-up fast was on ${fmt(rows[0].onDate)}.`, sources: rows.map((r) => ({ label: "Fast completed", date: r.onDate, href: "/faith/fasts" })) };
+        return { answer: `Your last make-up fast was on ${fmt(rows[0].onDate)}.`, sources: rows.map((r) => ({ label: "Fast completed", date: dmy(r.onDate), href: "/faith/fasts" })) };
       }
       if (q.target === "charity") {
         const rows = await db.select().from(charityPayments).where(and(eq(charityPayments.ownerId, ownerId), eq(charityPayments.status, "completed"), isNull(charityPayments.deletedAt))).orderBy(desc(charityPayments.paidOn)).limit(3);
         if (!rows.length) return { answer: "No donations are logged yet.", sources: [] };
-        return { answer: `Your last donation was ${formatMoney(rows[0].amountMinor, rows[0].currency)} to ${rows[0].recipient} on ${fmt(rows[0].paidOn)}.`, sources: rows.map((r) => ({ label: `${formatMoney(r.amountMinor, r.currency)} — ${r.recipient}`, date: r.paidOn, href: "/finance/charity" })) };
+        return { answer: `Your last donation was ${formatMoney(rows[0].amountMinor, rows[0].currency)} to ${rows[0].recipient} on ${fmt(rows[0].paidOn)}.`, sources: rows.map((r) => ({ label: `${formatMoney(r.amountMinor, r.currency)} — ${r.recipient}`, date: dmy(r.paidOn), href: "/finance/charity" })) };
       }
       if (q.target.startsWith("routine:")) {
         const id = aliases[q.target.slice(8).replace(/^@/, "")]?.id;
@@ -304,7 +305,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
         const evs = await db.select().from(routineEvents).where(and(eq(routineEvents.routineId, r.id), isNull(routineEvents.voidedAt))).orderBy(desc(routineEvents.onDate)).limit(3);
         if (!evs.length) return { answer: `Nothing is logged for “${r.name}” yet.`, sources: [] };
         const due = routineDue(r, await routineAnchor({ tx: db }, r));
-        return { answer: `“${r.name}”: last ${evs[0].type.replace("_", " ")} on ${fmt(evs[0].onDate)}.${due ? ` Next due ${fmt(due)}.` : ""}`, sources: evs.map((e) => ({ label: `${r.name} — ${e.type.replace("_", " ")}`, date: e.onDate, href: "/care/routines" })) };
+        return { answer: `“${r.name}”: last ${evs[0].type.replace("_", " ")} on ${fmt(evs[0].onDate)}.${due ? ` Next due ${fmt(due)}.` : ""}`, sources: evs.map((e) => ({ label: `${r.name} — ${e.type.replace("_", " ")}`, date: dmy(e.onDate), href: "/care/routines" })) };
       }
       return { answer: "I can look up the last waxing, dental scaling, fast, donation or routine.", sources: [] };
     }
@@ -317,13 +318,13 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
       return {
         answer: `You donated ${totals} between ${fmt(q.from)} and ${fmt(q.to)}.`,
         calculation: `${rows.length} completed donation${rows.length === 1 ? "" : "s"} summed per currency; planned donations excluded.`,
-        sources: rows.slice(0, 10).map((r) => ({ label: `${formatMoney(r.amountMinor, r.currency)} — ${r.recipient}`, date: r.paidOn, href: "/finance/charity" })),
+        sources: rows.slice(0, 10).map((r) => ({ label: `${formatMoney(r.amountMinor, r.currency)} — ${r.recipient}`, date: dmy(r.paidOn), href: "/finance/charity" })),
       };
     }
     case "fast_balance": {
       const b = await fastBalance({ tx: db, ownerId });
       const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(fastLedgerEvents).where(and(eq(fastLedgerEvents.ownerId, ownerId), isNull(fastLedgerEvents.voidedAt)));
-      return { answer: n ? `Your make-up fast balance is ${b}.` : "You haven't set up a fast balance yet.", calculation: "Opening balance + annual additions + adjustments − completed fasts.", sources: n ? [{ label: "Fast ledger", date: todayLocal(tz), href: "/faith/fasts" }] : [] };
+      return { answer: n ? `Your make-up fast balance is ${b}.` : "You haven't set up a fast balance yet.", calculation: "Opening balance + annual additions + adjustments − completed fasts.", sources: n ? [{ label: "Fast ledger", date: dmy(todayLocal(tz)), href: "/faith/fasts" }] : [] };
     }
     case "debts_outstanding": {
       const ds = await db.select().from(debts).where(and(eq(debts.ownerId, ownerId), eq(debts.status, "open"), isNull(debts.deletedAt), q.direction ? eq(debts.direction, q.direction) : sql`true`));
@@ -331,7 +332,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
       const lines: Source[] = [];
       for (const d of ds) {
         const { outstanding } = await debtOutstanding({ tx: db, ownerId }, d.id);
-        lines.push({ label: `${d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`} ${formatMoney(outstanding, d.currency)}`, date: d.dueDate ?? d.onDate, href: "/finance/debts" });
+        lines.push({ label: `${d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`} ${formatMoney(outstanding, d.currency)}`, date: dmy(d.dueDate ?? d.onDate), href: "/finance/debts" });
       }
       return { answer: lines.map((l) => l.label).join("; ") + ".", sources: lines };
     }
@@ -342,7 +343,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
       for (const g of goals) {
         const [{ net }] = await db.select({ net: sql<string>`coalesce(sum(case when type='deposit' then amount_minor else -amount_minor end),0)` }).from(savingsTransactions).where(and(eq(savingsTransactions.goalId, g.id), isNull(savingsTransactions.voidedAt)));
         const bal = g.openingBalanceMinor + Number(net);
-        out.push({ label: `${g.name}: ${formatMoney(bal, g.currency)} of ${formatMoney(g.targetMinor, g.currency)} (${Math.floor((bal / g.targetMinor) * 100)}%)`, date: todayLocal(tz), href: "/finance/savings" });
+        out.push({ label: `${g.name}: ${formatMoney(bal, g.currency)} of ${formatMoney(g.targetMinor, g.currency)} (${Math.floor((bal / g.targetMinor) * 100)}%)`, date: dmy(todayLocal(tz)), href: "/finance/savings" });
       }
       return { answer: out.map((o) => o.label).join("; ") + ".", calculation: "Opening balance + deposits − withdrawals (planned contributions not counted).", sources: out };
     }
@@ -350,7 +351,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
       const o = await db.transaction((tx) => nextClassOccurrence({ tx, ownerId, tz, source: "manual", now: new Date() }));
       if (!o) return { answer: "No upcoming class is scheduled.", sources: [] };
       const hw = await db.select().from(homeworkTasks).where(and(eq(homeworkTasks.occurrenceId, o.id), isNull(homeworkTasks.completedAt)));
-      return { answer: `Next class: ${formatInstant(o.startsAt, tz)}${hw.length ? ` — ${hw.length} homework item${hw.length === 1 ? "" : "s"} open` : ""}.`, sources: [{ label: "Quran class", date: o.localDate, href: "/quran" }] };
+      return { answer: `Next class: ${fmtDateTime(o.startsAt, tz)}${hw.length ? ` — ${hw.length} homework item${hw.length === 1 ? "" : "s"} open` : ""}.`, sources: [{ label: "Quran class", date: dmy(o.localDate), href: "/quran" }] };
     }
     case "text": {
       const term = `%${q.q.replace(/[%_\\]/g, "").slice(0, 80)}%`;
@@ -358,7 +359,7 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
         .where(and(eq(auditEvents.ownerId, ownerId), eq(auditEvents.sensitive, false), or(ilike(auditEvents.summary, term), ilike(auditEvents.category, term))))
         .orderBy(desc(auditEvents.occurredAt)).limit(10);
       if (!rows.length) return { answer: `No results for “${q.q}”.`, sources: [] };
-      return { answer: `Found ${rows.length} matching entr${rows.length === 1 ? "y" : "ies"}.`, sources: rows.map((r) => ({ label: r.summary, date: r.occurredAt.toISOString().slice(0, 10), href: `/history?q=${encodeURIComponent(q.q)}` })) };
+      return { answer: `Found ${rows.length} matching entr${rows.length === 1 ? "y" : "ies"}.`, sources: rows.map((r) => ({ label: r.summary, date: dmy(r.occurredAt.toISOString().slice(0, 10)), href: `/history?q=${encodeURIComponent(q.q)}` })) };
     }
   }
 }

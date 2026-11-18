@@ -1,3 +1,4 @@
+import { dmy } from "@/lib/time";
 import { pageOwner, charityState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
@@ -61,7 +62,7 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
                   {r.status === "planned" && <span className="chip chip-mustard">planned</span>}
                 </div>
                 <div className="col-span-2 flex gap-2">
-                  {r.status === "planned" && <OpButton op="charity.update" className="btn btn-sm" label="Mark paid" input={{ ...r, id: r.id, amount: fromMinor(r.amountMinor, r.currency), status: "completed", paidOn: today, cause: r.cause, notes: r.notes }} confirmText={`Mark as paid today (${today})?`} />}
+                  {r.status === "planned" && <OpButton op="charity.update" className="btn btn-sm" label="Mark paid" input={{ ...r, id: r.id, amount: fromMinor(r.amountMinor, r.currency), status: "completed", paidOn: today, cause: r.cause, notes: r.notes }} confirmText={`Mark as paid today (${dmy(today)})?`} />}
                   <a href={`?edit=${r.id}`} className="btn btn-sm btn-ghost">Edit</a>
                   <OpButton op="charity.delete" input={{ id: r.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText="Delete this donation? It will be removed from totals." />
                 </div>

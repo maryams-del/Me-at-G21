@@ -127,6 +127,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(dlg.getByText(/How much did you lend/)).toBeVisible();
     await expect(dlg.getByRole("button", { name: "Save 1 draft" })).toBeVisible();
     await dlg.getByRole("button", { name: "Save 1 draft" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "sent to Needs details" })).toBeVisible();
     await page.goto("/inbox");
     await expect(page.getByText("“I lent Sara money yesterday, she will repay Friday”")).toBeVisible();
     await page.getByLabel("Amount").fill("200");
@@ -155,7 +156,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await shot(page, "09-waxing");
     await page.goto("/quran");
     await expect(page.getByRole("heading", { name: "Next class" })).toBeVisible();
-    await expect(page.getByText(/Sun \d+ \w+, 19:00/).first()).toBeVisible();
+    await expect(page.getByText(/Sun \d{2}\/\d{2}\/\d{4}, 19:00/).first()).toBeVisible();
     await shot(page, "10-quran");
     for (const [path, name] of [["/care/routines", "11-routines"], ["/finance/savings", "12-savings"], ["/projects", "13-projects"], ["/care/dental", "14-dental"], ["/settings/notifications", "15-notifications"], ["/vault", "16-vault"], ["/", "17-dashboard"]] as const) {
       await page.goto(path);
@@ -171,7 +172,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await page.goto("/admin/expiries");
     await page.getByRole("button", { name: "Track something" }).click();
     await page.getByLabel("What is it?").fill("Driving licence");
-    await page.getByRole("combobox", { name: /^Type/ }).selectOption("license");
+    await page.locator("form").filter({ has: page.getByLabel("What is it?") }).getByRole("combobox", { name: /^Type/ }).selectOption("license");
     await page.getByLabel("Expiry date").fill("2027-02-01");
     await page.getByRole("button", { name: "Start tracking" }).click();
     await expect(page.getByRole("heading", { name: /Driving licence/ })).toBeVisible();
@@ -181,11 +182,13 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await page.getByLabel("Title").fill("Passport");
     await page.getByLabel("Expiry date").fill("2030-05-01");
     await page.getByLabel("ID number").fill("P1234567");
+    await page.getByLabel("Choose a file for this document").setInputFiles({ name: "passport.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\ntest file only\n%%EOF") });
+    await expect(page.getByText(/passport\.pdf \(1 KB\)/)).toBeVisible();
     await page.getByRole("button", { name: "Save document" }).click();
     await expect(page.getByText("••••4567")).toBeVisible();
     await expect(page.getByText("P1234567")).toHaveCount(0);
-    await page.getByLabel("Choose a file to upload").setInputFiles({ name: "passport.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\ntest file only\n%%EOF") });
-    await expect(page.getByText(/passport\.pdf/)).toBeVisible();
+    await expect(page.getByText(/passport\.pdf v1/)).toBeVisible(); // uploaded in the same save
+    await expect(page.getByText("01/05/2030")).toBeVisible(); // DD/MM/YYYY
     await page.getByRole("button", { name: "Reveal" }).click(); // passkey step-up via the virtual authenticator
     await expect(page.getByText("P1234567")).toBeVisible();
     await shot(page, "22-documents");
@@ -195,6 +198,18 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     expect((await ok.body()).toString()).toContain("test file only");
     const anon = await (await page.context().browser()!.newContext()).request.get(new URL(href!, "http://localhost:3100").toString());
     expect(anon.status()).toBe(401);
+    await page.goto("/admin/documents?kind=certificate");
+    await expect(page.getByText(/No documents match type “Certificate”/)).toBeVisible();
+    await page.goto("/admin/documents?q=passport+4567");
+    await expect(page.getByRole("heading", { name: "Passport", level: 2 })).toBeVisible();
+    await page.goto("/admin/expiries");
+    const order = await page.locator("main li h2").allInnerTexts();
+    expect(order.findIndex((x) => x.startsWith("Driving licence"))).toBeLessThan(order.findIndex((x) => x.startsWith("Passport")));
+    await page.goto("/admin/expiries?sort=latest");
+    const rev = await page.locator("main li h2").allInnerTexts();
+    expect(rev.findIndex((x) => x.startsWith("Passport"))).toBeLessThan(rev.findIndex((x) => x.startsWith("Driving licence")));
+    await page.goto("/admin/expiries?kind=license");
+    await expect(page.locator("main li h2")).toHaveCount(1);
     await page.goto("/admin/expiries");
     await shot(page, "23-expiries");
   });

@@ -1,3 +1,4 @@
+import { dmy } from "@/lib/time";
 import { pageOwner, fastsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
@@ -14,7 +15,7 @@ export default async function FastsPage() {
   return (
     <>
       <PageHeader glyph="fasts" title="Make-up fasts" intro="Balance = opening balance + annual additions + adjustments − completed fasts. Every change is kept in the ledger.">
-        <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${today})?`} />
+        <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${dmy(today)})?`} />
       </PageHeader>
 
       <div className="grid gap-3 sm:grid-cols-3 mb-8">

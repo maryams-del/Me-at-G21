@@ -3,7 +3,7 @@ import { and, eq, isNull, max } from "drizzle-orm";
 import { expiryItems, renewalEvents, documents, protectedIdFields, documentFiles } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { addDays, localToInstant, todayLocal } from "@/lib/time";
+import { addDays, localToInstant, todayLocal, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders } from "../reminders";
 import { encryptField } from "@/lib/crypto";
 import { removeStored } from "../storage";
@@ -39,12 +39,12 @@ const expiryInput = z.object({
 export const expiryCreate = defineOp({
   name: "expiry.create", module: "expiries", label: "Track an expiry", aiAllowed: true,
   schema: expiryInput, draftable: ["expiresOn"],
-  summarize: (i) => `Track “${i.label}” expiring ${i.expiresOn}; reminders ${i.reminderOffsetsDays.map((o) => (o === 0 ? "on the day" : `${-o} days before`)).join(", ")}`,
+  summarize: (i) => `Track “${i.label}” expiring ${dmy(i.expiresOn)}; reminders ${i.reminderOffsetsDays.map((o) => (o === 0 ? "on the day" : `${-o} days before`)).join(", ")}`,
   async run(ctx, i) {
     if (i.documentId) await ownDocument(ctx, i.documentId);
     const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, ...i, documentId: i.documentId ?? null, source: ctx.source }).returning({ id: expiryItems.id });
     await syncExpiry(ctx, it.id);
-    await audit(ctx, "expiries", "created", "expiry_item", it.id, `Tracking “${redactDigits(i.label)}”, expires ${i.expiresOn}`);
+    await audit(ctx, "expiries", "created", "expiry_item", it.id, `Tracking “${redactDigits(i.label)}”, expires ${dmy(i.expiresOn)}`);
     return { id: it.id, message: `Tracking ${i.label}` };
   },
 });
@@ -67,7 +67,7 @@ export const expiryUpdate = defineOp({
 export const expiryRenew = defineOp({
   name: "expiry.renew", module: "expiries", label: "Record renewal", aiAllowed: true,
   schema: z.object({ itemId: zId, renewedOn: zDate, newExpiresOn: zDate, notes: zOptText() }),
-  summarize: (i) => `Renewed on ${i.renewedOn}; new expiry ${i.newExpiresOn}`,
+  summarize: (i) => `Renewed on ${dmy(i.renewedOn)}; new expiry ${dmy(i.newExpiresOn)}`,
   async run(ctx, i) {
     const [it] = await ctx.tx.select().from(expiryItems).where(and(eq(expiryItems.id, i.itemId), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt)));
     if (!it) throw new UserError("Item not found");
@@ -76,8 +76,8 @@ export const expiryRenew = defineOp({
     await ctx.tx.insert(renewalEvents).values({ ownerId: ctx.ownerId, itemId: it.id, renewedOn: i.renewedOn, previousExpiresOn: it.expiresOn, newExpiresOn: i.newExpiresOn, notes: i.notes });
     await ctx.tx.update(expiryItems).set({ expiresOn: i.newExpiresOn, status: "active", updatedAt: ctx.now }).where(eq(expiryItems.id, it.id));
     await syncExpiry(ctx, it.id);
-    await audit(ctx, "expiries", "renewed", "expiry_item", it.id, `Renewed “${redactDigits(it.label)}” — new expiry ${i.newExpiresOn}`);
-    return { id: it.id, message: `Renewed until ${i.newExpiresOn}` };
+    await audit(ctx, "expiries", "renewed", "expiry_item", it.id, `Renewed “${redactDigits(it.label)}” — new expiry ${dmy(i.newExpiresOn)}`);
+    return { id: it.id, message: `Renewed until ${dmy(i.newExpiresOn)}` };
   },
 });
 

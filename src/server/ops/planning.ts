@@ -3,7 +3,7 @@ import { and, asc, eq, gte, isNull, inArray } from "drizzle-orm";
 import { projects, tasks, recurringEvents, eventOccurrences, homeworkTasks } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { addDays, localToInstant, nextWeekday, todayLocal, type LocalDate } from "@/lib/time";
+import { addDays, localToInstant, nextWeekday, todayLocal, type LocalDate, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders } from "../reminders";
 
 /* ───────────── Projects & tasks ───────────── */
@@ -14,7 +14,7 @@ export const projectCreate = defineOp({
     name: zText(200), description: zOptText(), targetDate: zDate.optional().nullable(),
     priority: z.enum(["low", "medium", "high"]).optional().nullable(), links: z.array(z.string().url()).max(20).default([]),
   }),
-  summarize: (i) => `Create project “${i.name}”${i.targetDate ? ` (target ${i.targetDate})` : ""}`,
+  summarize: (i) => `Create project “${i.name}”${i.targetDate ? ` (target ${dmy(i.targetDate)})` : ""}`,
   async run(ctx, i) {
     const [p] = await ctx.tx.insert(projects).values({ ownerId: ctx.ownerId, name: i.name, description: i.description, targetDate: i.targetDate ?? null, priority: i.priority ?? null, links: i.links, source: ctx.source }).returning({ id: projects.id });
     await audit(ctx, "projects", "created", "project", p.id, `Created project “${i.name}”`);
@@ -65,7 +65,7 @@ const taskInput = z.object({
 export const taskCreate = defineOp({
   name: "task.create", module: "projects", label: "Add task", aiAllowed: true,
   schema: taskInput, draftable: ["dueOn"],
-  summarize: (i) => `Add task “${i.title}”${i.dueOn ? ` due ${i.dueOn}${i.dueTime ? ` ${i.dueTime}` : ""}` : ""}${i.dueOn && i.remindersEnabled ? " with reminder" : ""}`,
+  summarize: (i) => `Add task “${i.title}”${i.dueOn ? ` due ${dmy(i.dueOn)}${i.dueTime ? ` ${i.dueTime}` : ""}` : ""}${i.dueOn && i.remindersEnabled ? " with reminder" : ""}`,
   async run(ctx, i) {
     if (i.projectId) {
       const [p] = await ctx.tx.select({ id: projects.id }).from(projects).where(and(eq(projects.id, i.projectId), eq(projects.ownerId, ctx.ownerId)));
@@ -250,7 +250,7 @@ export const occurrenceUpdate = defineOp({
       if (later.length) await ctx.tx.update(eventOccurrences).set({ status: "cancelled", updatedAt: ctx.now }).where(inArray(eventOccurrences.id, later.map((l) => l.id)));
     }
     await ensureOccurrences(ctx, ev.id);
-    await audit(ctx, "quran", i.status, "event_occurrence", o.id, `${ev.title} on ${o.localDate}: ${i.status}${i.scope === "future" ? " (and all future)" : ""}`);
+    await audit(ctx, "quran", i.status, "event_occurrence", o.id, `${ev.title} on ${dmy(o.localDate)}: ${i.status}${i.scope === "future" ? " (and all future)" : ""}`);
     return { id: o.id, message: "Saved" };
   },
 });
@@ -290,8 +290,8 @@ export const homeworkCreate = defineOp({
       ownerId: ctx.ownerId, occurrenceId: occId!, title: i.title, description: i.description, reference: i.reference,
       dueAt: i.dueAt ? new Date(i.dueAt) : o.startsAt, priority: i.priority ?? null, source: ctx.source,
     }).returning({ id: homeworkTasks.id });
-    await audit(ctx, "quran", "created", "homework", h.id, `Homework “${i.title}” for class on ${o.localDate}`);
-    return { id: h.id, message: `Homework added for ${o.localDate}` };
+    await audit(ctx, "quran", "created", "homework", h.id, `Homework “${i.title}” for class on ${dmy(o.localDate)}`);
+    return { id: h.id, message: `Homework added for ${dmy(o.localDate)}` };
   },
 });
 

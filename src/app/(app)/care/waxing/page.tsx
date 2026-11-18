@@ -1,3 +1,4 @@
+import { dmy } from "@/lib/time";
 import { pageOwner, waxingState, remindersFor } from "@/server/queries";
 import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
@@ -11,7 +12,7 @@ export default async function WaxingPage() {
   return (
     <>
       <PageHeader glyph="waxing" title="Waxing" intro={`Your personal goal: next session around day ${s.rule.recommendedDay}, and within ${W} days of the last one. Each new session restarts the count from the date it actually happened.`}>
-        <OpButton op="waxing.complete" input={{ completedOn: s.today }} label="Done today" className="btn btn-primary" confirmText={`Log waxing completed today (${s.today})?`} />
+        <OpButton op="waxing.complete" input={{ completedOn: s.today }} label="Done today" className="btn btn-primary" confirmText={`Log waxing completed today (${dmy(s.today)})?`} />
       </PageHeader>
 
       {s.last ? (

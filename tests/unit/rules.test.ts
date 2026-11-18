@@ -112,3 +112,25 @@ describe("quiet hours", () => {
   });
   void addDays;
 });
+
+import { rankDocuments } from "@/server/queries";
+describe("document search ranking", () => {
+  const D = (title: string, kind: string, extra: Partial<{ issuer: string; notes: string; tags: string[]; idMasked: string }> = {}) =>
+    ({ title, kind, issuer: extra.issuer ?? null, notes: extra.notes ?? null, tags: extra.tags ?? [], idMasked: extra.idMasked ?? null });
+  const docs = [
+    D("Sara passport", "passport"), D("Maryam passport", "passport"), D("Maryam degree", "certificate"),
+    D("Maryam ID", "national_id", { idMasked: "••••4321" }), D("Bank letter", "letter", { issuer: "Al Rajhi" }),
+  ];
+  it("“maryam passport” puts the title+type match first", () => {
+    const r = rankDocuments(docs, "maryam passport").map((d) => d.title);
+    expect(r[0]).toBe("Maryam passport");
+    expect(r).toContain("Sara passport");
+    expect(r).not.toContain("Bank letter");
+  });
+  it("type words and synonyms match (iqama, certificate, last 4 digits, issuer)", () => {
+    expect(rankDocuments(docs, "iqama").map((d) => d.title)).toEqual(["Maryam ID"]);
+    expect(rankDocuments(docs, "maryam certificate")[0].title).toBe("Maryam degree");
+    expect(rankDocuments(docs, "4321")[0].title).toBe("Maryam ID");
+    expect(rankDocuments(docs, "rajhi")[0].title).toBe("Bank letter");
+  });
+});
