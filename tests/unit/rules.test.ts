@@ -1,0 +1,114 @@
+import { describe, it, expect } from "vitest";
+import { addMonths, addDays, localToInstant, fromHijri, toHijri, nextWeekday, isoWeekday } from "@/lib/time";
+import { toMinor, fromMinor, formatMoney } from "@/lib/money";
+import { waxingReminders, DEFAULT_WAXING_RULE, dentalDue, DEFAULT_DENTAL_RULE, routineDue, ruleDate } from "@/server/ops/care";
+import { weeklyDates } from "@/server/ops/planning";
+import { resolveDatePhrase } from "@/server/ai/dates";
+import { recoveryCode, normalizeRecoveryCode, encryptField, decryptField } from "@/lib/crypto";
+import { quietUntil } from "@/server/notify";
+
+const KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+
+describe("calendar-month arithmetic (PRD 4.5, 4.6, test 2, 3, 24)", () => {
+  it("Jan 31 + 6 months = Jul 31", () => expect(addMonths("2026-01-31", 6)).toBe("2026-07-31"));
+  it("Aug 31 + 6 months clamps to Feb 28 in a common year", () => expect(addMonths("2025-08-31", 6)).toBe("2026-02-28"));
+  it("Aug 31 + 6 months clamps to Feb 29 in a leap year", () => expect(addMonths("2027-08-31", 6)).toBe("2028-02-29"));
+  it("Nov 30 + 3 months = Feb 28 (toothbrush)", () => expect(addMonths("2026-11-30", 3)).toBe("2027-02-28"));
+  it("Feb 29 + 12 months = Feb 28", () => expect(addMonths("2024-02-29", 12)).toBe("2025-02-28"));
+  it("dental due = six calendar months", () => expect(dentalDue("2026-01-31", DEFAULT_DENTAL_RULE)).toBe("2026-07-31"));
+  it("toothbrush due uses first-use anchor, 3 calendar months", () => {
+    expect(routineDue({ intervalValue: 3, intervalUnit: "month", snoozedUntil: null }, "2026-11-20")).toBe("2027-02-20");
+  });
+  it("snooze moves due date later, never earlier", () => {
+    expect(routineDue({ intervalValue: 7, intervalUnit: "day", snoozedUntil: "2026-12-01" }, "2026-11-20")).toBe("2026-12-01");
+    expect(routineDue({ intervalValue: 7, intervalUnit: "day", snoozedUntil: "2026-11-21" }, "2026-11-20")).toBe("2026-11-27");
+  });
+});
+
+describe("waxing 40-day window (PRD 4.4, test 1)", () => {
+  it("reminders on days 27/30/35/38/40 after the actual completion date, 09:00 Riyadh", () => {
+    const r = waxingReminders("a", "2026-11-01", DEFAULT_WAXING_RULE, "09:00", "Asia/Riyadh");
+    expect(r.map((x) => x.fireAt.toISOString())).toEqual([
+      "2026-11-28T06:00:00.000Z", "2026-12-01T06:00:00.000Z", "2026-12-06T06:00:00.000Z", "2026-12-09T06:00:00.000Z", "2026-12-11T06:00:00.000Z",
+    ]);
+    expect(r.every((x) => x.sensitive)).toBe(true);
+    expect(new Set(r.map((x) => x.dedupeKey)).size).toBe(5);
+  });
+});
+
+describe("Saudi time (test 18)", () => {
+  it("19:00 Riyadh is 16:00 UTC", () => expect(localToInstant("2026-11-22", "19:00").toISOString()).toBe("2026-11-22T16:00:00.000Z"));
+  it("Quran class dates are Sundays", () => {
+    const ds = weeklyDates({ weekday: 7, startDate: "2026-11-18", endDate: null }, "2026-11-18", 4);
+    expect(ds).toEqual(["2026-11-22", "2026-11-29", "2026-12-06", "2026-12-13"]);
+    expect(ds.every((d) => isoWeekday(d) === 7)).toBe(true);
+  });
+  it("series end date stops recurrence", () => {
+    expect(weeklyDates({ weekday: 7, startDate: "2026-11-18", endDate: "2026-11-30" }, "2026-11-18", 8)).toEqual(["2026-11-22", "2026-11-29"]);
+  });
+  it("nextWeekday is inclusive", () => expect(nextWeekday("2026-11-22", 7)).toBe("2026-11-22"));
+});
+
+describe("Hijri (Umm al-Qura)", () => {
+  it("round-trips", () => {
+    const g = fromHijri(1448, 10, 1);
+    expect(toHijri(g)).toEqual({ year: 1448, month: 10, day: 1 });
+  });
+  it("Gregorian rule clamps Feb 29 in common years", () => {
+    expect(ruleDate({ calendar: "gregorian", month: 2, day: 29 }, 2027)).toBe("2027-02-28");
+  });
+});
+
+describe("money in minor units (no floats)", () => {
+  it("parses decimals exactly", () => {
+    expect(toMinor("0.1") + toMinor("0.2")).toBe(toMinor("0.3"));
+    expect(toMinor("150.5", "SAR")).toBe(15050);
+    expect(toMinor("1.234", "KWD")).toBe(1234);
+  });
+  it("rejects too many decimals and junk", () => {
+    expect(() => toMinor("1.234", "SAR")).toThrow();
+    expect(() => toMinor("12a")).toThrow();
+  });
+  it("formats", () => {
+    expect(fromMinor(15050)).toBe("150.50");
+    expect(formatMoney(1234500)).toBe("12,345 SAR");
+    expect(formatMoney(-5)).toBe("-0.05 SAR");
+  });
+});
+
+describe("natural dates (relative to Wed 2026-11-18)", () => {
+  const T = "2026-11-18";
+  it.each([
+    ["today", T], ["yesterday", "2026-11-17"], ["tomorrow", "2026-11-19"],
+    ["she will repay Friday", "2026-11-20"], ["next Thursday", "2026-11-19"], ["by Sunday", "2026-11-22"],
+    ["last Sunday", "2026-11-15"], ["3 days ago", "2026-11-15"], ["on 25 December", "2026-12-25"], ["2027-01-05", "2027-01-05"],
+  ])("%s → %s", (p, want) => expect(resolveDatePhrase(p, T)).toBe(want));
+  it("no date → null", () => expect(resolveDatePhrase("I donated 100", T)).toBeNull());
+});
+
+describe("crypto", () => {
+  it("recovery codes are high-entropy and normalisable", () => {
+    const codes = Array.from({ length: 50 }, recoveryCode);
+    expect(new Set(codes).size).toBe(50);
+    expect(codes[0]).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(normalizeRecoveryCode(codes[0].toLowerCase().replace(/-/g, " "))).toBe(codes[0]);
+  });
+  it("AES-GCM envelope round-trips and detects tampering / wrong context", () => {
+    const e = encryptField("JBSWY3DPEHPK3PXP", KEY, "totp:u1");
+    expect(e).not.toContain("JBSW");
+    expect(decryptField(e, KEY, "totp:u1")).toBe("JBSWY3DPEHPK3PXP");
+    expect(() => decryptField(e, KEY, "totp:u2")).toThrow();
+    const parts = e.split(".");
+    parts[2] = parts[2].slice(0, -2) + (parts[2].endsWith("A") ? "BB" : "AA");
+    expect(() => decryptField(parts.join("."), KEY, "totp:u1")).toThrow();
+  });
+});
+
+describe("quiet hours", () => {
+  it("overnight window postpones to the end time", () => {
+    const at = localToInstant("2026-11-18", "23:30");
+    expect(quietUntil(at, "Asia/Riyadh", "22:00", "07:00")?.toISOString()).toBe(localToInstant("2026-11-19", "07:00").toISOString());
+    expect(quietUntil(localToInstant("2026-11-18", "12:00"), "Asia/Riyadh", "22:00", "07:00")).toBeNull();
+  });
+  void addDays;
+});

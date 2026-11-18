@@ -1,0 +1,429 @@
+import "server-only";
+import { z } from "zod";
+import { and, desc, eq, gt, isNull, ne, sql, count } from "drizzle-orm";
+import {
+  generateRegistrationOptions, verifyRegistrationResponse,
+  generateAuthenticationOptions, verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
+import { generateSecret, generateURI, verifySync } from "otplib";
+import QRCode from "qrcode";
+import { cookies } from "next/headers";
+import { getDb } from "@/db";
+import {
+  users, authSessions, passkeyCredentials, webauthnChallenges, totpAuthenticators,
+  accountRecoveryCodeVerifiers, emailVerifications, accountSecurityEvents,
+} from "@/db/schema";
+import { env } from "@/lib/env";
+import { decryptField, encryptField, normalizeRecoveryCode, numericCode, randomToken, recoveryCode, safeEqual, verifier } from "@/lib/crypto";
+import { sendEmail } from "../email";
+import {
+  AuthError, assertSensitiveAllowed, clearSessionCookie, createSession, getSession, ipKey,
+  rateLimit, requireUser, securityEvent, type SessionUser,
+} from "./core";
+import { seedDefaultsForOwner } from "../defaults";
+
+const CHALLENGE_COOKIE = "ld_chal";
+const RP_NAME = "Life Dashboard";
+const GENERIC_SENT = { ok: true, message: "If this address is allowed, we've sent a 6-digit code. It expires in 10 minutes." };
+
+type Handler = (body: unknown) => Promise<unknown>;
+
+/* ───────────── helpers ───────────── */
+
+async function issueEmailCode(email: string, purpose: "enroll" | "recovery") {
+  const code = numericCode();
+  await getDb().insert(emailVerifications).values({
+    email, purpose, codeHash: verifier(code, env.pepper, `email:${purpose}:${email}`),
+    expiresAt: new Date(Date.now() + 10 * 60_000),
+  });
+  await sendEmail(email, purpose === "enroll" ? "Your Life Dashboard verification code" : "Your account recovery code",
+    `Your one-time code is ${code}\n\nIt expires in 10 minutes and can be used once. ${purpose === "recovery"
+      ? "This code alone cannot sign you in — you'll also need your authenticator app or one of your offline recovery codes. If you didn't request this, someone may know your email; your account is still protected."
+      : "You requested this to set up your private Life Dashboard."}`);
+}
+
+async function consumeEmailCode(email: string, purpose: "enroll" | "recovery", code: string) {
+  const [row] = await getDb().select().from(emailVerifications)
+    .where(and(eq(emailVerifications.email, email), eq(emailVerifications.purpose, purpose), isNull(emailVerifications.consumedAt), gt(emailVerifications.expiresAt, new Date())))
+    .orderBy(desc(emailVerifications.createdAt)).limit(1);
+  if (!row || row.attempts >= 5) return false;
+  await getDb().update(emailVerifications).set({ attempts: row.attempts + 1 }).where(eq(emailVerifications.id, row.id));
+  if (!safeEqual(row.codeHash, verifier(code.trim(), env.pepper, `email:${purpose}:${email}`))) return false;
+  await getDb().update(emailVerifications).set({ consumedAt: new Date() }).where(eq(emailVerifications.id, row.id));
+  return true;
+}
+
+async function storeChallenge(userId: string | null, purpose: string, challenge: string) {
+  const [row] = await getDb().insert(webauthnChallenges).values({ userId, purpose, challenge, expiresAt: new Date(Date.now() + 5 * 60_000) }).returning({ id: webauthnChallenges.id });
+  (await cookies()).set(CHALLENGE_COOKIE, row.id, { httpOnly: true, secure: env.secureCookies, sameSite: "strict", path: "/api/auth", maxAge: 300 });
+}
+
+async function takeChallenge(purpose: string) {
+  const jar = await cookies();
+  const id = jar.get(CHALLENGE_COOKIE)?.value;
+  jar.delete(CHALLENGE_COOKIE);
+  if (!id || !z.string().uuid().safeParse(id).success) throw new AuthError(400, "Challenge expired, please try again");
+  const [row] = await getDb().update(webauthnChallenges).set({ usedAt: new Date() })
+    .where(and(eq(webauthnChallenges.id, id), eq(webauthnChallenges.purpose, purpose), isNull(webauthnChallenges.usedAt), gt(webauthnChallenges.expiresAt, new Date())))
+    .returning();
+  if (!row) throw new AuthError(400, "Challenge expired, please try again");
+  return row;
+}
+
+async function activePasskeys(userId: string) {
+  return getDb().select().from(passkeyCredentials).where(and(eq(passkeyCredentials.userId, userId), isNull(passkeyCredentials.revokedAt)));
+}
+
+async function activeTotp(userId: string) {
+  const [t] = await getDb().select().from(totpAuthenticators)
+    .where(and(eq(totpAuthenticators.userId, userId), isNull(totpAuthenticators.revokedAt), sql`${totpAuthenticators.verifiedAt} is not null`));
+  return t ?? null;
+}
+
+/** Verify a TOTP code with ±1 step drift tolerance and replay protection. */
+async function checkTotp(t: typeof totpAuthenticators.$inferSelect, code: string) {
+  const secret = decryptField(t.secretEnc, env.dataKey, `totp:${t.userId}`);
+  const res = verifySync({ secret, token: code.replace(/\s/g, ""), epochTolerance: 30, ...(t.lastTimeStep ? { afterTimeStep: t.lastTimeStep } : {}) });
+  if (!res.valid) return false;
+  const step = (res as { timeStep?: number }).timeStep;
+  if (step) await getDb().update(totpAuthenticators).set({ lastTimeStep: step }).where(eq(totpAuthenticators.id, t.id));
+  return true;
+}
+
+async function sessionFor(allowOnboarding: boolean): Promise<SessionUser> {
+  const s = await getSession();
+  if (!s) throw new AuthError(401, "Sign in required");
+  if (!allowOnboarding && (s.method === "onboarding" || s.user.onboardingStep !== "complete")) throw new AuthError(401, "Finish setup first");
+  return s;
+}
+
+const emailSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) });
+
+/* ───────────── enrollment ───────────── */
+
+const enrollStart: Handler = async (body) => {
+  const { email } = emailSchema.parse(body);
+  if (!(await rateLimit(`enroll:${await ipKey()}`, 5, 3600))) throw new AuthError(429, "Too many attempts. Try again later.");
+  const [existing] = await getDb().select().from(users).limit(1);
+  // Single-owner app: only OWNER_EMAIL may enroll, and only while setup isn't finished.
+  if (email === env.ownerEmail && (!existing || (existing.email === email && existing.onboardingStep !== "complete"))) {
+    await issueEmailCode(email, "enroll");
+  }
+  return GENERIC_SENT;
+};
+
+const enrollVerify: Handler = async (body) => {
+  const { email, code } = emailSchema.extend({ code: z.string().regex(/^\d{6}$/) }).parse(body);
+  if (!(await rateLimit(`enroll-verify:${await ipKey()}`, 10, 3600))) throw new AuthError(429, "Too many attempts. Try again later.");
+  if (email !== env.ownerEmail || !(await consumeEmailCode(email, "enroll", code))) throw new AuthError(400, "That code is invalid or expired");
+  let [u] = await getDb().select().from(users).where(eq(users.email, email));
+  if (u?.onboardingStep === "complete") throw new AuthError(400, "This account is already set up. Sign in instead.");
+  if (!u) {
+    [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey" }).returning();
+  } else {
+    await getDb().update(users).set({ emailVerifiedAt: new Date(), onboardingStep: u.onboardingStep === "email" ? "passkey" : u.onboardingStep }).where(eq(users.id, u.id));
+  }
+  await createSession(u.id, "onboarding");
+  await securityEvent(u.id, "email_verified");
+  return { ok: true };
+};
+
+const enrollProfile: Handler = async (body) => {
+  const s = await sessionFor(true);
+  const { displayName } = z.object({ displayName: z.string().trim().min(1).max(60) }).parse(body);
+  await getDb().update(users).set({ displayName, updatedAt: new Date() }).where(eq(users.id, s.user.id));
+  return { ok: true };
+};
+
+/* ───────────── passkeys ───────────── */
+
+const passkeyRegisterOptions: Handler = async () => {
+  const s = await sessionFor(true);
+  if (s.method !== "onboarding" && s.method !== "recovery") {
+    // Adding a passkey from a normal session needs a fresh step-up.
+    if (!s.stepUpAt || Date.now() - s.stepUpAt.getTime() > 10 * 60_000) throw new AuthError(403, "step_up_required");
+  }
+  const existing = await activePasskeys(s.user.id);
+  const options = await generateRegistrationOptions({
+    rpName: RP_NAME, rpID: env.rpId, userName: s.user.email, userDisplayName: s.user.displayName ?? s.user.email,
+    userID: new TextEncoder().encode(s.user.id),
+    attestationType: "none",
+    excludeCredentials: existing.map((c) => ({ id: c.credentialId, transports: c.transports ?? undefined })),
+    authenticatorSelection: { residentKey: "required", userVerification: "required" },
+  });
+  await storeChallenge(s.user.id, "register", options.challenge);
+  return options;
+};
+
+const passkeyRegisterVerify: Handler = async (body) => {
+  const s = await sessionFor(true);
+  const { response, nickname } = z.object({ response: z.any(), nickname: z.string().trim().max(60).optional() }).parse(body);
+  const chal = await takeChallenge("register");
+  if (chal.userId !== s.user.id) throw new AuthError(400, "Challenge mismatch");
+  const v = await verifyRegistrationResponse({
+    response, expectedChallenge: chal.challenge, expectedOrigin: env.origin, expectedRPID: env.rpId, requireUserVerification: true,
+  });
+  if (!v.verified) throw new AuthError(400, "Passkey could not be verified");
+  const { credential, credentialDeviceType, credentialBackedUp, aaguid } = v.registrationInfo;
+  await getDb().insert(passkeyCredentials).values({
+    userId: s.user.id, credentialId: credential.id, publicKey: Buffer.from(credential.publicKey).toString("base64url"),
+    counter: credential.counter, transports: credential.transports ?? null, deviceType: credentialDeviceType,
+    backedUp: credentialBackedUp, aaguid, nickname: nickname || defaultNickname(credentialDeviceType, credentialBackedUp),
+  });
+  if (s.user.onboardingStep === "passkey") await getDb().update(users).set({ onboardingStep: "totp" }).where(eq(users.id, s.user.id));
+  await securityEvent(s.user.id, "passkey_added", { deviceType: credentialDeviceType, backedUp: credentialBackedUp }, s.user.onboardingStep === "complete");
+  return { ok: true, synced: credentialBackedUp };
+};
+
+function defaultNickname(deviceType: string, backedUp: boolean) {
+  return backedUp ? "Synced passkey" : deviceType === "singleDevice" ? "Device-bound passkey" : "Passkey";
+}
+
+const loginOptions: Handler = async () => {
+  if (!(await rateLimit(`login-opt:${await ipKey()}`, 30, 600))) throw new AuthError(429, "Too many attempts");
+  const options = await generateAuthenticationOptions({ rpID: env.rpId, userVerification: "required" });
+  await storeChallenge(null, "login", options.challenge);
+  return options;
+};
+
+async function verifyAssertion(response: { id: string } & Record<string, unknown>, purpose: "login" | "stepup", expectedUserId?: string) {
+  const chal = await takeChallenge(purpose);
+  const [cred] = await getDb().select().from(passkeyCredentials).where(and(eq(passkeyCredentials.credentialId, String(response.id)), isNull(passkeyCredentials.revokedAt)));
+  if (!cred || (expectedUserId && cred.userId !== expectedUserId)) throw new AuthError(400, "This passkey isn't registered for this account");
+  const v = await verifyAuthenticationResponse({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    response: response as any, expectedChallenge: chal.challenge, expectedOrigin: env.origin, expectedRPID: env.rpId,
+    requireUserVerification: true,
+    credential: { id: cred.credentialId, publicKey: Buffer.from(cred.publicKey, "base64url"), counter: cred.counter, transports: cred.transports ?? undefined },
+  });
+  if (!v.verified) throw new AuthError(400, "Passkey verification failed");
+  await getDb().update(passkeyCredentials).set({ counter: v.authenticationInfo.newCounter, lastUsedAt: new Date() }).where(eq(passkeyCredentials.id, cred.id));
+  return cred;
+}
+
+const loginVerify: Handler = async (body) => {
+  const { response } = z.object({ response: z.object({ id: z.string().max(1024) }).passthrough() }).parse(body);
+  if (!(await rateLimit(`login:${await ipKey()}`, 20, 600))) throw new AuthError(429, "Too many attempts");
+  const cred = await verifyAssertion(response, "login");
+  const [u] = await getDb().select().from(users).where(eq(users.id, cred.userId));
+  await createSession(u.id, u.onboardingStep === "complete" ? "passkey" : "onboarding");
+  await securityEvent(u.id, "signed_in", { method: "passkey" });
+  return { ok: true, next: u.onboardingStep === "complete" ? "/" : "/onboarding" };
+};
+
+const stepUpOptions: Handler = async () => {
+  const s = await sessionFor(true);
+  const creds = await activePasskeys(s.user.id);
+  const options = await generateAuthenticationOptions({
+    rpID: env.rpId, userVerification: "required",
+    allowCredentials: creds.map((c) => ({ id: c.credentialId, transports: c.transports ?? undefined })),
+  });
+  await storeChallenge(s.user.id, "stepup", options.challenge);
+  return options;
+};
+
+const stepUpVerify: Handler = async (body) => {
+  const s = await sessionFor(true);
+  const { response } = z.object({ response: z.object({ id: z.string().max(1024) }).passthrough() }).parse(body);
+  await verifyAssertion(response, "stepup", s.user.id);
+  await getDb().update(authSessions).set({ stepUpAt: new Date() }).where(eq(authSessions.id, s.sessionId));
+  return { ok: true };
+};
+
+const passkeyRemove: Handler = async (body) => {
+  const s = await requireUser();
+  assertSensitiveAllowed(s);
+  const { id } = z.object({ id: z.string().uuid() }).parse(body);
+  const creds = await activePasskeys(s.user.id);
+  if (!creds.some((c) => c.id === id)) throw new AuthError(404, "Passkey not found");
+  if (creds.length <= 1) throw new AuthError(400, "You can't remove your only passkey. Add another first.");
+  await getDb().update(passkeyCredentials).set({ revokedAt: new Date() }).where(and(eq(passkeyCredentials.id, id), eq(passkeyCredentials.userId, s.user.id)));
+  await securityEvent(s.user.id, "passkey_removed", { id }, true);
+  return { ok: true };
+};
+
+const passkeyRename: Handler = async (body) => {
+  const s = await requireUser();
+  const { id, nickname } = z.object({ id: z.string().uuid(), nickname: z.string().trim().min(1).max(60) }).parse(body);
+  await getDb().update(passkeyCredentials).set({ nickname }).where(and(eq(passkeyCredentials.id, id), eq(passkeyCredentials.userId, s.user.id)));
+  return { ok: true };
+};
+
+/* ───────────── TOTP ───────────── */
+
+const totpSetup: Handler = async () => {
+  const s = await sessionFor(true);
+  if (s.user.onboardingStep === "complete") assertSensitiveAllowed(s);
+  else if (s.user.onboardingStep !== "totp") throw new AuthError(400, "Register a passkey first");
+  const secret = generateSecret({ length: 20 });
+  await getDb().delete(totpAuthenticators).where(and(eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.verifiedAt)));
+  const [row] = await getDb().insert(totpAuthenticators).values({ userId: s.user.id, secretEnc: encryptField(secret, env.dataKey, `totp:${s.user.id}`) }).returning({ id: totpAuthenticators.id });
+  const uri = generateURI({ issuer: RP_NAME, label: s.user.email, secret });
+  const qr = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
+  // The secret is returned once for manual entry; it is never logged or stored in plaintext.
+  return { id: row.id, qr, secret: secret.match(/.{1,4}/g)!.join(" ") };
+};
+
+const totpVerify: Handler = async (body) => {
+  const s = await sessionFor(true);
+  const { id, code } = z.object({ id: z.string().uuid(), code: z.string().regex(/^\d{6}$/) }).parse(body);
+  if (!(await rateLimit(`totp-verify:${s.user.id}`, 10, 600))) throw new AuthError(429, "Too many attempts");
+  const [t] = await getDb().select().from(totpAuthenticators).where(and(eq(totpAuthenticators.id, id), eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.verifiedAt)));
+  if (!t || !(await checkTotp(t, code))) throw new AuthError(400, "That code didn't match. Check the time on your phone and try the newest code.");
+  // Replace any previous authenticator only after the new one is proven.
+  await getDb().update(totpAuthenticators).set({ revokedAt: new Date() }).where(and(eq(totpAuthenticators.userId, s.user.id), ne(totpAuthenticators.id, t.id), isNull(totpAuthenticators.revokedAt)));
+  await getDb().update(totpAuthenticators).set({ verifiedAt: new Date() }).where(eq(totpAuthenticators.id, t.id));
+  if (s.user.onboardingStep === "totp") await getDb().update(users).set({ onboardingStep: "recovery_codes" }).where(eq(users.id, s.user.id));
+  await securityEvent(s.user.id, "totp_added", {}, s.user.onboardingStep === "complete");
+  return { ok: true };
+};
+
+const totpRemove: Handler = async () => {
+  const s = await requireUser();
+  assertSensitiveAllowed(s);
+  await getDb().update(totpAuthenticators).set({ revokedAt: new Date() }).where(and(eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.revokedAt)));
+  await securityEvent(s.user.id, "totp_removed", {}, true);
+  return { ok: true };
+};
+
+/* ───────────── recovery codes ───────────── */
+
+const recoveryCodesGenerate: Handler = async () => {
+  const s = await sessionFor(true);
+  if (s.user.onboardingStep === "complete") assertSensitiveAllowed(s);
+  else if (s.user.onboardingStep !== "recovery_codes") throw new AuthError(400, "Finish the earlier setup steps first");
+  const codes = Array.from({ length: 10 }, recoveryCode);
+  const batchId = crypto.randomUUID();
+  await getDb().transaction(async (tx) => {
+    await tx.update(accountRecoveryCodeVerifiers).set({ invalidatedAt: new Date() })
+      .where(and(eq(accountRecoveryCodeVerifiers.userId, s.user.id), isNull(accountRecoveryCodeVerifiers.invalidatedAt)));
+    await tx.insert(accountRecoveryCodeVerifiers).values(codes.map((c, i) => ({
+      userId: s.user.id, batchId, position: i + 1, verifier: verifier(c, env.pepper, `recovery:${s.user.id}`),
+    })));
+  });
+  if (s.user.onboardingStep === "complete") await securityEvent(s.user.id, "recovery_codes_rotated", {}, true);
+  // Shown exactly once. Never emailed, texted, logged or stored in plaintext.
+  return { codes, generatedAt: new Date().toISOString() };
+};
+
+const onboardingComplete: Handler = async (body) => {
+  const s = await sessionFor(true);
+  z.object({ savedCodes: z.literal(true) }).parse(body);
+  if (s.user.onboardingStep !== "recovery_codes") throw new AuthError(400, "Finish the earlier setup steps first");
+  const [{ n }] = await getDb().select({ n: count() }).from(accountRecoveryCodeVerifiers).where(and(eq(accountRecoveryCodeVerifiers.userId, s.user.id), isNull(accountRecoveryCodeVerifiers.invalidatedAt)));
+  if (!n) throw new AuthError(400, "Generate your recovery codes first");
+  await getDb().update(users).set({ onboardingStep: "complete" }).where(eq(users.id, s.user.id));
+  await seedDefaultsForOwner(s.user.id, s.user.timezone);
+  // Replace the onboarding session with a full one (passkey was just proven during setup).
+  await getDb().update(authSessions).set({ revokedAt: new Date() }).where(eq(authSessions.id, s.sessionId));
+  await createSession(s.user.id, "passkey");
+  await securityEvent(s.user.id, "onboarding_complete");
+  return { ok: true };
+};
+
+/* ───────────── lost-device recovery: verified email + one independent factor ───────────── */
+
+const recoveryStart: Handler = async (body) => {
+  const { email } = emailSchema.parse(body);
+  if (!(await rateLimit(`recovery-start:${await ipKey()}`, 5, 3600)) || !(await rateLimit(`recovery-start:${email}`, 5, 3600))) {
+    throw new AuthError(429, "Too many attempts. Try again in an hour.");
+  }
+  const [u] = await getDb().select().from(users).where(eq(users.email, email));
+  if (u?.onboardingStep === "complete") await issueEmailCode(email, "recovery");
+  return GENERIC_SENT;
+};
+
+const recoveryVerify: Handler = async (body) => {
+  const { email, emailCode, factor, value } = emailSchema.extend({
+    emailCode: z.string().regex(/^\d{6}$/), factor: z.enum(["totp", "recovery_code"]), value: z.string().trim().min(6).max(40),
+  }).parse(body);
+  if (!(await rateLimit(`recovery-verify:${await ipKey()}`, 10, 3600)) || !(await rateLimit(`recovery-verify:${email}`, 10, 86400))) {
+    throw new AuthError(429, "Too many attempts. Recovery is temporarily locked; try again later.");
+  }
+  const fail = async (reason: string) => {
+    await securityEvent(null, "recovery_failed", { reason });
+    return new AuthError(400, "Recovery details didn't match. Check the email code and your second factor.");
+  };
+  const [u] = await getDb().select().from(users).where(eq(users.email, email));
+  if (!u || u.onboardingStep !== "complete") throw await fail("no_user");
+  if (!(await consumeEmailCode(email, "recovery", emailCode))) throw await fail("email_code");
+
+  let usedCodeId: string | null = null;
+  if (factor === "totp") {
+    const t = await activeTotp(u.id);
+    if (!t || !(await checkTotp(t, value))) throw await fail("totp");
+  } else {
+    const v = verifier(normalizeRecoveryCode(value), env.pepper, `recovery:${u.id}`);
+    const [row] = await getDb().update(accountRecoveryCodeVerifiers).set({ usedAt: new Date() })
+      .where(and(eq(accountRecoveryCodeVerifiers.userId, u.id), eq(accountRecoveryCodeVerifiers.verifier, v), isNull(accountRecoveryCodeVerifiers.usedAt), isNull(accountRecoveryCodeVerifiers.invalidatedAt)))
+      .returning({ id: accountRecoveryCodeVerifiers.id });
+    if (!row) throw await fail("recovery_code");
+    usedCodeId = row.id;
+  }
+  await createSession(u.id, "recovery");
+  if (usedCodeId) await securityEvent(u.id, "recovery_code_used", {}, false);
+  await securityEvent(u.id, "account_recovered", { factor }, true);
+  return { ok: true, next: "/settings/security?recovered=1" };
+};
+
+/* ───────────── sessions & inventory ───────────── */
+
+const securityOverview: Handler = async () => {
+  const s = await requireUser();
+  const db = getDb();
+  const [passkeys, totp, codes, sessions, events] = await Promise.all([
+    activePasskeys(s.user.id),
+    activeTotp(s.user.id),
+    db.select({ used: accountRecoveryCodeVerifiers.usedAt, pos: accountRecoveryCodeVerifiers.position, at: accountRecoveryCodeVerifiers.createdAt })
+      .from(accountRecoveryCodeVerifiers).where(and(eq(accountRecoveryCodeVerifiers.userId, s.user.id), isNull(accountRecoveryCodeVerifiers.invalidatedAt))),
+    db.select().from(authSessions).where(and(eq(authSessions.userId, s.user.id), isNull(authSessions.revokedAt), gt(authSessions.expiresAt, new Date()))).orderBy(desc(authSessions.lastSeenAt)),
+    db.select().from(accountSecurityEvents).where(eq(accountSecurityEvents.userId, s.user.id)).orderBy(desc(accountSecurityEvents.createdAt)).limit(30),
+  ]);
+  return {
+    session: { method: s.method, createdAt: s.createdAt, stepUpFresh: !!s.stepUpAt && Date.now() - s.stepUpAt.getTime() < 10 * 60_000 },
+    passkeys: passkeys.map((p) => ({ id: p.id, nickname: p.nickname, backedUp: p.backedUp, deviceType: p.deviceType, createdAt: p.createdAt, lastUsedAt: p.lastUsedAt })),
+    totp: totp ? { label: totp.label, verifiedAt: totp.verifiedAt } : null,
+    recoveryCodes: { total: codes.length, remaining: codes.filter((c) => !c.used).length, generatedAt: codes[0]?.at ?? null, used: codes.filter((c) => c.used).map((c) => c.pos) },
+    sessions: sessions.map((x) => ({ id: x.id, device: x.deviceLabel, method: x.method, createdAt: x.createdAt, lastSeenAt: x.lastSeenAt, current: x.id === s.sessionId })),
+    events: events.map((e) => ({ type: e.type, at: e.createdAt, ua: e.userAgent })),
+  };
+};
+
+const sessionRevoke: Handler = async (body) => {
+  const s = await requireUser();
+  const { id, all } = z.object({ id: z.string().uuid().optional(), all: z.boolean().optional() }).parse(body);
+  const now = new Date();
+  if (all) {
+    await getDb().update(authSessions).set({ revokedAt: now }).where(and(eq(authSessions.userId, s.user.id), ne(authSessions.id, s.sessionId), isNull(authSessions.revokedAt)));
+  } else if (id) {
+    await getDb().update(authSessions).set({ revokedAt: now }).where(and(eq(authSessions.id, id), eq(authSessions.userId, s.user.id)));
+  }
+  await securityEvent(s.user.id, "sessions_revoked", { all: !!all }, true);
+  return { ok: true };
+};
+
+const logout: Handler = async () => {
+  const s = await getSession();
+  if (s) await getDb().update(authSessions).set({ revokedAt: new Date() }).where(eq(authSessions.id, s.sessionId));
+  await clearSessionCookie();
+  return { ok: true };
+};
+
+const status: Handler = async () => {
+  const s = await getSession();
+  return s ? { signedIn: true, method: s.method, onboardingStep: s.user.onboardingStep } : { signedIn: false };
+};
+
+export const authHandlers: Record<string, Handler> = {
+  "enroll-start": enrollStart, "enroll-verify": enrollVerify, "enroll-profile": enrollProfile,
+  "passkey-register-options": passkeyRegisterOptions, "passkey-register-verify": passkeyRegisterVerify,
+  "passkey-remove": passkeyRemove, "passkey-rename": passkeyRename,
+  "login-options": loginOptions, "login-verify": loginVerify,
+  "stepup-options": stepUpOptions, "stepup-verify": stepUpVerify,
+  "totp-setup": totpSetup, "totp-verify": totpVerify, "totp-remove": totpRemove,
+  "recovery-codes-generate": recoveryCodesGenerate, "onboarding-complete": onboardingComplete,
+  "recovery-start": recoveryStart, "recovery-verify": recoveryVerify,
+  "security-overview": securityOverview, "session-revoke": sessionRevoke, logout, status,
+};
+
+export { randomToken };
