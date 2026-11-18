@@ -1,5 +1,8 @@
 import "server-only";
-import webpush from "web-push";
+import * as webpushNs from "web-push";
+
+// web-push is CommonJS: depending on the bundler it arrives as a namespace or under `.default`.
+const webpush = ((webpushNs as unknown as { default?: typeof webpushNs }).default ?? webpushNs) as typeof webpushNs;
 import { and, eq, inArray, isNull, lte, or, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import {

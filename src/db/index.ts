@@ -4,7 +4,9 @@ import * as schema from "./schema";
 
 /** DATABASE_URL, or the name the Vercel–Neon integration created with the ME_AT_G21 prefix. */
 export function databaseUrl(): string | undefined {
-  return process.env.DATABASE_URL || process.env.ME_AT_G21_DATABASE_URL || process.env.ME_AT_G21_URL;
+  const url = process.env.DATABASE_URL || process.env.ME_AT_G21_DATABASE_URL || process.env.ME_AT_G21_URL;
+  // Neon URLs use sslmode=require, which pg already treats as verify-full; say so explicitly (same behaviour, no warning).
+  return url?.replace(/sslmode=require\b/, "sslmode=verify-full");
 }
 
 export type DB = NodePgDatabase<typeof schema>;
