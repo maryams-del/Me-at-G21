@@ -682,3 +682,73 @@ export const applicationStatusEvents = pgTable("application_status_events", {
   note: text("note"),
   createdAt: createdAt(),
 });
+
+/* ───────────────────────────── Period log (sensitive) ───────────────────────────── */
+
+/**
+ * One row per period. Dates are plain local dates (needed for history and estimates);
+ * notes and symptoms are AES-GCM encrypted at rest with an owner+row bound AAD.
+ * Never sent to an AI provider, never shown in notifications, dashboard only if the owner opts in.
+ */
+export const periodCycles = pgTable("period_cycles", {
+  id: id(),
+  ownerId: owner(),
+  startDate: date("start_date").notNull(),
+  startTime: text("start_time"), // 'HH:mm' optional
+  endDate: date("end_date"),
+  endTime: text("end_time"),
+  notesEnc: text("notes_enc"),
+  symptomsEnc: text("symptoms_enc"),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [index("period_owner_start_idx").on(t.ownerId, t.startDate)]);
+
+/* ───────────────────────────── Achievements bank & hobbies ───────────────────────────── */
+
+export const ACHIEVEMENT_KINDS = ["accomplishment", "project", "award", "certification", "volunteering", "skill", "publication", "other"] as const;
+export const ACHIEVEMENT_AREAS = ["work", "academic", "personal", "community"] as const;
+
+export const achievements = pgTable("achievements", {
+  id: id(),
+  ownerId: owner(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull().default("accomplishment"),
+  area: text("area").notNull().default("work"),
+  organisation: text("organisation"),
+  startDate: date("start_date"),
+  endDate: date("end_date"), // or the single date for an award
+  description: text("description"),
+  /** Outcome metrics exactly as the owner states them; AI may never invent these. */
+  outcome: text("outcome"),
+  /** Optional portfolio/CV-ready line written or approved by the owner. */
+  summary: text("summary"),
+  skills: jsonb("skills").$type<string[]>().notNull().default([]),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  links: jsonb("links").$type<{ label: string; url: string }[]>().notNull().default([]),
+  documentIds: jsonb("document_ids").$type<string[]>().notNull().default([]),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+  applicationId: uuid("application_id").references(() => mastersApplications.id, { onDelete: "set null" }),
+  featured: boolean("featured").notNull().default(false),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [index("achievements_owner_date_idx").on(t.ownerId, t.endDate)]);
+
+export const hobbies = pgTable("hobbies", {
+  id: id(),
+  ownerId: owner(),
+  name: text("name").notNull(),
+  level: text("level"), // e.g. beginner / intermediate / advanced, free text
+  since: date("since"),
+  active: boolean("active").notNull().default(true),
+  notes: text("notes"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  links: jsonb("links").$type<{ label: string; url: string }[]>().notNull().default([]),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});

@@ -4,6 +4,7 @@ import { Glyph } from "@/components/Glyph";
 
 export default function CareIndex() {
   const items = [
+    { href: "/care/period", label: "Period log", glyph: "period" as const, d: "Private log, calendar and your own estimates" },
     { href: "/care/routines", label: "Routines", glyph: "routines" as const, d: "Waxing, dental scaling, toothbrush, bedsheets, anything on a cycle" },
   ];
   return (

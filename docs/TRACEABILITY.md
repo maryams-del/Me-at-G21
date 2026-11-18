@@ -8,11 +8,11 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 |---|---|---|---|
 | 4.1 | Dashboard: 7-day reminders, overdue, recently completed, next Quran class, homework, fast balance, charity this month, savings, push state | ✅ | `app/(app)/page.tsx`, E2E screenshots 17/18 |
 | 4.1 | Quick actions: Log charity, Waxing completed, Fast completed, Add savings, Add task, Add entry by AI | ✅ | Dashboard quick-action row |
-| 4.1 | Quick actions: Period started/ended | ⏳ B | Arrives with the period log |
+| 4.1 | Quick actions: Period started/ended | ✅ | Shown on Today only after the owner opts in on the Period page (PRD 4.3 privacy) |
 | 4.1 | Hide/reorder widgets | ⏳ B | "later" in PRD |
 | 4.2 | Charity CRUD, planned vs completed, filters, monthly/yearly totals | ✅ | `ops/finance.ts`, charity page, tests 8/11 |
 | 4.2 | Receipt upload, monthly charity goal reminder | ⏳ B | Needs private Blob (B) |
-| 4.3 | Period log | ⏳ B | |
+| 4.3 | Period log: explicit start/end with optional time, symptoms, notes, corrections; calendar; history with length and cycle length; estimate marked as such; privacy controls | ✅ | `ops/period.ts`, `care/period`. Notes/symptoms AES-GCM at rest; ops not AI-allowed; period text in Capture/Search answered locally and never sent to the provider; no notifications; audit entries redacted. `personal.test.ts`, E2E |
 | 4.4 | Waxing 40-day window, 27/30/35/38/40 reminders, reset on completion, safe recalculation | ✅ | Now a Routine (template: every 30 days, latest +10, private). Test 1, `trackers.test.ts`, `rules.test.ts` |
 | 4.5 | Dental 6 calendar months, −14/−1/0 reminders, editable | ✅ | Now a Routine (template). Test 2 |
 | 4.6 | Routines: toothbrush purchase vs first-use, brushes, bedsheets, skip/snooze/pause/backdate, history | ✅ | Test 3, routines page. Generic: any routine can have a grace window, after-due nudges and private notifications; templates are one tap. Migration 0004 moved existing waxing/dental history. |
@@ -26,7 +26,7 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.13 | Master's applications | ⏳ B | |
 | 4.14 | Projects & tasks: list by deadline, board, reminders, no auto-complete | ✅ | Projects page |
 | 4.14 | Task attachments, checklist editing UI | ⏳ B | Checklist stored; editor UI pending |
-| 4.15 | Achievements & hobbies | ⏳ B | |
+| 4.15 | Achievements bank & hobbies: kinds, areas, dates, outcome, CV line, skills, tags, links, attached documents, links to projects/applications, filters, CV/portfolio bullet export | ✅ | `ops/career.ts`, `education/achievements`. Bullets built only from stored fields; AI prompt forbids invented metrics; AI can't mark featured. `personal.test.ts`, E2E |
 | 4.16 | Quran class Sun 19:00 Riyadh, 60-min reminder (editable), per-occurrence homework, translation study suggestion (Sat 19:00, inactive until owner activates), cancel one vs all future, other weekly classes | ✅ | Tests 7 & 25 |
 | 4.17 | Zakat | ⏳ B | |
 | 4.18 | AI capture: text and editable dictation, multi-action, preview, questions, NL corrections, Fill details later → draft only after confirm, per-entry confirm, transactional, idempotent, auditable, server-enforced | ✅ | Tests 8/9/10/22; `ai.test.ts`; E2E |

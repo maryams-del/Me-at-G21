@@ -239,6 +239,44 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await shot(page, "23-expiries");
   });
 
+  test("Period log stays private; achievements export CV bullets", async () => {
+    await page.goto("/care/period");
+    await expect(page.getByText(/never sent to the AI/)).toBeVisible();
+    await expect(async () => {
+      await page.getByRole("button", { name: "Period started today" }).click();
+      await expect(page.getByText("Day 1")).toBeVisible({ timeout: 3000 });
+    }).toPass();
+    await expect(page.getByRole("gridcell", { name: /, period$/ }).first()).toBeVisible();
+    // not on Today unless opted in
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Period ended" })).toHaveCount(0);
+    await page.goto("/care/period");
+    await page.getByLabel("Show period status and quick buttons on the Today page").check();
+    await page.getByRole("button", { name: "Save privacy settings" }).click();
+    await expect(page.getByText("Settings saved")).toBeVisible();
+    await shot(page, "20-period");
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Period ended" })).toBeVisible();
+    // capture keeps it away from the AI
+    await openCapture(page);
+    await page.getByRole("dialog").getByLabel(/What happened/).fill("when did my period start?");
+    await page.getByRole("dialog").getByRole("button", { name: "Preview" }).click();
+    await expect(page.getByRole("dialog").getByText(/nothing was sent to the AI/)).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+
+    await page.goto("/education/achievements?add=1");
+    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Save achievement" }) });
+    await form.getByLabel("What you did").fill("Redesigned onboarding");
+    await form.locator('select[name="kind"]').selectOption("project");
+    await form.getByLabel("Finished / awarded").fill("2025-06-30");
+    await form.getByLabel("Outcome and numbers").fill("Sign-up completion up from 41% to 63%");
+    await form.getByLabel("Skills used").fill("Figma, user research");
+    await form.getByRole("button", { name: "Save achievement" }).click();
+    await expect(page.getByRole("heading", { name: "Redesigned onboarding" })).toBeVisible();
+    await expect(page.getByLabel("CV bullets")).toHaveValue(/Redesigned onboarding: Sign-up completion up from 41% to 63% \(Jun 2025\. Figma, user research\)/);
+    await shot(page, "21-achievements");
+  });
+
   test("mobile layout", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

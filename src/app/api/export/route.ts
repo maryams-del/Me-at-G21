@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import * as t from "@/db/schema";
 import { requireUser, AuthError } from "@/server/auth/core";
+import { decPeriodField } from "@/server/ops/period";
 
 /** Machine-readable export of non-secret app data. Auth/security secrets are never included. */
 export async function GET() {
@@ -36,13 +37,29 @@ export async function GET() {
       db.select().from(t.documents).where(eq(t.documents.ownerId, o)),
       db.select({ id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename, contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, sha256: t.documentFiles.sha256, createdAt: t.documentFiles.createdAt, deletedAt: t.documentFiles.deletedAt }).from(t.documentFiles).where(eq(t.documentFiles.ownerId, o)),
     ]);
+    const [apps, appReqs, appEvents, achievements, hobbies, periods, people] = await Promise.all([
+      db.select().from(t.mastersApplications).where(eq(t.mastersApplications.ownerId, o)),
+      db.select().from(t.applicationRequirements).where(eq(t.applicationRequirements.ownerId, o)),
+      db.select().from(t.applicationStatusEvents).where(eq(t.applicationStatusEvents.ownerId, o)),
+      db.select().from(t.achievements).where(eq(t.achievements.ownerId, o)),
+      db.select().from(t.hobbies).where(eq(t.hobbies.ownerId, o)),
+      db.select().from(t.periodCycles).where(eq(t.periodCycles.ownerId, o)),
+      db.select().from(t.people).where(eq(t.people.ownerId, o)),
+    ]);
+    const periodLog = periods.filter((p) => !p.deletedAt).map((p) => ({
+      startDate: p.startDate, startTime: p.startTime, endDate: p.endDate, endTime: p.endTime,
+      notes: decPeriodField(o, p.id, "notes", p.notesEnc), symptoms: (() => { try { return p.symptomsEnc ? JSON.parse(decPeriodField(o, p.id, "symptoms", p.symptomsEnc) ?? "[]") : []; } catch { return []; } })(),
+    }));
     const data = {
       format: "me-at-g21-export", version: 1, exportedAt: new Date().toISOString(), timezone: s.user.timezone,
       note: "Money values are integer minor units (e.g. halalas). Local dates are in the timezone above.",
       charity, legacyMaintenance: { note: "Pre-Routines waxing/dental records (already copied into routines)", activities: maint, events: maintEvents }, routines: { routines, events: routineEvents },
       fasts: { ledger: fasts, rules: fastRules }, savings: { goals, transactions: savingsTx }, debts: { debts, repayments },
       projects: { projects, tasks }, classes: { events, occurrences, homework }, drafts, history,
-      expiries: { items: expiries, renewals },
+      expiries: { items: expiries, renewals }, people,
+      applications: { applications: apps, requirements: appReqs, statusEvents: appEvents },
+      achievements: { achievements, hobbies },
+      periodLog: { note: "Private. Decrypted for this export only; keep this file somewhere safe.", entries: periodLog },
       documents: { note: "Metadata only. Full ID numbers and file contents are excluded; download files individually.", documents: docs, files },
     };
     return new NextResponse(JSON.stringify(data, null, 2), {

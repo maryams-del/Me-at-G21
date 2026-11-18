@@ -31,9 +31,9 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
   const groups: { title: string; items: NavItem[] }[] = [
     { title: "", items: [{ href: "/", label: "Today", glyph: "home" }, { href: "/inbox", label: "Needs details", glyph: "inbox", badge: inboxCount }] },
     { title: "Finance", items: [{ href: "/finance/charity", label: "Charity", glyph: "charity" }, { href: "/finance/savings", label: "Savings", glyph: "savings" }, { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts" }] },
-    { title: "Personal care", items: [{ href: "/care/routines", label: "Routines", glyph: "routines" }] },
+    { title: "Personal care", items: [{ href: "/care/period", label: "Period log", glyph: "period" }, { href: "/care/routines", label: "Routines", glyph: "routines" }] },
     { title: "Life admin", items: [{ href: "/admin/expiries", label: "Expiries", glyph: "expiries" }, { href: "/admin/documents", label: "Documents & IDs", glyph: "documents" }] },
-    { title: "Education & career", items: [{ href: "/education/applications", label: "Master's applications", glyph: "applications" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }] },
+    { title: "Education & career", items: [{ href: "/education/applications", label: "Master's applications", glyph: "applications" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }, { href: "/education/achievements", label: "Achievements", glyph: "achievements" }] },
     { title: "Faith", items: [{ href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" }] },
     { title: "", items: [{ href: "/history", label: "History & search", glyph: "history" }, { href: "/vault", label: "Secure vault", glyph: "vault" }, { href: "/settings", label: "Settings", glyph: "settings" }] },
   ];

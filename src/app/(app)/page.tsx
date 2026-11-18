@@ -40,6 +40,9 @@ export default async function Dashboard() {
 
       <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
+        {s.period && (s.period.open
+          ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
+          : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />)}
         {waxRoutine && <OpButton op="routine.log" input={{ routineId: waxRoutine.routine.id, type: "completed", onDate: s.today }} label={`${waxRoutine.routine.name} completed`} className="btn btn-sm" confirmText={`Log ${waxRoutine.routine.name.toLowerCase()} done today (${dmy(s.today)})? The next one is counted from today.`} />}
         <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
         <Link href="/finance/savings?add=1" className="btn btn-sm">Add savings</Link>
@@ -90,6 +93,15 @@ export default async function Dashboard() {
           <p className="t-num text-[2rem] mt-3 break-words">{charity}</p>
           <Glyph kind="charity" size={80} color="var(--paper)" className="glyph-corner" />
         </Link>
+
+        {s.period && (
+          <Link href="/care/period" className="tile">
+            <p className="t-small text-ink-2">Period</p>
+            {s.period.open ? <><p className="t-num text-[2.4rem] mt-2">Day {s.period.openDay}</p><p className="t-small text-ink-2">since {fmtShort(s.period.open.startDate)}</p></>
+              : s.period.estimate && s.period.settings.showEstimate ? <><p className="t-num text-[2rem] mt-2">{fmtShort(s.period.estimate.nextStart)}</p><p className="t-small text-ink-2">estimate, {relDays(s.period.daysToEstimate)}</p></>
+              : <p className="t-small mt-3 text-ink-2">{s.period.cycles[0] ? `Last started ${fmtShort(s.period.cycles[0].startDate)}` : "Nothing logged yet"}</p>}
+          </Link>
+        )}
 
         <Link href="/care/routines" className="tile col-span-2">
           <p className="t-small text-ink-2">Routines</p>
@@ -172,7 +184,7 @@ export default async function Dashboard() {
             <div className="flex justify-between items-baseline"><h2 id="rc-h" className="t-h2">Recent activity</h2><Link href="/history" className="t-small underline underline-offset-4">History</Link></div>
             {s.recent.length ? (
               <ul className="list mt-2">{s.recent.slice(0, 6).map((r) => (
-                <li key={r.id} className="py-2 t-small flex justify-between gap-3"><span>{r.sensitive ? "Personal care entry" : r.summary}</span><span className="t-meta whitespace-nowrap">{r.source === "ai" ? "AI, " : ""}{fmtDateTime(r.occurredAt, tz)}</span></li>
+                <li key={r.id} className="py-2 t-small flex justify-between gap-3"><span>{r.sensitive ? "Private entry" : r.summary}</span><span className="t-meta whitespace-nowrap">{r.source === "ai" ? "AI, " : ""}{fmtDateTime(r.occurredAt, tz)}</span></li>
               ))}</ul>
             ) : <p className="t-meta mt-2">Your log is empty. Try the quick actions above.</p>}
           </section>

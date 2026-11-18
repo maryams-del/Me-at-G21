@@ -6,6 +6,7 @@ export default function EducationIndex() {
   const items = [
     { href: "/education/applications", label: "Master's applications", glyph: "applications" as const, d: "Deadlines, requirements, status and follow-ups" },
     { href: "/projects", label: "Projects & tasks", glyph: "projects" as const, d: "Deadlines and checklists" },
+    { href: "/education/achievements", label: "Achievements & hobbies", glyph: "achievements" as const, d: "Accomplishments bank and CV bullets" },
   ];
   return (
     <>

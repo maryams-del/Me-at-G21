@@ -9,6 +9,8 @@ import "./care";
 import "./planning";
 import "./admin";
 import "./education";
+import "./period";
+import "./career";
 
 export { getOp, allOps };
 

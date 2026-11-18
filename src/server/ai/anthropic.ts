@@ -71,6 +71,8 @@ Rules:
 - For questions about stored data ("when did I last…", "how much did I donate…"), set intent "search", operations [], and fill "query".
   Use query.type "last_event" with target waxing|dental|fasts|charity|savings|debts|routine:@alias. Use charity_total with from/to dates.
 - Application deadlines: only use a deadline the owner typed. Never fill one in from your own knowledge of a university; leave it missing instead.
+- Achievements: record only what the owner said happened. Never add metrics, numbers, outcomes, skills, organisations or dates she did not state; leave "outcome" empty rather than guess.
+- Period / menstrual tracking is not available through capture. If asked, return no operation and reply that she can log it on the Period page.
 - Features not in the catalog (passwords, document files or ID numbers, period log, subscriptions, zakat, achievements): intent "unsupported", explain briefly in questions.
 - CORRECTIONS: if PREVIOUS PROPOSAL is given, the new text corrects or extends it. Return the FULL updated list of operations
   (keep unchanged ones exactly, apply the change, drop ones the person removes).`;

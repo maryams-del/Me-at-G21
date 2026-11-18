@@ -8,7 +8,7 @@ import { api, ApiError, toast } from "./api";
 export type FieldDef = {
   name: string;
   label: string;
-  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime";
+  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime" | "checks";
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -59,6 +59,7 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
       continue;
     }
     if (f.type === "checkbox") { out[f.name] = form.get(f.name) === "on"; continue; }
+    if (f.type === "checks") { out[key] = form.getAll(f.name).map(String); continue; }
     const v = String(form.get(f.name) ?? "").trim();
     if (v === "") { if (f.nullable) out[f.name] = null; continue; }
     if (f.type === "int") out[f.name] = Number(v);
@@ -121,6 +122,19 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               <span>{f.label}</span>
             </label>
           );
+          if (f.type === "checks") {
+            const chosen = Array.isArray(initial[f.name]) ? (initial[f.name] as string[]) : [];
+            return (
+              <fieldset key={f.name} className="field sm:col-span-2">
+                <legend className="label mb-1">{f.label}{f.required ? "" : <span className="t-meta"> (optional)</span>}</legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {f.options?.map((o) => (
+                    <label key={o.value} className="check"><input type="checkbox" name={f.name} value={o.value} defaultChecked={chosen.includes(o.value)} /><span>{o.label}</span></label>
+                  ))}
+                </div>
+              </fieldset>
+            );
+          }
           return (
             <label key={f.name} htmlFor={fid} className={`field ${f.wide || f.type === "textarea" ? "sm:col-span-2" : ""}`}>
               <span className="label">{f.label}{f.required ? "" : <span className="t-meta"> (optional)</span>}</span>

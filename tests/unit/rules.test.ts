@@ -150,3 +150,17 @@ describe("document search ranking", () => {
     expect(rankDocuments(docs, "rajhi")[0].title).toBe("Bank letter");
   });
 });
+
+import { periodEstimate } from "@/server/ops/period";
+describe("period estimate (PRD 4.3: estimate, not a medical assertion)", () => {
+  it("needs three logged starts", () => {
+    expect(periodEstimate([{ startDate: "2026-09-01", endDate: "2026-09-05" }, { startDate: "2026-09-29", endDate: null }])).toBeNull();
+  });
+  it("averages recent cycles and ignores implausible gaps from a missed log", () => {
+    const e = periodEstimate([
+      { startDate: "2026-05-01", endDate: "2026-05-05" }, { startDate: "2026-07-30", endDate: "2026-08-03" }, // 90-day gap ignored
+      { startDate: "2026-08-27", endDate: "2026-08-31" }, { startDate: "2026-09-26", endDate: "2026-09-29" },
+    ]);
+    expect(e).toMatchObject({ avgCycle: 29, basedOn: 2, nextStart: "2026-10-25", avgLength: 5 });
+  });
+});

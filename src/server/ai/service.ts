@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-or
 import { getDb } from "@/db";
 import {
   aiProposals, aiProposalOperations, captureDrafts, routines, savingsGoals, debts, projects, tasks,
-  charityPayments, expiryItems, people, mastersApplications, routineEvents, fastLedgerEvents,
+  charityPayments, periodCycles, expiryItems, people, mastersApplications, routineEvents, fastLedgerEvents,
   savingsTransactions, auditEvents, homeworkTasks,
 } from "@/db/schema";
 import { getOp, runOpInTx } from "../ops";
@@ -139,10 +139,29 @@ export async function loadPreview(ownerId: string, proposalId: string) {
   };
 }
 
+/** Period/menstrual text never leaves the server: answered deterministically from the owner's own log, never sent to the AI provider or stored as a proposal. */
+const PERIOD_RE = /\b(period|periods|menstrua\w*|menses)\b/i;
+async function privatePeriodAnswer(owner: { id: string; timezone: string }, text: string, capture: boolean): Promise<{ answer: string; sources: Source[] } | null> {
+  if (!PERIOD_RE.test(text)) return null;
+  const db = getDb();
+  const rows = await db.select({ startDate: periodCycles.startDate, endDate: periodCycles.endDate }).from(periodCycles)
+    .where(and(eq(periodCycles.ownerId, owner.id), isNull(periodCycles.deletedAt))).orderBy(desc(periodCycles.startDate)).limit(3);
+  const link = { label: "Period log", date: "", href: "/care/period" };
+  const today = todayLocal(owner.timezone);
+  const isQuestion = /\?|^(when|what|how|did|is|was|last)\b/i.test(text.trim());
+  if (capture && !isQuestion) return { answer: "To keep it private, period entries aren't handled by Capture or the AI. Use the Period log page (or turn on its quick buttons for the Today page).", sources: [link] };
+  if (!rows.length) return { answer: "No periods are logged yet. (Answered from your own log; nothing was sent to the AI.)", sources: [link] };
+  const [last] = rows;
+  const status = last.endDate ? `Your last period started on ${dmy(last.startDate)} and ended on ${dmy(last.endDate)} (${daysBetween(last.startDate, last.endDate) + 1} days).` : `Your current period started on ${dmy(last.startDate)} (day ${daysBetween(last.startDate, today) + 1}).`;
+  return { answer: `${status} Answered from your own log; nothing was sent to the AI.`, sources: rows.map((r) => ({ label: r.endDate ? `Period ${dmy(r.startDate)} to ${dmy(r.endDate)}` : "Period (ongoing)", date: dmy(r.startDate), href: "/care/period" })) };
+}
+
 /** Step 1–3: interpret text into a stored proposal (or answer a search). Writes nothing else. */
 export async function interpret(owner: { id: string; timezone: string; defaultCurrency: string }, text: string, mode: "text" | "voice") {
   const clean = text.trim().slice(0, 2000);
   if (!clean) throw new UserError("Type or say something first");
+  const priv = await privatePeriodAnswer(owner, clean, true);
+  if (priv) return { kind: "search" as const, ...priv };
   const { ctx, aliases } = await buildContext(owner.id, owner.timezone, owner.defaultCurrency);
   const provider = getProvider();
   let out: Interpretation;
@@ -367,6 +386,8 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
 }
 
 export async function searchDirect(owner: { id: string; timezone: string; defaultCurrency: string }, text: string) {
+  const priv = await privatePeriodAnswer(owner, text, false);
+  if (priv) return priv;
   const { ctx, aliases } = await buildContext(owner.id, owner.timezone, owner.defaultCurrency);
   const out = await getProvider().interpret({ text, ctx });
   if (out.intent === "search" && out.query) return runSearch(owner, out.query, aliases);

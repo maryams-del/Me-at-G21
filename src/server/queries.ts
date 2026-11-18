@@ -6,6 +6,8 @@ import * as t from "@/db/schema";
 import { getSession } from "./auth/core";
 import { fastBalance, routineAnchor, routineDue, applyAnnualFastRules } from "./ops/care";
 import { debtOutstanding } from "./ops/finance";
+import { decPeriodField, periodEstimate, periodSettingsOf } from "./ops/period";
+import { cvBullet } from "./ops/career";
 import { ensureOccurrences } from "./ops/planning";
 import { addDays, daysBetween, todayLocal, dmy } from "@/lib/time";
 
@@ -154,7 +156,7 @@ export async function dashboardState(o: Owner) {
     recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework,
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },
-    hidePeriod: true,
+    period: periodSettingsOf(o.settings).showOnDashboard ? await periodState(o) : null,
   };
 }
 
@@ -290,4 +292,59 @@ export async function applicationDetail(o: Owner, id: string) {
   ]);
   const rem = await remindersFor(o.id, "application", [a.id]);
   return { app: a, reqs, events, followUps, docs, allDocs, reminders: rem };
+}
+
+/* ── Period log: decrypted only here, for the signed-in owner's own page ── */
+export async function periodState(o: Owner, opts: { withDetails?: boolean } = {}) {
+  const rows = await db().select().from(t.periodCycles).where(and(eq(t.periodCycles.ownerId, o.id), isNull(t.periodCycles.deletedAt))).orderBy(asc(t.periodCycles.startDate));
+  const today = todayLocal(o.timezone);
+  const settings = periodSettingsOf(o.settings);
+  const cycles = rows.map((r, n) => {
+    const next = rows[n + 1];
+    let symptoms: string[] = [];
+    if (opts.withDetails && r.symptomsEnc) { try { symptoms = JSON.parse(decPeriodField(o.id, r.id, "symptoms", r.symptomsEnc) ?? "[]"); } catch { symptoms = []; } }
+    return {
+      id: r.id, startDate: r.startDate, startTime: r.startTime, endDate: r.endDate, endTime: r.endTime,
+      length: r.endDate ? daysBetween(r.startDate, r.endDate) + 1 : null,
+      cycleLength: next ? daysBetween(r.startDate, next.startDate) : null,
+      notes: opts.withDetails ? decPeriodField(o.id, r.id, "notes", r.notesEnc) : null,
+      symptoms,
+    };
+  });
+  const open = cycles.find((c) => !c.endDate) ?? null;
+  const estimate = periodEstimate(cycles);
+  return {
+    today, settings, cycles: [...cycles].reverse(), open,
+    openDay: open ? daysBetween(open.startDate, today) + 1 : null,
+    estimate, daysToEstimate: estimate ? daysBetween(today, estimate.nextStart) : null,
+  };
+}
+
+export async function achievementsState(o: Owner, f: { q?: string; kind?: string; area?: string; tag?: string; year?: string } = {}) {
+  const [all, hobbyRows, projectRows, appRows, docRows] = await Promise.all([
+    db().select().from(t.achievements).where(and(eq(t.achievements.ownerId, o.id), isNull(t.achievements.deletedAt))),
+    db().select().from(t.hobbies).where(and(eq(t.hobbies.ownerId, o.id), isNull(t.hobbies.deletedAt))).orderBy(desc(t.hobbies.active), asc(t.hobbies.name)),
+    db().select({ id: t.projects.id, name: t.projects.name, status: t.projects.status }).from(t.projects).where(and(eq(t.projects.ownerId, o.id), isNull(t.projects.deletedAt))),
+    db().select({ id: t.mastersApplications.id, university: t.mastersApplications.university, program: t.mastersApplications.program, status: t.mastersApplications.status }).from(t.mastersApplications).where(and(eq(t.mastersApplications.ownerId, o.id), isNull(t.mastersApplications.deletedAt))),
+    db().select({ id: t.documents.id, title: t.documents.title, kind: t.documents.kind }).from(t.documents).where(and(eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt))),
+  ]);
+  const words = (f.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const sortKey = (a: typeof all[number]) => a.endDate ?? a.startDate ?? a.createdAt.toISOString().slice(0, 10);
+  const rows = all.filter((a) => {
+    if (f.kind && a.kind !== f.kind) return false;
+    if (f.area && a.area !== f.area) return false;
+    if (f.tag && !a.tags.concat(a.skills).some((x) => x.toLowerCase() === f.tag!.toLowerCase())) return false;
+    if (f.year && !(sortKey(a).startsWith(f.year) || (a.startDate ?? "").startsWith(f.year))) return false;
+    if (words.length) {
+      const hay = [a.title, a.organisation, a.description, a.outcome, a.summary, a.kind, a.area, ...a.tags, ...a.skills].filter(Boolean).join(" ").toLowerCase();
+      if (!words.every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  }).sort((a, b) => Number(b.featured) - Number(a.featured) || sortKey(b).localeCompare(sortKey(a)));
+  const tags = [...new Set(all.flatMap((a) => [...a.tags, ...a.skills]))].sort((a, b) => a.localeCompare(b));
+  const years = [...new Set(all.map((a) => sortKey(a).slice(0, 4)))].sort().reverse();
+  return {
+    rows: rows.map((a) => ({ ...a, bullet: cvBullet(a), project: projectRows.find((p) => p.id === a.projectId) ?? null, application: appRows.find((x) => x.id === a.applicationId) ?? null, docs: docRows.filter((d) => a.documentIds.includes(d.id)) })),
+    total: all.length, hobbies: hobbyRows, tags, years, projects: projectRows, applications: appRows, documents: docRows,
+  };
 }
