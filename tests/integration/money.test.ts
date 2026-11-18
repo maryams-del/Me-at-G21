@@ -31,7 +31,7 @@ describe("Subscriptions (PRD 4.10)", () => {
     expect(st.upcoming.map((u) => [u.name, u.date])).toEqual([["Music", "2026-11-20"], ["Cloud storage", "2026-12-01"], ["Music", "2026-12-20"]]);
 
     await op(at("2026-11-19"), "subscription.cancel", { id: s.id, cancelledOn: "2026-11-19" });
-    expect((await pending("subscription")).every((x) => !x.dedupeKey.includes(s.id))).toBe(true);
+    expect((await pending("subscription")).every((x) => !x.dedupeKey.includes(s.id!))).toBe(true);
   });
 
   it("refuses card numbers in the payment label", async () => {
