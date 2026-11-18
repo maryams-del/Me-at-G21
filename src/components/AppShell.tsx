@@ -57,7 +57,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
   const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education"];
   const top: NavItem[] = [
     { href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" },
-    { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
+    { href: "/history", label: "History", icon: "history" }, { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
     { href: "/settings", label: "Settings", icon: "settings" },
   ];
   const bottomLeft: NavItem[] = [{ href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" }];
