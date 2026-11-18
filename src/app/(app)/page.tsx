@@ -7,6 +7,7 @@ import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
 import { AiBar } from "@/components/home/AiBar";
 import { OpButton } from "@/components/OpForm";
 import { SpacesWave, type Space } from "@/components/home/SpacesWave";
+import { FrequentlyVisited } from "@/components/home/FrequentlyVisited";
 
 const TINT = {
   amber: "radial-gradient(circle at 35% 30%, #FFE2B5, #F0A94B)",
@@ -68,7 +69,6 @@ export default async function Dashboard() {
     { key: "education", name: "Education", stat: nApps ? `${nApps} deadline${nApps === 1 ? "" : "s"} in 30 days` : "Applications & achievements", href: "/education", glyph: "education", tint: TINT.sky },
     { key: "projects", name: "Projects", stat: nTasks ? `${nTasks} task${nTasks === 1 ? "" : "s"} due this week` : "Projects & tasks", href: "/projects", glyph: "projects", tint: TINT.moss },
     { key: "vault", name: "Vault", stat: "Locked away", href: "/vault", glyph: "vault", tint: TINT.sky },
-    { key: "history", name: "History", stat: "Search everything", href: "/history", glyph: "history", tint: TINT.blush },
   ];
 
   return (
@@ -99,6 +99,8 @@ export default async function Dashboard() {
           <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
           <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
         </nav>
+
+        <FrequentlyVisited />
 
         {(s.pendingAi > 0 || s.drafts.length > 0) && (
           <div className="flex flex-wrap gap-2">

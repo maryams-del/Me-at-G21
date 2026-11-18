@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CaptureSheet } from "./Capture";
 import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
+import { recordVisit } from "@/lib/visits";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -50,11 +51,13 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
     return () => { window.removeEventListener("ld-toast", onToast); window.removeEventListener("ld-capture", onOpen); window.removeEventListener("keydown", onKey); };
   }, []);
 
+  useEffect(() => { recordVisit(path); }, [path]);
+
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education"];
   const top: NavItem[] = [
     { href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" },
-    { href: "/history", label: "History", icon: "history" }, { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
+    { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
     { href: "/settings", label: "Settings", icon: "settings" },
   ];
   const bottomLeft: NavItem[] = [{ href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" }];
