@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CaptureSheet } from "./Capture";
 import { ThemeToggle } from "./ThemeToggle";
+import { LogoMark } from "./LogoMark";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -66,7 +67,10 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
       <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
         <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4 md:pt-6">
           <Link href="/" className="min-w-0 no-underline pb-1">
-            <span className="logo block text-[31px] md:text-[40px]">Me @ G21</span>
+            <span className="flex items-center gap-2 md:gap-3">
+              <LogoMark className="w-[40px] h-[40px] md:w-[52px] md:h-[52px] shrink-0" />
+              <span className="logo block text-[31px] md:text-[40px]">Me @ G21</span>
+            </span>
             <span className="block mt-2.5 text-[12px] md:text-[13px] font-semibold leading-snug text-ink-3">{dateLine}<br className="md:hidden" /><span className="hidden md:inline"> · </span>{hijriLine}</span>
           </Link>
           <nav aria-label="Main" className="hidden md:flex top-nav glass rounded-full items-center gap-1 p-[5px] order-none">

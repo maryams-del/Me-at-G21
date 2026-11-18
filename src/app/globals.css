@@ -46,6 +46,8 @@
   --spaces-muted: #4A5540;
   --logo: #4D6A3C;
   --accent-ink: #8A4A12;
+  --mark-green: #4D6A3C;
+  --mark-bar: #26331F;
   --wave-display: block;
   --font-body: "Nunito Variable", "Nunito", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fredoka Variable", "Fredoka", ui-sans-serif, system-ui, sans-serif;
@@ -74,7 +76,7 @@
     --btn-primary-bg: #E9E3D6; --btn-primary-ink: #1E2418;
     --accent-grad: radial-gradient(circle at 40% 30%, #FFD49A, #F0B060 55%, #C77A2E);
     --spaces-bg: linear-gradient(160deg, #EFE9DB, #E2DBCA); --spaces-ink: #1E2418; --spaces-muted: #4A4E3F;
-    --logo: #F2EDE3; --accent-ink: #F0B060; --wave-display: none;
+    --logo: #F2EDE3; --accent-ink: #F0B060; --mark-green: #8FB46A; --mark-bar: #F2EDE3; --wave-display: none;
     --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-body); --display-weight: 500; --num-weight: 300;
     --page-art:
@@ -100,7 +102,7 @@
   --btn-primary-bg: #E9E3D6; --btn-primary-ink: #1E2418;
   --accent-grad: radial-gradient(circle at 40% 30%, #FFD49A, #F0B060 55%, #C77A2E);
   --spaces-bg: linear-gradient(160deg, #EFE9DB, #E2DBCA); --spaces-ink: #1E2418; --spaces-muted: #4A4E3F;
-  --logo: #F2EDE3; --accent-ink: #F0B060; --wave-display: none;
+  --logo: #F2EDE3; --accent-ink: #F0B060; --mark-green: #8FB46A; --mark-bar: #F2EDE3; --wave-display: none;
   --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-body); --display-weight: 500; --num-weight: 300;
   --page-art:
