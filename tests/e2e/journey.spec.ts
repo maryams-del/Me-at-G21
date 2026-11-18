@@ -167,6 +167,38 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await expect(page.getByText("NOT APPROVED FOR REAL SECRETS")).toBeVisible();
   });
 
+  test("Life admin: expiry, document upload, ID reveal behind passkey step-up", async () => {
+    await page.goto("/admin/expiries");
+    await page.getByRole("button", { name: "Track something" }).click();
+    await page.getByLabel("What is it?").fill("Driving licence");
+    await page.getByRole("combobox", { name: /^Type/ }).selectOption("license");
+    await page.getByLabel("Expiry date").fill("2027-02-01");
+    await page.getByRole("button", { name: "Start tracking" }).click();
+    await expect(page.getByRole("heading", { name: /Driving licence/ })).toBeVisible();
+
+    await page.goto("/admin/documents");
+    await page.getByRole("button", { name: "Add a document" }).click();
+    await page.getByLabel("Title").fill("Passport");
+    await page.getByLabel("Expiry date").fill("2030-05-01");
+    await page.getByLabel("ID number").fill("P1234567");
+    await page.getByRole("button", { name: "Save document" }).click();
+    await expect(page.getByText("••••4567")).toBeVisible();
+    await expect(page.getByText("P1234567")).toHaveCount(0);
+    await page.getByLabel("Choose a file to upload").setInputFiles({ name: "passport.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\ntest file only\n%%EOF") });
+    await expect(page.getByText(/passport\.pdf/)).toBeVisible();
+    await page.getByRole("button", { name: "Reveal" }).click(); // passkey step-up via the virtual authenticator
+    await expect(page.getByText("P1234567")).toBeVisible();
+    await shot(page, "22-documents");
+    const href = await page.getByRole("link", { name: "Download" }).first().getAttribute("href");
+    const ok = await page.request.get(href!);
+    expect(ok.status()).toBe(200);
+    expect((await ok.body()).toString()).toContain("test file only");
+    const anon = await (await page.context().browser()!.newContext()).request.get(new URL(href!, "http://localhost:3100").toString());
+    expect(anon.status()).toBe(401);
+    await page.goto("/admin/expiries");
+    await shot(page, "23-expiries");
+  });
+
   test("mobile layout", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");

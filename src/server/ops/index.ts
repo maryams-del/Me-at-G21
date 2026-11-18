@@ -7,6 +7,7 @@ import { audit, UserError, type Ctx } from "../audit";
 import "./finance";
 import "./care";
 import "./planning";
+import "./admin";
 
 export { getOp, allOps };
 

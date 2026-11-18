@@ -21,8 +21,8 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.8 | Savings: multiple goals, ledger, progress, milestones, month-by-month, planned ≠ saved, monthly reminder | ✅ | Test 6 |
 | 4.9 | Lent/borrowed, partial repayments, audited corrections, collect vs repay reminders, overdue repeats | ✅ | Test 5 |
 | 4.10 | Subscriptions | ⏳ B | |
-| 4.11 | Expiries & renewals | ⏳ B | |
-| 4.12 | Document vault & IDs | ⏳ B | |
+| 4.11 | Expiries & renewals: 90/30/7 reminders (editable), renewal history, passports/IDs/licences/cards/memberships/custom, digits redacted from notifications | ✅ | `ops/admin.ts`, `admin.test.ts`, E2E |
+| 4.12 | Documents: metadata, version history, private Vercel Blob storage with server-side AES-256-GCM, sniffed file types, 4 MB limit, owner-checked download, share sheet, protected ID numbers (encrypted, masked, reveal/copy after passkey step-up, audit) | ✅ | `storage.ts`, `documents.ts`, `admin.test.ts`, E2E |
 | 4.13 | Master's applications | ⏳ B | |
 | 4.14 | Projects & tasks: list by deadline, board, reminders, no auto-complete | ✅ | Projects page |
 | 4.14 | Task attachments, checklist editing UI | ⏳ B | Checklist stored; editor UI pending |
@@ -63,7 +63,7 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 7 | ✅ | `trackers.test.ts` Tests 7 & 25 |
 | 8 | ✅ | `ai.test.ts` + E2E (second tab shows no record before Confirm) |
 | 9 | ✅ | `ai.test.ts` + E2E |
-| 10 | 🟡 | Mechanism ✅ (E2E with lent-money draft); the literal "passport expiry" example needs the Phase B Expiries module |
+| 10 | ✅ | `admin.test.ts`: "Add passport expiry" → one question + Fill details later → confirmed draft in Needs Details |
 | 11 | ✅ | `ai.test.ts` + E2E |
 | 12 | ✅ / 🟡 | E2E onboarding; real Face ID pending |
 | 13 | 🔒 | Vault not enabled; recovery has no path to vault keys by design |
@@ -76,6 +76,6 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 20 | ✅ | E2E |
 | 21 | 🟡 | UI gating implemented; real iPhone run pending |
 | 22 | ✅ | Voice and text share the same proposal path; tests cover correction / interruption / retry |
-| 23 | ⏳ B | Documents module |
+| 23 | ✅ | `admin.test.ts` + E2E: other owner / unauthenticated access to files and IDs refused; nothing from documents is in the AI context |
 | 24 | ✅ | `rules.test.ts` |
 | 25 | ✅ | `trackers.test.ts` |

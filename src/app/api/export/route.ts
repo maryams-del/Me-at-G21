@@ -30,12 +30,20 @@ export async function GET() {
       db.select().from(t.captureDrafts).where(eq(t.captureDrafts.ownerId, o)),
       db.select().from(t.auditEvents).where(eq(t.auditEvents.ownerId, o)),
     ]);
+    const [expiries, renewals, docs, files] = await Promise.all([
+      db.select().from(t.expiryItems).where(eq(t.expiryItems.ownerId, o)),
+      db.select().from(t.renewalEvents).where(eq(t.renewalEvents.ownerId, o)),
+      db.select().from(t.documents).where(eq(t.documents.ownerId, o)),
+      db.select({ id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename, contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, sha256: t.documentFiles.sha256, createdAt: t.documentFiles.createdAt, deletedAt: t.documentFiles.deletedAt }).from(t.documentFiles).where(eq(t.documentFiles.ownerId, o)),
+    ]);
     const data = {
       format: "me-at-g21-export", version: 1, exportedAt: new Date().toISOString(), timezone: s.user.timezone,
       note: "Money values are integer minor units (e.g. halalas). Local dates are in the timezone above.",
       charity, maintenance: { activities: maint, events: maintEvents }, routines: { routines, events: routineEvents },
       fasts: { ledger: fasts, rules: fastRules }, savings: { goals, transactions: savingsTx }, debts: { debts, repayments },
       projects: { projects, tasks }, classes: { events, occurrences, homework }, drafts, history,
+      expiries: { items: expiries, renewals },
+      documents: { note: "Metadata only. Full ID numbers and file contents are excluded; download files individually.", documents: docs, files },
     };
     return new NextResponse(JSON.stringify(data, null, 2), {
       headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="me-at-g21-export-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" },

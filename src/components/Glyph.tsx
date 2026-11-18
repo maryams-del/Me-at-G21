@@ -1,7 +1,8 @@
 /** The tracker glyph system: one flat geometric shape per area, used in nav, tiles and lists. */
 export type GlyphKind =
   | "home" | "fasts" | "waxing" | "dental" | "routines" | "charity" | "savings" | "debts"
-  | "quran" | "projects" | "inbox" | "history" | "settings" | "finance" | "care" | "vault" | "ai";
+  | "quran" | "projects" | "inbox" | "history" | "settings" | "finance" | "care" | "vault" | "ai"
+  | "expiries" | "documents" | "admin";
 
 export function Glyph({ kind, size = 22, color = "currentColor", accent, className, title }: {
   kind: GlyphKind; size?: number; color?: string; accent?: string; className?: string; title?: string;
@@ -24,6 +25,9 @@ export function Glyph({ kind, size = 22, color = "currentColor", accent, classNa
     finance: <><rect x="3" y="3" width="11" height="11" fill={color} /><circle cx="16" cy="16" r="5.5" fill={a} /></>,
     care: <><path d="M12 3 A9 9 0 0 1 12 21 Z" fill={color} /><circle cx="7" cy="12" r="3" fill={a} /></>,
     vault: <><rect x="3" y="9" width="18" height="12" fill={color} /><path d="M7 9 V7 A5 5 0 0 1 17 7 V9" fill="none" stroke={color} strokeWidth="2.5" /></>,
+    expiries: <><path d="M5 3 H19 L12 12 Z" fill={color} /><path d="M12 12 L19 21 H5 Z" fill="none" stroke={color} strokeWidth="2" /><rect x="9" y="17" width="6" height="3" fill={a} /></>,
+    documents: <><path d="M5 2 H14 L19 7 V22 H5 Z" fill="none" stroke={color} strokeWidth="2.5" /><path d="M14 2 V7 H19" fill={color} /><rect x="8" y="12" width="8" height="2.5" fill={a} /><rect x="8" y="16.5" width="5" height="2.5" fill={color} /></>,
+    admin: <><path d="M3 21 V8 H21 V21 Z" fill={color} /><path d="M7 8 V4 H17 V8" fill="none" stroke={color} strokeWidth="2.5" /><circle cx="12" cy="14.5" r="2.6" fill={a} /></>,
     ai: <><circle cx="12" cy="12" r="9" fill={color} /><path d="M12 6 L13.6 10.4 L18 12 L13.6 13.6 L12 18 L10.4 13.6 L6 12 L10.4 10.4 Z" fill={a} /></>,
   };
   return (

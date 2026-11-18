@@ -70,7 +70,7 @@ Rules:
 - If something needed for safe accuracy is missing, add ONE short, specific question per gap to "questions" (keep it minimal).
 - For questions about stored data ("when did I last…", "how much did I donate…"), set intent "search", operations [], and fill "query".
   Use query.type "last_event" with target waxing|dental|fasts|charity|savings|debts|routine:@alias. Use charity_total with from/to dates.
-- Features not in the catalog (passwords, documents, period log, expiries, subscriptions, zakat, applications, achievements): intent "unsupported", explain briefly in questions.
+- Features not in the catalog (passwords, document files or ID numbers, period log, subscriptions, zakat, applications, achievements): intent "unsupported", explain briefly in questions.
 - CORRECTIONS: if PREVIOUS PROPOSAL is given, the new text corrects or extends it. Return the FULL updated list of operations
   (keep unchanged ones exactly, apply the change, drop ones the person removes).`;
 
@@ -86,7 +86,7 @@ export function anthropicProvider(): AiProvider {
       const prev = previous?.at(-1);
       const userContent = [
         `TODAY: ${ctx.today} (${ctx.weekday}), timezone ${ctx.tz}, default currency ${ctx.currency}`,
-        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks })}`,
+        `CONTEXT: ${JSON.stringify({ routines: ctx.routines, goals: ctx.goals, debts: ctx.debts, projects: ctx.projects, tasks: ctx.tasks, expiries: ctx.expiries })}`,
         `OP CATALOG: ${JSON.stringify(catalog)}`,
         prev ? `PREVIOUS PROPOSAL (from "${prev.text.slice(0, 500)}"): ${JSON.stringify(prev.operations)}` : "",
         `<owner_text>${text.slice(0, 2000)}</owner_text>`,

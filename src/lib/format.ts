@@ -9,5 +9,7 @@ export function relDays(n: number | null) {
   if (n === 0) return "today";
   if (n === 1) return "tomorrow";
   if (n === -1) return "yesterday";
-  return n > 0 ? `in ${n} days` : `${-n} days ago`;
+  const a = Math.abs(n);
+  const span = a >= 365 ? `${Math.floor(a / 365)} year${a >= 730 ? "s" : ""}${Math.floor((a % 365) / 30) ? ` ${Math.floor((a % 365) / 30)} month${Math.floor((a % 365) / 30) > 1 ? "s" : ""}` : ""}` : a >= 60 ? `${Math.round(a / 30)} months` : `${a} days`;
+  return n > 0 ? `in ${span}` : `${span} ago`;
 }

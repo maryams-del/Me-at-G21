@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { captureDrafts, routines, savingsGoals, debts } from "@/db/schema";
+import { captureDrafts, routines, savingsGoals, debts, expiryItems } from "@/db/schema";
 import { pageOwner } from "@/server/queries";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, type FieldDef } from "@/components/OpForm";
@@ -12,10 +12,11 @@ export default async function InboxPage() {
   const o = await pageOwner();
   const db = getDb();
   const drafts = await db.select().from(captureDrafts).where(and(eq(captureDrafts.ownerId, o.id), eq(captureDrafts.status, "open"))).orderBy(desc(captureDrafts.createdAt));
-  const [rs, gs, ds] = await Promise.all([
+  const [rs, gs, ds, es] = await Promise.all([
     db.select().from(routines).where(eq(routines.ownerId, o.id)),
     db.select().from(savingsGoals).where(and(eq(savingsGoals.ownerId, o.id), eq(savingsGoals.status, "active"))),
     db.select().from(debts).where(and(eq(debts.ownerId, o.id), eq(debts.status, "open"))),
+    db.select().from(expiryItems).where(and(eq(expiryItems.ownerId, o.id), eq(expiryItems.status, "active"))),
   ]);
   const today = todayLocal(o.timezone);
   const formFor = (action: string): FieldDef[] | null => {
@@ -37,6 +38,9 @@ export default async function InboxPage() {
       case "task.create": return [{ name: "title", label: "Task", required: true, wide: true }, { name: "dueOn", label: "Due date", type: "date", nullable: true }, { name: "dueTime", label: "Time", type: "time", nullable: true }];
       case "homework.create": return [{ name: "title", label: "Homework", required: true, wide: true }, { name: "reference", label: "Surah / verses", nullable: true }];
       case "project.create": return [{ name: "name", label: "Project", required: true }, { name: "targetDate", label: "Target date", type: "date", nullable: true }];
+      case "expiry.create": return [{ name: "label", label: "Item", required: true }, { name: "expiresOn", label: "Expiry date", type: "date", required: true }];
+      case "expiry.renew": return [{ name: "itemId", label: "Item", type: "select", required: true, options: es.map((e) => ({ value: e.id, label: e.label })) },
+        { name: "renewedOn", label: "Renewed on", type: "date", required: true }, { name: "newExpiresOn", label: "New expiry date", type: "date", required: true }];
       case "savings.goal.create": return [{ name: "name", label: "Goal", required: true }, { name: "target", label: "Target", type: "amount", required: true }, currencyField(o.defaultCurrency)];
       default: return null;
     }
@@ -50,7 +54,7 @@ export default async function InboxPage() {
           {drafts.map((d) => {
             const fields = formFor(d.action);
             const payload = d.payload as Record<string, unknown>;
-            const initial = { paidOn: today, onDate: today, completedOn: today, status: "completed", currency: o.defaultCurrency, ...payload };
+            const initial = { paidOn: today, onDate: today, completedOn: today, renewedOn: today, status: "completed", currency: o.defaultCurrency, ...payload };
             return (
               <li key={d.id} className="panel p-4 grid gap-3">
                 <div className="flex flex-wrap justify-between gap-2">

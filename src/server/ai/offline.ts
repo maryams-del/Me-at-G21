@@ -188,8 +188,32 @@ function parseClause(c: string, ctx: AiContext, ops: ProposedOp[], questions: st
     return;
   }
 
-  if (/(passport|expir|renew|licen[cs]e|national id|iqama|document|subscription|zakat|period|application|achievement)/.test(t)) {
-    questions.push("That module (expiries, documents, subscriptions, zakat, period log, applications, achievements) arrives in Phase B. I've left it unsaved.");
+  const EXP_KINDS: [RegExp, string, string][] = [
+    [/passport/, "passport", "Passport"], [/(national id|iqama|\bid card\b|residence permit)/, "national_id", "National ID"],
+    [/(driving licen[cs]e|driver'?s licen[cs]e|licen[cs]e)/, "license", "Driving licence"], [/(bank card|credit card|debit card|\bcard\b)/, "bank_card", "Bank card"],
+    [/(membership)/, "membership", "Membership"],
+  ];
+  const expKind = EXP_KINDS.find(([re]) => re.test(t));
+  if (/\brenew(ed|al)?\b/.test(t) && expKind) {
+    const hit = ctx.expiries.find((e) => e.kind === expKind[1]) ?? findByName(ctx.expiries, t, (e) => e.label);
+    const after = t.split(/(?:until|till|new expiry(?: date)?(?: is)?|now expires|expires(?: on)?|valid (?:until|till))/)[1];
+    const newDate = after ? resolveDatePhrase(after, ctx.today) : null;
+    const missing = [...(hit ? [] : ["itemId"]), ...(newDate ? [] : ["newExpiresOn"])];
+    ops.push({ op: "expiry.renew", input: { itemId: hit ? `@${hit.alias}` : undefined, renewedOn: ctx.today, newExpiresOn: newDate ?? undefined }, missing, assumed: ["renewedOn"] });
+    if (!hit) questions.push(`I couldn't find a tracked ${expKind[2].toLowerCase()} — add it first, then record the renewal.`);
+    if (!newDate) questions.push("What's the new expiry date?");
+    return;
+  }
+  if (expKind || /\bexpir/.test(t)) {
+    const kind = expKind?.[1] ?? "custom";
+    const label = expKind?.[2] ?? cap(stripDates(c.replace(/^(add|track|remind me( about)?|my)\s+/i, "").replace(/\b(expiry|expires?|expiring|expiration)\b.*$/i, "")).trim() || "Item");
+    const date = resolveDatePhrase(t.replace(/^.*?\b(expir\w*|valid until|until|on)\b/, ""), ctx.today) ?? resolveDatePhrase(t, ctx.today);
+    ops.push({ op: "expiry.create", input: { label, kind, expiresOn: date ?? undefined, reminderOffsetsDays: [-90, -30, -7] }, missing: date ? [] : ["expiresOn"] });
+    if (!date) questions.push(`When does your ${label.toLowerCase()} expire? You can also save it now and fill in the date later.`);
+    return;
+  }
+  if (/(document|subscription|zakat|period|application|achievement)/.test(t)) {
+    questions.push("That module isn't available in Capture yet (documents are added from Life admin → Documents). I've left it unsaved.");
     return;
   }
   if (c.length > 2) questions.push(`I couldn't match “${c}” to a tracker. Could you rephrase it, or use a form?`);
@@ -204,7 +228,7 @@ function applyCorrection(text: string, prev: ProposedOp[], ctx: AiContext): Prop
   const moduleOf: Record<string, RegExp> = {
     "charity.create": /donat|charity|gift/, "debt.create": /lend|lent|borrow|loan|debt/, "fasts.complete": /fast/,
     "routine.log": /sheet|brush|toothbrush|routine/, "waxing.complete": /wax/, "dental.complete": /dental|scaling/,
-    "savings.deposit": /saving|deposit/, "task.create": /task/, "homework.create": /homework/,
+    "savings.deposit": /saving|deposit/, "expiry.create": /passport|expir|licen|iqama|card|membership/, "expiry.renew": /renew/, "task.create": /task/, "homework.create": /homework/,
   };
   const target = (pred: (o: ProposedOp) => boolean) => {
     const byWord = ops.filter((o) => moduleOf[o.op]?.test(t) && pred(o));
@@ -228,7 +252,7 @@ function applyCorrection(text: string, prev: ProposedOp[], ctx: AiContext): Prop
   }
   const date = resolveDatePhrase(t, ctx.today);
   if (date) {
-    const dateKeys = ["paidOn", "onDate", "completedOn", "dueOn", "dueDate"];
+    const dateKeys = ["paidOn", "onDate", "completedOn", "dueOn", "dueDate", "expiresOn", "newExpiresOn"];
     const wantsDue = /\b(due|repay|pay back|deadline|by)\b/.test(t);
     const hits = target((o) => dateKeys.some((k) => k in o.input));
     for (const o of hits.slice(-1)) {

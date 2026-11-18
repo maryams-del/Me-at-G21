@@ -153,7 +153,9 @@ export async function dashboardState(o: Owner) {
   const charityMonth = await db().select({ cur: t.charityPayments.currency, sum: sql<string>`sum(${t.charityPayments.amountMinor})` }).from(t.charityPayments)
     .where(and(eq(t.charityPayments.ownerId, o.id), eq(t.charityPayments.status, "completed"), isNull(t.charityPayments.deletedAt), gte(t.charityPayments.paidOn, monthStart))).groupBy(t.charityPayments.currency);
 
+  const expiring = await expiringSoon(o, 90);
   const overdue: { label: string; detail: string; href: string }[] = [];
+  for (const e of expiring) if (e.expiresOn < today) overdue.push({ label: e.label, detail: `Expired ${e.expiresOn}`, href: "/admin/expiries" });
   if (wax.overdue && wax.day) overdue.push({ label: "Waxing", detail: `Day ${wax.day} — past your ${wax.rule.windowDays}-day window`, href: "/care/waxing" });
   if (dental.daysLeft !== null && dental.daysLeft < 0) overdue.push({ label: "Dental scaling", detail: `${-dental.daysLeft} days overdue`, href: "/care/dental" });
   for (const r of routines) if (!r.routine.paused && r.daysLeft !== null && r.daysLeft < 0) overdue.push({ label: r.routine.name, detail: `${-r.daysLeft} day${r.daysLeft === -1 ? "" : "s"} overdue`, href: "/care/routines" });
@@ -167,7 +169,7 @@ export async function dashboardState(o: Owner) {
   const recentlyDone = recent.filter((r) => ["completed", "deposit", "settled", "first_use", "repayment"].includes(r.action)).slice(0, 5);
 
   return {
-    today, upcoming, sentUnread, wax, dental, routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
+    today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), wax, dental, routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
     recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework,
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },
@@ -189,4 +191,29 @@ export async function historyState(o: Owner, q: { q?: string; category?: string;
 export async function remindersFor(ownerId: string, sourceType: string, sourceIds: string[]) {
   if (!sourceIds.length) return [];
   return db().select().from(t.reminders).where(and(eq(t.reminders.ownerId, ownerId), eq(t.reminders.sourceType, sourceType), inArray(t.reminders.sourceId, sourceIds), inArray(t.reminders.status, ["scheduled", "snoozed"]), ne(t.reminders.status, "cancelled"))).orderBy(asc(t.reminders.fireAt));
+}
+
+/* ───── life admin ───── */
+
+export async function expiriesState(o: Owner) {
+  const items = await db().select().from(t.expiryItems).where(and(eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt))).orderBy(asc(t.expiryItems.status), asc(t.expiryItems.expiresOn));
+  const renewals = items.length ? await db().select().from(t.renewalEvents).where(inArray(t.renewalEvents.itemId, items.map((i) => i.id))).orderBy(desc(t.renewalEvents.renewedOn)) : [];
+  const docs = await db().select({ id: t.documents.id, title: t.documents.title }).from(t.documents).where(and(eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)));
+  const today = todayLocal(o.timezone);
+  return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id) })), docs, today };
+}
+
+export async function documentsState(o: Owner) {
+  const docs = await db().select().from(t.documents).where(and(eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt))).orderBy(asc(t.documents.kind), asc(t.documents.title));
+  const files = docs.length ? await db().select({
+    id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename,
+    contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, createdAt: t.documentFiles.createdAt,
+  }).from(t.documentFiles).where(and(inArray(t.documentFiles.documentId, docs.map((d) => d.id)), isNull(t.documentFiles.deletedAt))).orderBy(desc(t.documentFiles.version)) : [];
+  const tracked = docs.length ? await db().select({ documentId: t.expiryItems.documentId, id: t.expiryItems.id }).from(t.expiryItems).where(and(inArray(t.expiryItems.documentId, docs.map((d) => d.id)), isNull(t.expiryItems.deletedAt))) : [];
+  return docs.map((d) => ({ doc: d, files: files.filter((f) => f.documentId === d.id), tracked: tracked.some((x) => x.documentId === d.id) }));
+}
+
+export async function expiringSoon(o: Owner, days = 90) {
+  const today = todayLocal(o.timezone);
+  return db().select().from(t.expiryItems).where(and(eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt), eq(t.expiryItems.status, "active"), lte(t.expiryItems.expiresOn, addDays(today, days)))).orderBy(asc(t.expiryItems.expiresOn));
 }

@@ -13,6 +13,7 @@ export default defineConfig({
       APP_ORIGIN: "http://localhost:3000",
       OWNER_EMAIL: "owner@example.com",
       AI_PROVIDER: "offline",
+      LOCAL_BLOB_DIR: "/tmp/ld-test-blobs",
     },
   },
   resolve: {

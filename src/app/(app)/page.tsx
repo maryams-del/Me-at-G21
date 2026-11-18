@@ -129,6 +129,12 @@ export default async function Dashboard() {
               <ul className="list">{s.tasksDueSoon.map((tk) => <li key={tk.id} className="py-2 flex justify-between t-small"><Link href="/projects" className="underline underline-offset-4">{tk.title}</Link><span className="t-meta">{fmtShort(tk.dueOn)}</span></li>)}</ul>
             </>
           )}
+          {s.expiring.length > 0 && (
+            <>
+              <h3 className="t-h3 mt-5 mb-2">Expiring within 90 days</h3>
+              <ul className="list">{s.expiring.map((e) => <li key={e.id} className="py-2 flex justify-between t-small"><Link href="/admin/expiries" className="underline underline-offset-4">{e.label}</Link><span className="t-meta">{fmtShort(e.expiresOn)}</span></li>)}</ul>
+            </>
+          )}
           {s.debts.some((d) => d.debt.status === "open") && (
             <>
               <h3 className="t-h3 mt-5 mb-2">Lent & borrowed</h3>

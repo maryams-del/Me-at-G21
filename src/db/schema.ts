@@ -534,3 +534,75 @@ export const jobRuns = pgTable("job_runs", {
   stats: jsonb("stats").$type<Record<string, unknown>>(),
   error: text("error"),
 });
+
+/* ───────────────────────────── Phase B: expiries & renewals ───────────────────────────── */
+
+export const expiryItems = pgTable("expiry_items", {
+  id: id(),
+  ownerId: owner(),
+  label: text("label").notNull(),
+  kind: text("kind").notNull().default("custom"), // passport | national_id | license | bank_card | membership | custom
+  expiresOn: date("expires_on").notNull(),
+  issuer: text("issuer"),
+  documentId: uuid("document_id"),
+  status: text("status").notNull().default("active"), // active | archived
+  reminderOffsetsDays: jsonb("reminder_offsets_days").$type<number[]>().notNull().default([-90, -30, -7]),
+  reminderTime: text("reminder_time").notNull().default("09:00"),
+  remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  notes: text("notes"),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [index("expiry_owner_idx").on(t.ownerId, t.expiresOn)]);
+
+export const renewalEvents = pgTable("renewal_events", {
+  id: id(),
+  ownerId: owner(),
+  itemId: uuid("item_id").notNull().references(() => expiryItems.id, { onDelete: "cascade" }),
+  renewedOn: date("renewed_on").notNull(),
+  previousExpiresOn: date("previous_expires_on").notNull(),
+  newExpiresOn: date("new_expires_on").notNull(),
+  notes: text("notes"),
+  createdAt: createdAt(),
+});
+
+/* ───────────────────────────── Phase B: document vault ───────────────────────────── */
+
+export const documents = pgTable("documents", {
+  id: id(),
+  ownerId: owner(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull().default("other"), // passport | national_id | transcript | certificate | cv | application | letter | other
+  issuer: text("issuer"),
+  issuedOn: date("issued_on"),
+  expiresOn: date("expires_on"),
+  idMasked: text("id_masked"), // e.g. ••••1234 — safe to display
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  notes: text("notes"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+/** Full ID numbers live apart from document metadata, encrypted, and are revealed only after step-up. */
+export const protectedIdFields = pgTable("protected_id_fields", {
+  documentId: uuid("document_id").primaryKey().references(() => documents.id, { onDelete: "cascade" }),
+  ownerId: owner(),
+  valueEnc: text("value_enc").notNull(),
+  updatedAt: updatedAt(),
+});
+
+export const documentFiles = pgTable("document_files", {
+  id: id(),
+  ownerId: owner(),
+  documentId: uuid("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  storageKey: text("storage_key").notNull(), // opaque random path; contents are AES-GCM encrypted before storage
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  createdAt: createdAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("doc_file_version_uq").on(t.documentId, t.version)]);

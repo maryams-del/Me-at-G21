@@ -54,12 +54,14 @@ export function BackLink({ href, label }: { href: string; label: string }) {
 export function ReminderList({ items, tz }: { items: { id: string; title: string; publicBody: string; fireAt: Date }[]; tz: string }) {
   if (!items.length) return <p className="t-meta">No upcoming reminders.</p>;
   const f = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+  const fy = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+  const soon = Date.now() + 300 * 86400_000;
   return (
     <ul className="list">
       {items.map((r) => (
         <li key={r.id} className="py-2 flex justify-between gap-4 t-small">
           <span>{r.title} <span className="text-ink-3">{r.publicBody}</span></span>
-          <span className="t-meta whitespace-nowrap">{f.format(r.fireAt)}</span>
+          <span className="t-meta whitespace-nowrap">{(r.fireAt.getTime() > soon ? fy : f).format(r.fireAt)}</span>
         </li>
       ))}
     </ul>

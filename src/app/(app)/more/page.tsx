@@ -9,7 +9,9 @@ export default async function More() {
   const items: { href: string; label: string; glyph: GlyphKind; note?: string }[] = [
     { href: "/inbox", label: "Needs details", glyph: "inbox", note: n ? `${n} waiting` : undefined },
     { href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" },
-    { href: "/projects", label: "Projects & tasks", glyph: "projects" }, { href: "/history", label: "History & search", glyph: "history" },
+    { href: "/projects", label: "Projects & tasks", glyph: "projects" },
+    { href: "/admin/expiries", label: "Expiries & renewals", glyph: "expiries" }, { href: "/admin/documents", label: "Documents & IDs", glyph: "documents" },
+    { href: "/history", label: "History & search", glyph: "history" },
     { href: "/vault", label: "Secure vault", glyph: "vault" }, { href: "/settings", label: "Settings", glyph: "settings" },
   ];
   return (

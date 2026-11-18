@@ -36,6 +36,7 @@ export type AiContext = {
   debts: { alias: string; counterparty: string; direction: string }[];
   projects: { alias: string; name: string }[];
   tasks: { alias: string; title: string }[];
+  expiries: { alias: string; label: string; kind: string }[];
 };
 
 export interface AiProvider {
