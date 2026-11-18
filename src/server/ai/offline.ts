@@ -188,6 +188,25 @@ function parseClause(c: string, ctx: AiContext, ops: ProposedOp[], questions: st
     return;
   }
 
+  if (/\b(appl(y|ying|ied|ication)|master'?s|msc|ma\b|mba|admission)/.test(t) && !/\bexpir/.test(t)) {
+    const app = ctx.applications.find((x) => t.includes(x.university.toLowerCase()) || t.includes(x.university.toLowerCase().replace(/^university of /, "")));
+    const st = /\b(submitted|sent|applied)\b/.test(t) ? "submitted" : /\binterview/.test(t) ? "interview" : /\baccepted|admitted|got in\b/.test(t) ? "accepted" : /\brejected|declined\b/.test(t) ? "rejected" : /\bwithdr/.test(t) ? "withdrawn" : null;
+    if (app && st) {
+      ops.push({ op: "application.status", input: { id: `@${app.alias}`, status: st, onDate }, assumed: assumedDate });
+      return;
+    }
+    const uni = c.match(/\b(?:to|at)\s+((?:the\s+)?(?:university of\s+)?[A-Z][\w'&.-]*(?:\s+(?:of\s+)?[A-Z][\w'&.-]*)*)/)?.[1];
+    const prog = c.match(/\bfor\s+(?:an?\s+|the\s+)?((?:MSc|MA|MBA|MEng|LLM|Master'?s|MPhil)[^,.;]*?)(?=\s+(?:at|to|deadline|due|by)\b|[,.;]|$)/i)?.[1];
+    const dl = c.match(/\b(?:deadline|due|by)\b(.*)$/i)?.[1];
+    const deadline = dl ? resolveDatePhrase(dl, ctx.today) : null;
+    if (uni || prog) {
+      const missing = [...(uni ? [] : ["university"]), ...(prog ? [] : ["program"]), ...(deadline ? [] : ["deadlineDate"])];
+      ops.push({ op: "application.create", input: { university: uni?.trim(), program: prog?.trim(), deadlineDate: deadline, deadlineTz: deadline ? ctx.tz : null, status: "researching", requirements: [], links: [], documentIds: [] }, missing });
+      if (!deadline) questions.push(`What's the deadline${uni ? ` for ${uni.trim()}` : ""}? Please copy it from the official site; I won't guess it.`);
+      if (!prog) questions.push("Which program is it?");
+      return;
+    }
+  }
   const EXP_KINDS: [RegExp, string, string][] = [
     [/passport/, "passport", "Passport"], [/(national id|iqama|\bid card\b|residence permit)/, "national_id", "National ID"],
     [/(driving licen[cs]e|driver'?s licen[cs]e|licen[cs]e)/, "license", "Driving licence"], [/(bank card|credit card|debit card|\bcard\b)/, "bank_card", "Bank card"],

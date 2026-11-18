@@ -396,6 +396,7 @@ export const tasks = pgTable("tasks", {
   id: id(),
   ownerId: owner(),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+  applicationId: uuid("application_id"), // follow-up task for a master's application
   title: text("title").notNull(),
   notes: text("notes"),
   status: text("status").notNull().default("backlog"), // backlog | in_progress | done
@@ -620,3 +621,59 @@ export const documentFiles = pgTable("document_files", {
   createdAt: createdAt(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("doc_file_version_uq").on(t.documentId, t.version)]);
+
+/* ───────────────────────────── Phase B: Master's applications ───────────────────────────── */
+
+export const APPLICATION_STATUSES = ["researching", "preparing", "submitted", "interview", "decision", "accepted", "rejected", "withdrawn"] as const;
+
+export const mastersApplications = pgTable("masters_applications", {
+  id: id(),
+  ownerId: owner(),
+  university: text("university").notNull(),
+  program: text("program").notNull(),
+  country: text("country"),
+  intake: text("intake"), // e.g. "Fall 2027"
+  url: text("url"),
+  /** Deadline as the university states it: local date + time in the university's timezone. */
+  deadlineDate: date("deadline_date"),
+  deadlineTime: text("deadline_time"), // 'HH:mm', default 23:59 when unknown
+  deadlineTz: text("deadline_tz"),
+  deadlineAt: timestamp("deadline_at", { withTimezone: true }), // canonical instant (computed)
+  deadlineVerified: boolean("deadline_verified").notNull().default(false),
+  status: text("status").notNull().default("researching"),
+  submittedOn: date("submitted_on"),
+  feeMinor: bigint("fee_minor", { mode: "number" }),
+  feeCurrency: text("fee_currency"),
+  funding: text("funding"),
+  contacts: text("contacts"),
+  notes: text("notes"),
+  links: jsonb("links").$type<{ label: string; url: string }[]>().notNull().default([]),
+  documentIds: jsonb("document_ids").$type<string[]>().notNull().default([]),
+  reminderOffsetsDays: jsonb("reminder_offsets_days").$type<number[]>().notNull().default([-30, -14, -7, -1]),
+  remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  source: recordSource("source").notNull().default("manual"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [index("apps_owner_deadline_idx").on(t.ownerId, t.deadlineAt)]);
+
+export const applicationRequirements = pgTable("application_requirements", {
+  id: id(),
+  ownerId: owner(),
+  applicationId: uuid("application_id").notNull().references(() => mastersApplications.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  position: integer("position").notNull().default(0),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+export const applicationStatusEvents = pgTable("application_status_events", {
+  id: id(),
+  ownerId: owner(),
+  applicationId: uuid("application_id").notNull().references(() => mastersApplications.id, { onDelete: "cascade" }),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  onDate: date("on_date").notNull(),
+  note: text("note"),
+  createdAt: createdAt(),
+});

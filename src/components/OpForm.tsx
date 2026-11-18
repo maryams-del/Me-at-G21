@@ -21,6 +21,12 @@ export type FieldDef = {
   includeZero?: boolean;
   /** select whose value should be sent as a number */
   numeric?: boolean;
+  /** textarea: send as an array of non-empty lines */
+  lines?: boolean;
+  /** send the value as a one-item array (or [] when empty) */
+  asArray?: boolean;
+  /** send under a different key */
+  sendAs?: string;
   wide?: boolean;
 };
 
@@ -46,6 +52,12 @@ type Props = {
 function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of fields) {
+    const key = f.sendAs ?? f.name;
+    if (f.lines || f.asArray) {
+      const raw = String(form.get(f.name) ?? "");
+      out[key] = f.lines ? raw.split("\n").map((l) => l.trim()).filter(Boolean) : raw.trim() ? [raw.trim()] : [];
+      continue;
+    }
     if (f.type === "checkbox") { out[f.name] = form.get(f.name) === "on"; continue; }
     const v = String(form.get(f.name) ?? "").trim();
     if (v === "") { if (f.nullable) out[f.name] = null; continue; }

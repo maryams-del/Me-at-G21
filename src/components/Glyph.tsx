@@ -2,7 +2,7 @@
 export type GlyphKind =
   | "home" | "fasts" | "waxing" | "dental" | "routines" | "charity" | "savings" | "debts"
   | "quran" | "projects" | "inbox" | "history" | "settings" | "finance" | "care" | "vault" | "ai"
-  | "expiries" | "documents" | "admin";
+  | "expiries" | "documents" | "admin" | "applications" | "education";
 
 export function Glyph({ kind, size = 22, color = "currentColor", accent, className, title }: {
   kind: GlyphKind; size?: number; color?: string; accent?: string; className?: string; title?: string;
@@ -28,6 +28,8 @@ export function Glyph({ kind, size = 22, color = "currentColor", accent, classNa
     expiries: <><path d="M5 3 H19 L12 12 Z" fill={color} /><path d="M12 12 L19 21 H5 Z" fill="none" stroke={color} strokeWidth="2" /><rect x="9" y="17" width="6" height="3" fill={a} /></>,
     documents: <><path d="M5 2 H14 L19 7 V22 H5 Z" fill="none" stroke={color} strokeWidth="2.5" /><path d="M14 2 V7 H19" fill={color} /><rect x="8" y="12" width="8" height="2.5" fill={a} /><rect x="8" y="16.5" width="5" height="2.5" fill={color} /></>,
     admin: <><path d="M3 21 V8 H21 V21 Z" fill={color} /><path d="M7 8 V4 H17 V8" fill="none" stroke={color} strokeWidth="2.5" /><circle cx="12" cy="14.5" r="2.6" fill={a} /></>,
+    applications: <><path d="M12 3 L22 8 L12 13 L2 8 Z" fill={color} /><path d="M6 10.5 V16 C6 18 18 18 18 16 V10.5" fill="none" stroke={color} strokeWidth="2.2" /><rect x="20.5" y="8" width="1.8" height="7" fill={a} /></>,
+    education: <><path d="M12 3 L22 8 L12 13 L2 8 Z" fill={color} /><rect x="6" y="14" width="12" height="6" fill={a} /></>,
     ai: <><circle cx="12" cy="12" r="9" fill={color} /><path d="M12 6 L13.6 10.4 L18 12 L13.6 13.6 L12 18 L10.4 13.6 L6 12 L10.4 10.4 Z" fill={a} /></>,
   };
   return (

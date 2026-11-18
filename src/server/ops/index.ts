@@ -8,6 +8,7 @@ import "./finance";
 import "./care";
 import "./planning";
 import "./admin";
+import "./education";
 
 export { getOp, allOps };
 

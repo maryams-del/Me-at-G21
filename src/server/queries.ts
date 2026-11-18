@@ -136,6 +136,7 @@ export async function projectsState(o: Owner) {
 /* ───── dashboard ───── */
 
 export async function dashboardState(o: Owner) {
+  const overdueApps: Awaited<ReturnType<typeof applicationsState>> = [];
   const today = todayLocal(o.timezone);
   const now = new Date();
   const in7 = new Date(now.getTime() + 7 * 86400_000);
@@ -153,9 +154,12 @@ export async function dashboardState(o: Owner) {
   const charityMonth = await db().select({ cur: t.charityPayments.currency, sum: sql<string>`sum(${t.charityPayments.amountMinor})` }).from(t.charityPayments)
     .where(and(eq(t.charityPayments.ownerId, o.id), eq(t.charityPayments.status, "completed"), isNull(t.charityPayments.deletedAt), gte(t.charityPayments.paidOn, monthStart))).groupBy(t.charityPayments.currency);
 
+  const apps = (await applicationsState(o)).filter((r) => r.open && r.app.deadlineAt && (r.daysLeft ?? 99) <= 30);
+  for (const r of apps) if (r.overdue) overdueApps.push(r);
   const names = new Map((await peopleList(o.id)).map((p) => [p.id, p.name]));
   const expiring = (await expiringSoon(o, 90)).map((e) => ({ ...e, label: e.personId && names.get(e.personId) ? `${names.get(e.personId)}'s ${e.label}` : e.label }));
   const overdue: { label: string; detail: string; href: string }[] = [];
+  for (const r of overdueApps) overdue.push({ label: `${r.app.university} application`, detail: "Deadline passed and not marked submitted", href: `/education/applications/${r.app.id}` });
   for (const e of expiring) if (e.expiresOn < today) overdue.push({ label: e.label, detail: `Expired ${dmy(e.expiresOn)}`, href: "/admin/expiries" });
   if (wax.overdue && wax.day) overdue.push({ label: "Waxing", detail: `Day ${wax.day} — past your ${wax.rule.windowDays}-day window`, href: "/care/waxing" });
   if (dental.daysLeft !== null && dental.daysLeft < 0) overdue.push({ label: "Dental scaling", detail: `${-dental.daysLeft} days overdue`, href: "/care/dental" });
@@ -170,7 +174,7 @@ export async function dashboardState(o: Owner) {
   const recentlyDone = recent.filter((r) => ["completed", "deposit", "settled", "first_use", "repayment"].includes(r.action)).slice(0, 5);
 
   return {
-    today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), wax, dental, routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
+    today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), appDeadlines: apps.filter((r) => !r.overdue), wax, dental, routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
     recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework,
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },
@@ -277,4 +281,37 @@ export async function documentStorageBytes(ownerId: string) {
 export async function expiringSoon(o: Owner, days = 90) {
   const today = todayLocal(o.timezone);
   return db().select().from(t.expiryItems).where(and(eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt), eq(t.expiryItems.status, "active"), lte(t.expiryItems.expiresOn, addDays(today, days)))).orderBy(asc(t.expiryItems.expiresOn));
+}
+
+/* ───── education ───── */
+
+export async function applicationsState(o: Owner) {
+  const apps = await db().select().from(t.mastersApplications).where(and(eq(t.mastersApplications.ownerId, o.id), isNull(t.mastersApplications.deletedAt)));
+  const reqs = apps.length ? await db().select().from(t.applicationRequirements).where(inArray(t.applicationRequirements.applicationId, apps.map((a) => a.id))) : [];
+  const now = Date.now();
+  const rows = apps.map((a) => {
+    const r = reqs.filter((x) => x.applicationId === a.id);
+    const msLeft = a.deadlineAt ? a.deadlineAt.getTime() - now : null;
+    const daysLeft = msLeft === null ? null : Math.ceil(msLeft / 86400_000);
+    const open = a.status === "researching" || a.status === "preparing";
+    // Highlight when inside one of this application's own reminder windows (default 30/14/7/1 days)
+    const window = open && daysLeft !== null && daysLeft >= 0 ? [...a.reminderOffsetsDays].map((x) => -x).sort((x, y) => x - y).find((d) => daysLeft <= d) ?? null : null;
+    return { app: a, reqTotal: r.length, reqDone: r.filter((x) => x.doneAt).length, daysLeft, open, window, overdue: open && msLeft !== null && msLeft < 0 };
+  });
+  rows.sort((x, y) => Number(y.open) - Number(x.open) || (x.app.deadlineAt?.getTime() ?? Infinity) - (y.app.deadlineAt?.getTime() ?? Infinity) || x.app.university.localeCompare(y.app.university));
+  return rows;
+}
+
+export async function applicationDetail(o: Owner, id: string) {
+  const [a] = await db().select().from(t.mastersApplications).where(and(eq(t.mastersApplications.id, id), eq(t.mastersApplications.ownerId, o.id), isNull(t.mastersApplications.deletedAt)));
+  if (!a) return null;
+  const [reqs, events, followUps, docs, allDocs] = await Promise.all([
+    db().select().from(t.applicationRequirements).where(eq(t.applicationRequirements.applicationId, a.id)).orderBy(asc(t.applicationRequirements.position)),
+    db().select().from(t.applicationStatusEvents).where(eq(t.applicationStatusEvents.applicationId, a.id)).orderBy(desc(t.applicationStatusEvents.onDate), desc(t.applicationStatusEvents.createdAt)),
+    db().select().from(t.tasks).where(and(eq(t.tasks.applicationId, a.id), eq(t.tasks.ownerId, o.id), isNull(t.tasks.deletedAt))).orderBy(asc(t.tasks.dueOn)),
+    a.documentIds.length ? db().select({ id: t.documents.id, title: t.documents.title, kind: t.documents.kind }).from(t.documents).where(and(inArray(t.documents.id, a.documentIds), eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt))) : Promise.resolve([]),
+    db().select({ id: t.documents.id, title: t.documents.title }).from(t.documents).where(and(eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt))).orderBy(asc(t.documents.title)),
+  ]);
+  const rem = await remindersFor(o.id, "application", [a.id]);
+  return { app: a, reqs, events, followUps, docs, allDocs, reminders: rem };
 }

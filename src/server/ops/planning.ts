@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, asc, eq, gte, isNull, inArray } from "drizzle-orm";
-import { projects, tasks, recurringEvents, eventOccurrences, homeworkTasks } from "@/db/schema";
+import { projects, tasks, recurringEvents, eventOccurrences, homeworkTasks, mastersApplications } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
 import { addDays, localToInstant, nextWeekday, todayLocal, type LocalDate, dmy } from "@/lib/time";
@@ -53,7 +53,7 @@ async function syncTaskReminders(ctx: Ctx, taskId: string) {
 }
 
 const taskInput = z.object({
-  title: zText(300), projectId: zId.optional().nullable(), notes: zOptText(),
+  title: zText(300), projectId: zId.optional().nullable(), applicationId: zId.optional().nullable(), notes: zOptText(),
   status: z.enum(["backlog", "in_progress", "done"]).default("backlog"),
   dueOn: zDate.optional().nullable(), dueTime: zTime.optional().nullable(),
   priority: z.enum(["low", "medium", "high"]).optional().nullable(),
@@ -71,8 +71,12 @@ export const taskCreate = defineOp({
       const [p] = await ctx.tx.select({ id: projects.id }).from(projects).where(and(eq(projects.id, i.projectId), eq(projects.ownerId, ctx.ownerId)));
       if (!p) throw new UserError("Project not found", "projectId");
     }
+    if (i.applicationId) {
+      const [a] = await ctx.tx.select({ id: mastersApplications.id }).from(mastersApplications).where(and(eq(mastersApplications.id, i.applicationId), eq(mastersApplications.ownerId, ctx.ownerId)));
+      if (!a) throw new UserError("Application not found", "applicationId");
+    }
     const [t] = await ctx.tx.insert(tasks).values({
-      ownerId: ctx.ownerId, projectId: i.projectId ?? null, title: i.title, notes: i.notes, status: i.status,
+      ownerId: ctx.ownerId, projectId: i.projectId ?? null, applicationId: i.applicationId ?? null, title: i.title, notes: i.notes, status: i.status,
       dueOn: i.dueOn ?? null, dueTime: i.dueTime ?? null, priority: i.priority ?? null, checklist: i.checklist,
       reminderOffsetsDays: i.reminderOffsetsDays, remindersEnabled: i.remindersEnabled,
       completedAt: i.status === "done" ? ctx.now : null, source: ctx.source,
@@ -92,7 +96,7 @@ export const taskUpdate = defineOp({
     if (!cur) throw new UserError("Task not found");
     const completedAt = i.status === "done" ? (cur.completedAt ?? ctx.now) : null;
     await ctx.tx.update(tasks).set({
-      projectId: i.projectId ?? null, title: i.title, notes: i.notes, status: i.status, dueOn: i.dueOn ?? null, dueTime: i.dueTime ?? null,
+      projectId: i.projectId ?? null, applicationId: i.applicationId ?? cur.applicationId, title: i.title, notes: i.notes, status: i.status, dueOn: i.dueOn ?? null, dueTime: i.dueTime ?? null,
       priority: i.priority ?? null, checklist: i.checklist, reminderOffsetsDays: i.reminderOffsetsDays, remindersEnabled: i.remindersEnabled,
       completedAt, updatedAt: ctx.now,
     }).where(eq(tasks.id, i.id));

@@ -39,6 +39,7 @@ export type AiContext = {
   expiries: { alias: string; label: string; kind: string }[];
   /** family members (first names only) for "Ali's passport" */
   people: { alias: string; name: string; relation: string }[];
+  applications: { alias: string; university: string; program: string; status: string }[];
 };
 
 export interface AiProvider {

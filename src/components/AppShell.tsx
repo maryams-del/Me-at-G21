@@ -33,7 +33,8 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
     { title: "Finance", items: [{ href: "/finance/charity", label: "Charity", glyph: "charity" }, { href: "/finance/savings", label: "Savings", glyph: "savings" }, { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts" }] },
     { title: "Personal care", items: [{ href: "/care/waxing", label: "Waxing", glyph: "waxing" }, { href: "/care/dental", label: "Dental scaling", glyph: "dental" }, { href: "/care/routines", label: "Routines", glyph: "routines" }] },
     { title: "Life admin", items: [{ href: "/admin/expiries", label: "Expiries", glyph: "expiries" }, { href: "/admin/documents", label: "Documents & IDs", glyph: "documents" }] },
-    { title: "Faith & learning", items: [{ href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }] },
+    { title: "Education & career", items: [{ href: "/education/applications", label: "Master's applications", glyph: "applications" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }] },
+    { title: "Faith", items: [{ href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" }] },
     { title: "", items: [{ href: "/history", label: "History & search", glyph: "history" }, { href: "/vault", label: "Secure vault", glyph: "vault" }, { href: "/settings", label: "Settings", glyph: "settings" }] },
   ];
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
@@ -79,7 +80,7 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
               <Glyph kind="ai" size={30} color="var(--ink)" accent="var(--mustard)" />
             </button>
           </div>
-          {mobile.slice(2).map((it) => <MobileLink key={it.href} it={it} active={isActive(it.href) || (it.href === "/more" && ["/more", "/faith", "/quran", "/projects", "/inbox", "/history", "/settings", "/vault", "/admin"].some((p) => path.startsWith(p)))} />)}
+          {mobile.slice(2).map((it) => <MobileLink key={it.href} it={it} active={isActive(it.href) || (it.href === "/more" && ["/more", "/faith", "/quran", "/projects", "/inbox", "/history", "/settings", "/vault", "/admin", "/education"].some((p) => path.startsWith(p)))} />)}
         </div>
       </nav>
 

@@ -130,6 +130,12 @@ export default async function Dashboard() {
               <ul className="list">{s.tasksDueSoon.map((tk) => <li key={tk.id} className="py-2 flex justify-between t-small"><Link href="/projects" className="underline underline-offset-4">{tk.title}</Link><span className="t-meta">{fmtShort(tk.dueOn)}</span></li>)}</ul>
             </>
           )}
+          {s.appDeadlines.length > 0 && (
+            <>
+              <h3 className="t-h3 mt-5 mb-2">Application deadlines (30 days)</h3>
+              <ul className="list">{s.appDeadlines.map((r) => <li key={r.app.id} className="py-2 flex justify-between gap-3 t-small"><Link href={`/education/applications/${r.app.id}`} className="underline underline-offset-4">{r.app.university}, {r.app.program}</Link><span className="t-meta whitespace-nowrap">{fmtDateTime(r.app.deadlineAt!, tz)}</span></li>)}</ul>
+            </>
+          )}
           {s.expiring.length > 0 && (
             <>
               <h3 className="t-h3 mt-5 mb-2">Expiring within 90 days</h3>
