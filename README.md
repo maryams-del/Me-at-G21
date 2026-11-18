@@ -1,4 +1,4 @@
-# Life Dashboard
+# Me @ G21
 
 A private, single-owner, mobile-first life dashboard (installable PWA). Phase A of the PRD.
 

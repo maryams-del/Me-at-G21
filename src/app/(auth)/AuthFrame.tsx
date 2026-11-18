@@ -11,7 +11,7 @@ export function AuthFrame({ title, children, step }: { title: string; children: 
       </div>
       <div className="flex items-center justify-center px-5 py-10">
         <div className="w-full max-w-[440px]">
-          <div className="flex items-center gap-2 mb-8"><Glyph kind="home" size={30} accent="var(--mustard)" /><span className="t-h3">Life Dashboard</span></div>
+          <div className="flex items-center gap-2 mb-8"><Glyph kind="home" size={30} accent="var(--mustard)" /><span className="t-h3">Me @ G21</span></div>
           {step && <p className="t-meta mb-2">Step {step.n} of {step.of}: {step.label}</p>}
           <h1 className="t-h1 mb-5">{title}</h1>
           {children}

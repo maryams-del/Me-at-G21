@@ -47,7 +47,7 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
       <aside className="hidden md:flex flex-col gap-1 border-r-[1.5px] border-ink px-4 py-5 sticky top-0 h-dvh overflow-y-auto">
         <Link href="/" className="flex items-center gap-2 px-2 pb-4 no-underline">
           <Glyph kind="home" size={28} accent="var(--mustard)" color="var(--ink)" />
-          <span className="t-h3">{name || "Life"}</span>
+          <span className="t-h3">{name || "Me @ G21"}</span>
         </Link>
         <button className="btn btn-accent mb-3 justify-start" onClick={() => setCapture(true)}>
           <Glyph kind="ai" size={20} color="var(--ink)" accent="var(--mustard)" /> Capture <span className="ml-auto t-meta" style={{ color: "inherit", opacity: 0.7 }}>⌘K</span>

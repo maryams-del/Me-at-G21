@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Life Dashboard",
+  title: "Me @ G21",
   description: "Private personal dashboard",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/favicon.png", apple: "/icons/apple-touch-icon.png" },
-  appleWebApp: { capable: true, title: "Life", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
 export const viewport: Viewport = {

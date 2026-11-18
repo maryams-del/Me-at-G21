@@ -136,7 +136,7 @@ export function TotpStep({ onDone }: { onDone: () => void }) {
 }
 
 export function CodesDisplay({ codes, generatedAt }: { codes: string[]; generatedAt: string }) {
-  const text = `Life Dashboard — account recovery codes\nGenerated ${generatedAt}\nEach code works once. Keep these offline, away from your phone.\nThey do NOT unlock the password vault.\n\n${codes.map((c, i) => `${String(i + 1).padStart(2, " ")}. ${c}`).join("\n")}\n`;
+  const text = `Me @ G21 — account recovery codes\nGenerated ${generatedAt}\nEach code works once. Keep these offline, away from your phone.\nThey do NOT unlock the password vault.\n\n${codes.map((c, i) => `${String(i + 1).padStart(2, " ")}. ${c}`).join("\n")}\n`;
   return (
     <div className="grid gap-3">
       <ol className="panel p-4 grid grid-cols-2 gap-x-6 gap-y-1.5 font-medium tracking-wide" style={{ fontVariantNumeric: "tabular-nums" }} aria-label="Recovery codes">
@@ -145,7 +145,7 @@ export function CodesDisplay({ codes, generatedAt }: { codes: string[]; generate
       <div className="flex flex-wrap gap-2">
         <button className="btn btn-sm" onClick={() => {
           const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-          const a = document.createElement("a"); a.href = url; a.download = "life-dashboard-recovery-codes.txt"; a.click(); URL.revokeObjectURL(url);
+          const a = document.createElement("a"); a.href = url; a.download = "me-at-g21-recovery-codes.txt"; a.click(); URL.revokeObjectURL(url);
         }}>Download .txt</button>
         <button className="btn btn-sm" onClick={() => {
           const w = window.open("", "_blank", "width=600,height=700");

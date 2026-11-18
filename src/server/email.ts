@@ -16,6 +16,6 @@ export async function sendEmail(to: string, subject: string, text: string) {
     return;
   }
   const resend = new Resend(key);
-  const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "Life Dashboard <onboarding@resend.dev>", to, subject, text });
+  const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "Me @ G21 <onboarding@resend.dev>", to, subject, text });
   if (error) throw new Error(`Email failed: ${error.message}`);
 }

@@ -31,14 +31,14 @@ export async function GET() {
       db.select().from(t.auditEvents).where(eq(t.auditEvents.ownerId, o)),
     ]);
     const data = {
-      format: "life-dashboard-export", version: 1, exportedAt: new Date().toISOString(), timezone: s.user.timezone,
+      format: "me-at-g21-export", version: 1, exportedAt: new Date().toISOString(), timezone: s.user.timezone,
       note: "Money values are integer minor units (e.g. halalas). Local dates are in the timezone above.",
       charity, maintenance: { activities: maint, events: maintEvents }, routines: { routines, events: routineEvents },
       fasts: { ledger: fasts, rules: fastRules }, savings: { goals, transactions: savingsTx }, debts: { debts, repayments },
       projects: { projects, tasks }, classes: { events, occurrences, homework }, drafts, history,
     };
     return new NextResponse(JSON.stringify(data, null, 2), {
-      headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="life-dashboard-export-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" },
+      headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="me-at-g21-export-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" },
     });
   } catch (e) {
     if (e instanceof AuthError) return NextResponse.json({ error: e.message }, { status: e.status });

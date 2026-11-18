@@ -96,7 +96,7 @@ export async function securityEvent(userId: string | null, type: string, detail:
     const [u] = await getDb().select().from(users).where(eq(users.id, userId));
     if (u) {
       await sendEmail(u.email, `Security alert: ${humanEvent(type)}`,
-        `This is an automatic security notice from your Life Dashboard.\n\nEvent: ${humanEvent(type)}\nTime: ${new Date().toISOString()}\nDevice: ${deviceLabelFromUA(h.get("user-agent"))}\n\nIf this wasn't you, sign in with a passkey, review Settings → Security, revoke unknown devices and rotate your recovery codes.`)
+        `This is an automatic security notice from your Me @ G21.\n\nEvent: ${humanEvent(type)}\nTime: ${new Date().toISOString()}\nDevice: ${deviceLabelFromUA(h.get("user-agent"))}\n\nIf this wasn't you, sign in with a passkey, review Settings → Security, revoke unknown devices and rotate your recovery codes.`)
         .catch((e) => console.error("security email failed", (e as Error).message));
     }
   }

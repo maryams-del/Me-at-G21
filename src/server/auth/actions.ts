@@ -23,7 +23,7 @@ import {
 import { seedDefaultsForOwner } from "../defaults";
 
 const CHALLENGE_COOKIE = "ld_chal";
-const RP_NAME = "Life Dashboard";
+const RP_NAME = "Me @ G21";
 const GENERIC_SENT = { ok: true, message: "If this address is allowed, we've sent a 6-digit code. It expires in 10 minutes." };
 
 type Handler = (body: unknown) => Promise<unknown>;
@@ -36,10 +36,10 @@ async function issueEmailCode(email: string, purpose: "enroll" | "recovery") {
     email, purpose, codeHash: verifier(code, env.pepper, `email:${purpose}:${email}`),
     expiresAt: new Date(Date.now() + 10 * 60_000),
   });
-  await sendEmail(email, purpose === "enroll" ? "Your Life Dashboard verification code" : "Your account recovery code",
+  await sendEmail(email, purpose === "enroll" ? "Your Me @ G21 verification code" : "Your account recovery code",
     `Your one-time code is ${code}\n\nIt expires in 10 minutes and can be used once. ${purpose === "recovery"
       ? "This code alone cannot sign you in — you'll also need your authenticator app or one of your offline recovery codes. If you didn't request this, someone may know your email; your account is still protected."
-      : "You requested this to set up your private Life Dashboard."}`);
+      : "You requested this to set up your private Me @ G21."}`);
 }
 
 async function consumeEmailCode(email: string, purpose: "enroll" | "recovery", code: string) {
