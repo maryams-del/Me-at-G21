@@ -389,3 +389,22 @@ export async function zakatState(o: Owner) {
     payments: pays.map((p) => ({ ...p, calc: calcs.find((c) => c.id === p.calculationId) ?? null })),
   };
 }
+
+/* ───── custom spaces ───── */
+
+export async function customSpacesState(o: Owner) {
+  const spaces = await db().select().from(t.customSpaces).where(and(eq(t.customSpaces.ownerId, o.id), isNull(t.customSpaces.deletedAt))).orderBy(asc(t.customSpaces.createdAt));
+  const items = spaces.length ? await db().select({ spaceId: t.customSpaceItems.spaceId, done: t.customSpaceItems.done }).from(t.customSpaceItems).where(inArray(t.customSpaceItems.spaceId, spaces.map((s) => s.id))) : [];
+  return spaces.map((s) => {
+    const mine = items.filter((i) => i.spaceId === s.id);
+    return { space: s, open: mine.filter((i) => !i.done).length, done: mine.filter((i) => i.done).length };
+  });
+}
+
+export async function customSpaceDetail(o: Owner, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [s] = await db().select().from(t.customSpaces).where(and(eq(t.customSpaces.id, id), eq(t.customSpaces.ownerId, o.id)));
+  if (!s) return null;
+  const items = await db().select().from(t.customSpaceItems).where(eq(t.customSpaceItems.spaceId, s.id)).orderBy(asc(t.customSpaceItems.done), asc(t.customSpaceItems.createdAt));
+  return { space: s, items };
+}

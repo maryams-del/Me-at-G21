@@ -5,6 +5,7 @@ export const BACKUP_LABELS: Record<string, string> = {
   expiry_items: "expiries", documents: "documents", document_files: "document files", masters_applications: "applications", achievements: "achievements", hobbies: "hobbies",
   subscriptions: "subscriptions", zakat_calculations: "zakat estimates", zakat_payments: "zakat payments", period_cycles: "period entries",
   people: "family members", recurring_events: "recurring events", homework_tasks: "homework items", capture_drafts: "drafts", reminders: "reminders",
+  custom_spaces: "your own spaces", custom_space_items: "items in your spaces",
 };
 export const backupItems = (counts: Record<string, number>) =>
   Object.entries(BACKUP_LABELS).map(([k, label]) => ({ label, count: counts[k] ?? 0 })).filter((x) => x.count > 0);

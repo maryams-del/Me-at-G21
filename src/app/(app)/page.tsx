@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { pageOwner, dashboardState } from "@/server/queries";
+import { pageOwner, dashboardState, customSpacesState } from "@/server/queries";
+import { isSpaceGlyph } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
-import { relDays, fmtDateTime, fmtShort } from "@/lib/format";
+import { relDays, fmtShort } from "@/lib/format";
 import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
 import { AiBar } from "@/components/home/AiBar";
 import { SpacesWave, type Space } from "@/components/home/SpacesWave";
@@ -18,6 +19,7 @@ const TINT = {
 export default async function Dashboard() {
   const o = await pageOwner();
   const s = await dashboardState(o);
+  const mine = await customSpacesState(o);
   const tz = o.timezone;
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: tz }).format(new Date()));
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -67,6 +69,9 @@ export default async function Dashboard() {
     { key: "education", name: "Education", stat: nApps ? `${nApps} deadline${nApps === 1 ? "" : "s"} in 30 days` : "Applications & achievements", href: "/education", glyph: "education", tint: TINT.sky },
     { key: "projects", name: "Projects", stat: nTasks ? `${nTasks} task${nTasks === 1 ? "" : "s"} due this week` : "Projects & tasks", href: "/projects", glyph: "projects", tint: TINT.moss },
     { key: "vault", name: "Vault", stat: "Locked away", href: "/vault", glyph: "vault", tint: TINT.sky },
+    { key: "history", name: "History", stat: "Search everything", href: "/history", glyph: "history", tint: TINT.blush },
+    ...mine.map((c, i) => ({ key: c.space.id, name: c.space.name, stat: c.open ? `${c.open} to do` : c.done ? "All done" : c.space.section, href: `/spaces/${c.space.id}`,
+      glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const), tint: [TINT.moss, TINT.amber, TINT.sky, TINT.blush][i % 4] })),
   ];
 
   return (
@@ -113,14 +118,6 @@ export default async function Dashboard() {
           </section>
         )}
 
-        <section aria-labelledby="rc-h" className="panel p-4">
-          <div className="flex justify-between items-baseline"><h2 id="rc-h" className="t-h3">Recent activity</h2><Link href="/history" className="t-small underline underline-offset-4">History</Link></div>
-          {s.recent.length ? (
-            <ul className="list mt-1">{s.recent.slice(0, 5).map((r) => (
-              <li key={r.id} className="py-2 t-small flex justify-between gap-3"><span>{r.sensitive ? "Private entry" : r.summary}</span><span className="t-meta whitespace-nowrap">{r.source === "ai" ? "AI, " : ""}{fmtDateTime(r.occurredAt, tz)}</span></li>
-            ))}</ul>
-          ) : <p className="t-meta mt-1">Your log is empty. Try the quick actions or the AI bar.</p>}
-        </section>
       </div>
 
       <section aria-labelledby="spaces-h" className="spaces-panel px-[18px] pt-6 pb-5 md:px-8 md:pt-8 -mx-[18px] md:mx-0">

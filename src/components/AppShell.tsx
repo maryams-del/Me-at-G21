@@ -6,6 +6,7 @@ import { CaptureSheet } from "./Capture";
 import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
+import { BackButton } from "./BackButton";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -54,10 +55,10 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
   useEffect(() => { recordVisit(path); }, [path]);
 
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education"];
+  const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education", "/spaces"];
   const top: NavItem[] = [
     { href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" },
-    { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
+    { href: "/history", label: "History", icon: "history" }, { href: "/inbox", label: "Inbox", icon: "inbox", badge: inboxCount },
     { href: "/settings", label: "Settings", icon: "settings" },
   ];
   const bottomLeft: NavItem[] = [{ href: "/", label: "Today", icon: "today" }, { href: "/more", label: "Spaces", icon: "spaces" }];
@@ -92,7 +93,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
           <svg width="2340" height="16" viewBox="0 0 2340 16"><path d={"M0 8 " + Array.from({ length: 24 }, (_, i) => (i === 0 ? "Q48.75 16 97.5 8" : `T${97.5 * (i + 1)} 8`)).join(" ")} fill="none" stroke="var(--slate)" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </div>
 
-        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{children}</main>
+        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{path !== "/" && <BackButton path={path} />}{children}</main>
       </div>
 
       <nav aria-label="Main" className="md:hidden bottom-nav">

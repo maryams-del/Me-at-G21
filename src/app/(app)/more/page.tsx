@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
-import { pageOwner, inboxCount } from "@/server/queries";
+import { pageOwner, inboxCount, customSpacesState } from "@/server/queries";
+import { OpForm, Reveal } from "@/components/OpForm";
+import { isSpaceGlyph } from "@/lib/spaces";
+import { spaceFields } from "../spaces/fields";
 
 type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string };
 
@@ -9,6 +12,7 @@ type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: s
 export default async function Spaces() {
   const o = await pageOwner();
   const n = await inboxCount(o.id);
+  const mine = await customSpacesState(o);
   const groups: { title: string; items: Item[] }[] = [
     { title: "Money", items: [
       { href: "/finance/charity", label: "Charity", glyph: "charity", d: "Donations, monthly and yearly totals" },
@@ -42,9 +46,22 @@ export default async function Spaces() {
       { href: "/settings/data", label: "Data & backups", glyph: "documents", d: "Exports, backups, undo" },
     ] },
   ];
+  // The owner's own spaces: under a built-in group, or in sections they made up.
+  for (const c of mine) {
+    const item: Item = { href: `/spaces/${c.space.id}`, label: c.space.name, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : "projects",
+      d: c.space.description ?? (c.open || c.done ? `${c.open} to do · ${c.done} done` : "Your own space"), note: c.open ? `${c.open}` : undefined };
+    const g = groups.find((x) => x.title === c.space.section);
+    if (g) g.items.push(item); else groups.push({ title: c.space.section, items: [item] });
+  }
+  const sections = [...new Set(mine.map((c) => c.space.section))];
   return (
     <>
-      <PageHeader title="Spaces" intro="Every part of Me @ G21 in one place." />
+      <PageHeader title="Spaces" intro="Every part of Me @ G21 in one place. Add your own spaces under any section, or start a new section." />
+      <div className="mb-8">
+        <Reveal label="+ Add a space" buttonClass="btn btn-accent">
+          <OpForm op="space.create" fields={spaceFields(sections)} initial={{ section: "You", glyph: "projects" }} submitLabel="Add space" />
+        </Reveal>
+      </div>
       <div className="grid gap-8">
         {groups.map((g) => (
           <section key={g.title} aria-labelledby={`sp-${g.title}`}>

@@ -25,7 +25,7 @@ export function applicationFields(docs: { id: string; title: string }[], forEdit
     { name: "deadlineVerified", label: "I checked this deadline on the official website", type: "checkbox", wide: true },
     { name: "url", label: "Application link", nullable: true, wide: true, placeholder: "https://" },
     { name: "fee", label: "Application fee", type: "amount", nullable: true },
-    { name: "feeCurrency", label: "Fee currency", type: "select", nullable: true, options: ["SAR", "USD", "GBP", "EUR", "CAD", "AUD"].map((c) => ({ value: c, label: c })) },
+    { name: "feeCurrency", label: "Fee currency", type: "select", nullable: true, options: ["SAR", "USD", "GBP", "EUR", "CAD", "AUD", "PKR"].map((c) => ({ value: c, label: c })) },
     { name: "funding", label: "Funding / scholarship", type: "textarea", nullable: true },
     { name: "contacts", label: "Contacts", type: "textarea", nullable: true, placeholder: "Admissions office, email…" },
     ...(forEdit ? [] : [{ name: "requirementsText", sendAs: "requirements", lines: true, label: "Requirements checklist (one per line)", type: "textarea", placeholder: "Transcript\nIELTS 7.0\n2 recommendation letters\nStatement of purpose" } as FieldDef]),

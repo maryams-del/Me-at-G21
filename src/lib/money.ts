@@ -1,5 +1,5 @@
 /** Money is integer minor units. Currencies listed here have 2 decimals unless noted. */
-const DECIMALS: Record<string, number> = { SAR: 2, USD: 2, EUR: 2, GBP: 2, AED: 2, KWD: 3, BHD: 3, OMR: 3, JPY: 0 };
+const DECIMALS: Record<string, number> = { SAR: 2, USD: 2, EUR: 2, GBP: 2, AED: 2, PKR: 2, KWD: 3, BHD: 3, OMR: 3, JPY: 0 };
 export const CURRENCIES = Object.keys(DECIMALS);
 export const decimalsFor = (c: string) => DECIMALS[c.toUpperCase()] ?? 2;
 

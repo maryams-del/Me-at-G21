@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { pageOwner, applicationDetail } from "@/server/queries";
-import { PageHeader, Section, ReminderList, BackLink } from "@/components/ui";
+import { PageHeader, Section, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
 import { applicationFields, STATUS_LABEL, STATUS_OPTIONS } from "../../fields";
 import { fmtDate, fmtDateTime } from "@/lib/format";
@@ -21,7 +21,6 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
 
   return (
     <>
-      <BackLink href="/education/applications" label="All applications" />
       <PageHeader glyph="applications" title={a.university} intro={`${a.program}${a.intake ? `, ${a.intake}` : ""}${a.country ? `, ${a.country}` : ""}`}>
         <span className="chip chip-fill self-center">{STATUS_LABEL[a.status]}</span>
       </PageHeader>

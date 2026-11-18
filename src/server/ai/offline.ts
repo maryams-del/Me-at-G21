@@ -8,12 +8,12 @@ import { resolveDatePhrase } from "./dates";
 import { addDays } from "@/lib/time";
 
 const NUM_WORDS: Record<string, number> = { one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5 };
-const CUR: Record<string, string> = { sar: "SAR", riyal: "SAR", riyals: "SAR", rial: "SAR", rials: "SAR", sr: "SAR", "﷼": "SAR", usd: "USD", dollars: "USD", dollar: "USD", $: "USD", aed: "AED", dirham: "AED", dirhams: "AED", eur: "EUR", euro: "EUR", euros: "EUR", gbp: "GBP", pounds: "GBP" };
+const CUR: Record<string, string> = { sar: "SAR", riyal: "SAR", riyals: "SAR", rial: "SAR", rials: "SAR", sr: "SAR", "﷼": "SAR", usd: "USD", dollars: "USD", dollar: "USD", $: "USD", aed: "AED", dirham: "AED", dirhams: "AED", eur: "EUR", euro: "EUR", euros: "EUR", gbp: "GBP", pounds: "GBP", pkr: "PKR", rupee: "PKR", rupees: "PKR", rs: "PKR" };
 
 function amountOf(s: string): { amount: string; currency: string | null } | null {
-  const m = s.match(/(\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d{1,2})?\s*(sar|riyals?|rials?|sr|usd|dollars?|aed|dirhams?|eur|euros?|gbp|pounds)?\b/i);
+  const m = s.match(/(\$|\brs\.?\s?|\bpkr\s?)?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d{1,2})?\s*(sar|riyals?|rials?|sr|usd|dollars?|aed|dirhams?|eur|euros?|gbp|pounds|pkr|rupees?|rs)?\b/i);
   if (!m) return null;
-  const cur = m[1] ? "USD" : m[4] ? CUR[m[4].toLowerCase()] : null;
+  const cur = m[1] ? (m[1].trim() === "$" ? "USD" : "PKR") : m[4] ? CUR[m[4].toLowerCase()] : null;
   return { amount: m[2].replace(/,/g, "") + (m[3] ?? ""), currency: cur };
 }
 

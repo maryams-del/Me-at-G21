@@ -47,6 +47,8 @@ type Props = {
   confirmText?: string;
   danger?: boolean;
   compact?: boolean;
+  /** Clear the fields after a successful save (for quick-add forms). */
+  resetOnSuccess?: boolean;
 };
 
 function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
@@ -78,7 +80,7 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
   return out;
 }
 
-export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, successMessage, onDone, endpoint, nestKey, nestExtra, nestBase, confirmText, danger, compact }: Props) {
+export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, successMessage, onDone, endpoint, nestKey, nestExtra, nestBase, confirmText, danger, compact, resetOnSuccess }: Props) {
   const router = useRouter();
   const id = useId();
   const reveal = useContext(RevealCtx);
@@ -89,11 +91,13 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     e.preventDefault();
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true); setError(null);
-    const input = { ...toInput(fields, new FormData(e.currentTarget)), ...fixed };
+    const form = e.currentTarget;
+    const input = { ...toInput(fields, new FormData(form)), ...fixed };
     try {
       const body = nestKey ? { ...nestExtra, [nestKey]: { ...nestBase, ...input } } : input;
       const res = await api<{ message?: string }>(endpoint ?? `/api/ops/${op}`, body);
       toast(successMessage ?? res.message ?? "Saved");
+      if (resetOnSuccess) form.reset();
       onDone?.();
       reveal?.close();
       router.refresh();

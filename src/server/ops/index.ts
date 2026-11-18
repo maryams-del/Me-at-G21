@@ -13,6 +13,7 @@ import "./period";
 import "./career";
 import "./subscriptions";
 import "./zakat";
+import "./spaces";
 import "./trash";
 
 export { getOp, allOps };
