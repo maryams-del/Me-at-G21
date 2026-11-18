@@ -31,7 +31,7 @@ export function AppShell({ children, name, inboxCount }: { children: React.React
   const groups: { title: string; items: NavItem[] }[] = [
     { title: "", items: [{ href: "/", label: "Today", glyph: "home" }, { href: "/inbox", label: "Needs details", glyph: "inbox", badge: inboxCount }] },
     { title: "Finance", items: [{ href: "/finance/charity", label: "Charity", glyph: "charity" }, { href: "/finance/savings", label: "Savings", glyph: "savings" }, { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts" }] },
-    { title: "Personal care", items: [{ href: "/care/waxing", label: "Waxing", glyph: "waxing" }, { href: "/care/dental", label: "Dental scaling", glyph: "dental" }, { href: "/care/routines", label: "Routines", glyph: "routines" }] },
+    { title: "Personal care", items: [{ href: "/care/routines", label: "Routines", glyph: "routines" }] },
     { title: "Life admin", items: [{ href: "/admin/expiries", label: "Expiries", glyph: "expiries" }, { href: "/admin/documents", label: "Documents & IDs", glyph: "documents" }] },
     { title: "Education & career", items: [{ href: "/education/applications", label: "Master's applications", glyph: "applications" }, { href: "/projects", label: "Projects & tasks", glyph: "projects" }] },
     { title: "Faith", items: [{ href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts" }, { href: "/quran", label: "Quran class", glyph: "quran" }] },

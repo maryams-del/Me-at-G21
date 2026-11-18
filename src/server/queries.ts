@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, count, ne } from "d
 import { getDb } from "@/db";
 import * as t from "@/db/schema";
 import { getSession } from "./auth/core";
-import { fastBalance, ensureActivity, latestCompletion, routineAnchor, routineDue, type WaxingRule, type DentalRule, dentalDue, applyAnnualFastRules } from "./ops/care";
+import { fastBalance, routineAnchor, routineDue, applyAnnualFastRules } from "./ops/care";
 import { debtOutstanding } from "./ops/finance";
 import { ensureOccurrences } from "./ops/planning";
 import { addDays, daysBetween, todayLocal, dmy } from "@/lib/time";
@@ -29,31 +29,6 @@ export async function inboxCount(ownerId: string) {
 
 /* ───── care ───── */
 
-export async function waxingState(o: Owner) {
-  const a = await db().transaction((tx) => ensureActivity({ tx, ownerId: o.id }, "waxing"));
-  const rule = a.rule as WaxingRule;
-  const last = await latestCompletion({ tx: db() }, a.id);
-  const today = todayLocal(o.timezone);
-  const events = await db().select().from(t.maintenanceCompletionEvents).where(and(eq(t.maintenanceCompletionEvents.activityId, a.id))).orderBy(desc(t.maintenanceCompletionEvents.completedOn), desc(t.maintenanceCompletionEvents.createdAt)).limit(40);
-  if (!last) return { activity: a, rule, last: null, events, day: null, recommended: null, latest: null, overdue: false, today };
-  const day = daysBetween(last.completedOn, today);
-  return {
-    activity: a, rule, last, events, today, day,
-    recommended: addDays(last.completedOn, rule.recommendedDay), latest: addDays(last.completedOn, rule.windowDays),
-    overdue: day > rule.windowDays,
-  };
-}
-
-export async function dentalState(o: Owner) {
-  const a = await db().transaction((tx) => ensureActivity({ tx, ownerId: o.id }, "dental"));
-  const rule = a.rule as DentalRule;
-  const last = await latestCompletion({ tx: db() }, a.id);
-  const events = await db().select().from(t.maintenanceCompletionEvents).where(eq(t.maintenanceCompletionEvents.activityId, a.id)).orderBy(desc(t.maintenanceCompletionEvents.completedOn)).limit(40);
-  const today = todayLocal(o.timezone);
-  const due = last ? dentalDue(last.completedOn, rule) : null;
-  return { activity: a, rule, last, events, due, daysLeft: due ? daysBetween(today, due) : null, today };
-}
-
 export async function routinesState(o: Owner) {
   const rs = await db().select().from(t.routines).where(eq(t.routines.ownerId, o.id)).orderBy(asc(t.routines.createdAt));
   const today = todayLocal(o.timezone);
@@ -62,7 +37,10 @@ export async function routinesState(o: Owner) {
     const due = routineDue(r, anchor);
     const events = await db().select().from(t.routineEvents).where(eq(t.routineEvents.routineId, r.id)).orderBy(desc(t.routineEvents.onDate), desc(t.routineEvents.createdAt)).limit(12);
     const lastPurchase = events.find((e) => e.type === "purchased" && !e.voidedAt)?.onDate ?? null;
-    return { routine: r, anchor, due, daysLeft: due ? daysBetween(today, due) : null, events, lastPurchase };
+    const latest = due && r.graceDays ? addDays(due, r.graceDays) : due;
+    const daysSince = anchor ? daysBetween(anchor, today) : null;
+    const overdue = !r.paused && !!latest && today > latest;
+    return { routine: r, anchor, due, latest, daysSince, cycleDays: anchor && latest ? daysBetween(anchor, latest) : null, daysLeft: due ? daysBetween(today, due) : null, overdue, events, lastPurchase };
   }));
 }
 
@@ -140,10 +118,10 @@ export async function dashboardState(o: Owner) {
   const today = todayLocal(o.timezone);
   const now = new Date();
   const in7 = new Date(now.getTime() + 7 * 86400_000);
-  const [upcoming, sentUnread, wax, dental, routines, fasts, quran, savings, debts, proj, drafts, pendingAi, recent, prefs, subs] = await Promise.all([
+  const [upcoming, sentUnread, routines, fasts, quran, savings, debts, proj, drafts, pendingAi, recent, prefs, subs] = await Promise.all([
     db().select().from(t.reminders).where(and(eq(t.reminders.ownerId, o.id), inArray(t.reminders.status, ["scheduled", "snoozed"]), lte(t.reminders.fireAt, in7))).orderBy(asc(t.reminders.fireAt)).limit(12),
     db().select().from(t.reminders).where(and(eq(t.reminders.ownerId, o.id), eq(t.reminders.status, "sent"), gte(t.reminders.fireAt, new Date(now.getTime() - 3 * 86400_000)))).orderBy(desc(t.reminders.fireAt)).limit(8),
-    waxingState(o), dentalState(o), routinesState(o), fastsState(o), quranState(o), savingsState(o), debtsState(o), projectsState(o),
+    routinesState(o), fastsState(o), quranState(o), savingsState(o), debtsState(o), projectsState(o),
     db().select().from(t.captureDrafts).where(and(eq(t.captureDrafts.ownerId, o.id), eq(t.captureDrafts.status, "open"))).orderBy(desc(t.captureDrafts.createdAt)),
     db().select({ n: count() }).from(t.aiProposals).where(and(eq(t.aiProposals.ownerId, o.id), eq(t.aiProposals.status, "pending"), gte(t.aiProposals.expiresAt, now))),
     db().select().from(t.auditEvents).where(eq(t.auditEvents.ownerId, o.id)).orderBy(desc(t.auditEvents.occurredAt)).limit(8),
@@ -161,9 +139,7 @@ export async function dashboardState(o: Owner) {
   const overdue: { label: string; detail: string; href: string }[] = [];
   for (const r of overdueApps) overdue.push({ label: `${r.app.university} application`, detail: "Deadline passed and not marked submitted", href: `/education/applications/${r.app.id}` });
   for (const e of expiring) if (e.expiresOn < today) overdue.push({ label: e.label, detail: `Expired ${dmy(e.expiresOn)}`, href: "/admin/expiries" });
-  if (wax.overdue && wax.day) overdue.push({ label: "Waxing", detail: `Day ${wax.day} — past your ${wax.rule.windowDays}-day window`, href: "/care/waxing" });
-  if (dental.daysLeft !== null && dental.daysLeft < 0) overdue.push({ label: "Dental scaling", detail: `${-dental.daysLeft} days overdue`, href: "/care/dental" });
-  for (const r of routines) if (!r.routine.paused && r.daysLeft !== null && r.daysLeft < 0) overdue.push({ label: r.routine.name, detail: `${-r.daysLeft} day${r.daysLeft === -1 ? "" : "s"} overdue`, href: "/care/routines" });
+  for (const r of routines) if (r.overdue) overdue.push({ label: r.routine.name, detail: r.routine.graceDays ? `Day ${r.daysSince}, past the day-${r.cycleDays} limit` : `${-(r.daysLeft ?? 0)} day${r.daysLeft === -1 ? "" : "s"} overdue`, href: "/care/routines" });
   for (const tk of proj.tasks) if (tk.status !== "done" && tk.dueOn && tk.dueOn < today) overdue.push({ label: tk.title, detail: `Due ${dmy(tk.dueOn)}`, href: "/projects" });
   for (const d of debts) if (d.overdue) overdue.push({ label: d.debt.direction === "lent" ? `Collect from ${d.debt.counterparty}` : `Repay ${d.debt.counterparty}`, detail: `Was due ${dmy(d.debt.dueDate)}`, href: "/finance/debts" });
 
@@ -174,7 +150,7 @@ export async function dashboardState(o: Owner) {
   const recentlyDone = recent.filter((r) => ["completed", "deposit", "settled", "first_use", "repayment"].includes(r.action)).slice(0, 5);
 
   return {
-    today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), appDeadlines: apps.filter((r) => !r.overdue), wax, dental, routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
+    today, upcoming, sentUnread, expiring: expiring.filter((e) => e.expiresOn >= today), appDeadlines: apps.filter((r) => !r.overdue), routines, fasts, savings, debts, drafts, pendingAi: pendingAi[0].n,
     recent, recentlyDone, overdue, charityMonth, cls, study, nextClass, openHomework,
     tasksDueSoon: proj.tasks.filter((x) => x.status !== "done" && x.dueOn && x.dueOn <= addDays(today, 7)).slice(0, 6),
     notif: { pushEnabled: prefs[0]?.pushEnabled ?? false, devices: subs[0].n },

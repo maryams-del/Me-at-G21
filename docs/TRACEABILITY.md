@@ -13,9 +13,9 @@ Legend: ✅ implemented and tested · 🟡 implemented, needs real-device or pro
 | 4.2 | Charity CRUD, planned vs completed, filters, monthly/yearly totals | ✅ | `ops/finance.ts`, charity page, tests 8/11 |
 | 4.2 | Receipt upload, monthly charity goal reminder | ⏳ B | Needs private Blob (B) |
 | 4.3 | Period log | ⏳ B | |
-| 4.4 | Waxing 40-day window, 27/30/35/38/40 reminders, reset on completion, safe recalculation | ✅ | Test 1, `trackers.test.ts` |
-| 4.5 | Dental 6 calendar months, −14/−1/0 reminders, editable | ✅ | Test 2 |
-| 4.6 | Routines: toothbrush purchase vs first-use, brushes, bedsheets, skip/snooze/pause/backdate, history | ✅ | Test 3, routines page |
+| 4.4 | Waxing 40-day window, 27/30/35/38/40 reminders, reset on completion, safe recalculation | ✅ | Now a Routine (template: every 30 days, latest +10, private). Test 1, `trackers.test.ts`, `rules.test.ts` |
+| 4.5 | Dental 6 calendar months, −14/−1/0 reminders, editable | ✅ | Now a Routine (template). Test 2 |
+| 4.6 | Routines: toothbrush purchase vs first-use, brushes, bedsheets, skip/snooze/pause/backdate, history | ✅ | Test 3, routines page. Generic: any routine can have a grace window, after-due nudges and private notifications; templates are one tap. Migration 0004 moved existing waxing/dental history. |
 | 4.7 | Fast ledger, opening balance, adjustments with reason, no accidental negatives, idempotent annual rule (Hijri/Gregorian), by-year, Gregorian+Hijri display | ✅ | Test 4 |
 | 4.7 | Fast calendar view, fast targets/reminders | ⏳ B | Ledger list shows Hijri equivalents today |
 | 4.8 | Savings: multiple goals, ledger, progress, milestones, month-by-month, planned ≠ saved, monthly reminder | ✅ | Test 6 |

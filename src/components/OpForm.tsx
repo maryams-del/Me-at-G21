@@ -66,7 +66,8 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
       let xs = v.split(/[\s,]+/).filter(Boolean).map(Number);
       if (f.negative) xs = xs.map((n) => -Math.abs(n));
       if (f.includeZero && !xs.includes(0)) xs.push(0);
-      out[f.name] = [...new Set(xs)];
+      const prev = Array.isArray(out[key]) ? (out[key] as number[]) : [];
+      out[key] = [...new Set([...prev, ...xs])]; // fields sharing a sendAs key are merged
     }
     else if (f.numeric) out[f.name] = Number(v);
     else if (f.type === "datetime") out[f.name] = new Date(v).toISOString();

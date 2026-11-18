@@ -39,7 +39,7 @@ export async function GET() {
     const data = {
       format: "me-at-g21-export", version: 1, exportedAt: new Date().toISOString(), timezone: s.user.timezone,
       note: "Money values are integer minor units (e.g. halalas). Local dates are in the timezone above.",
-      charity, maintenance: { activities: maint, events: maintEvents }, routines: { routines, events: routineEvents },
+      charity, legacyMaintenance: { note: "Pre-Routines waxing/dental records (already copied into routines)", activities: maint, events: maintEvents }, routines: { routines, events: routineEvents },
       fasts: { ledger: fasts, rules: fastRules }, savings: { goals, transactions: savingsTx }, debts: { debts, repayments },
       projects: { projects, tasks }, classes: { events, occurrences, homework }, drafts, history,
       expiries: { items: expiries, renewals },

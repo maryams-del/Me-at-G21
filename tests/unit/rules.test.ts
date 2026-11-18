@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { addMonths, addDays, localToInstant, fromHijri, toHijri, nextWeekday, isoWeekday } from "@/lib/time";
 import { toMinor, fromMinor, formatMoney } from "@/lib/money";
-import { waxingReminders, DEFAULT_WAXING_RULE, dentalDue, DEFAULT_DENTAL_RULE, routineDue, ruleDate } from "@/server/ops/care";
+import { routineReminders, ROUTINE_TEMPLATES, routineDue, ruleDate } from "@/server/ops/care";
+
+const tpl = (k: keyof typeof ROUTINE_TEMPLATES) => ({ id: k, reminderTime: "09:00", ...ROUTINE_TEMPLATES[k], reminderOffsetsDays: [...ROUTINE_TEMPLATES[k].reminderOffsetsDays] });
 import { weeklyDates } from "@/server/ops/planning";
 import { resolveDatePhrase } from "@/server/ai/dates";
 import { recoveryCode, normalizeRecoveryCode, encryptField, decryptField } from "@/lib/crypto";
@@ -15,7 +17,12 @@ describe("calendar-month arithmetic (PRD 4.5, 4.6, test 2, 3, 24)", () => {
   it("Aug 31 + 6 months clamps to Feb 29 in a leap year", () => expect(addMonths("2027-08-31", 6)).toBe("2028-02-29"));
   it("Nov 30 + 3 months = Feb 28 (toothbrush)", () => expect(addMonths("2026-11-30", 3)).toBe("2027-02-28"));
   it("Feb 29 + 12 months = Feb 28", () => expect(addMonths("2024-02-29", 12)).toBe("2025-02-28"));
-  it("dental due = six calendar months", () => expect(dentalDue("2026-01-31", DEFAULT_DENTAL_RULE)).toBe("2026-07-31"));
+  it("dental due = six calendar months", () => expect(routineDue({ ...tpl("dental"), snoozedUntil: null }, "2026-01-31")).toBe("2026-07-31"));
+  it("dental reminders 14 days, 1 day and on the due date", () => {
+    const r = routineReminders(tpl("dental"), "2026-01-31", "2026-07-31", "Asia/Riyadh");
+    expect(r.map((x) => x.fireAt.toISOString().slice(0, 10))).toEqual(["2026-07-17", "2026-07-30", "2026-07-31"]);
+    expect(r.some((x) => x.sensitive)).toBe(false);
+  });
   it("toothbrush due uses first-use anchor, 3 calendar months", () => {
     expect(routineDue({ intervalValue: 3, intervalUnit: "month", snoozedUntil: null }, "2026-11-20")).toBe("2027-02-20");
   });
@@ -27,12 +34,21 @@ describe("calendar-month arithmetic (PRD 4.5, 4.6, test 2, 3, 24)", () => {
 
 describe("waxing 40-day window (PRD 4.4, test 1)", () => {
   it("reminders on days 27/30/35/38/40 after the actual completion date, 09:00 Riyadh", () => {
-    const r = waxingReminders("a", "2026-11-01", DEFAULT_WAXING_RULE, "09:00", "Asia/Riyadh");
+    const w = { ...tpl("waxing"), snoozedUntil: null };
+    const due = routineDue(w, "2026-11-01")!;
+    expect(due).toBe("2026-12-01");
+    const r = routineReminders(w, "2026-11-01", due, "Asia/Riyadh");
     expect(r.map((x) => x.fireAt.toISOString())).toEqual([
       "2026-11-28T06:00:00.000Z", "2026-12-01T06:00:00.000Z", "2026-12-06T06:00:00.000Z", "2026-12-09T06:00:00.000Z", "2026-12-11T06:00:00.000Z",
     ]);
     expect(r.every((x) => x.sensitive)).toBe(true);
     expect(new Set(r.map((x) => x.dedupeKey)).size).toBe(5);
+    expect(r.at(-1)!.title).toBe("Waxing: last day (day 40)");
+    expect(r[0].title).toBe("Waxing: due in 3 days");
+  });
+  it("any custom routine can nudge after the due date", () => {
+    const r = routineReminders({ id: "x", name: "Haircut", reminderOffsetsDays: [2, -1, 0], reminderTime: "18:00", graceDays: null, sensitive: false }, "2026-10-01", "2026-11-01", "Asia/Riyadh");
+    expect(r.map((x) => x.title)).toEqual(["Haircut: due in 1 day", "Haircut: due today", "Haircut: 2 days past due"]);
   });
 });
 

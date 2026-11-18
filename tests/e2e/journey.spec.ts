@@ -95,7 +95,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await dlg.getByLabel(/What happened/).fill("Donated 100 SAR via Ehsan, changed bedsheets, and finished a fast");
     await dlg.getByRole("button", { name: "Preview" }).click();
     await expect(dlg.getByText("Log charity", { exact: true })).toBeVisible();
-    await expect(dlg.getByText("Log routine event", { exact: true })).toBeVisible();
+    await expect(dlg.getByText(/^Log routine/).first()).toBeVisible();
     await expect(dlg.getByText("Fast completed", { exact: true })).toBeVisible();
     await dlg.getByLabel(/Correct anything/).fill("Actually, make the donation 150");
     await dlg.getByRole("button", { name: "Update" }).click();
@@ -149,16 +149,25 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
   });
 
   test("tracker pages render with real data", async () => {
-    await page.goto("/care/waxing");
+    await page.goto("/care/waxing"); // old link redirects into Routines
+    await expect(page).toHaveURL(/\/care\/routines/);
+    await expect(async () => {
+      await page.getByRole("button", { name: "+ Waxing" }).click();
+      await expect(page.getByRole("heading", { name: /^Waxing/ })).toBeVisible({ timeout: 3000 });
+    }).toPass();
+    await page.getByRole("button", { name: "+ Dental scaling" }).click();
+    await expect(page.getByRole("heading", { name: /^Dental scaling/ })).toBeVisible();
+    const wax = page.locator("li.panel").filter({ has: page.getByRole("heading", { name: /^Waxing/ }) });
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Done today" }).click();
-    await expect(page.getByText("Day 0", { exact: false })).toBeVisible();
-    await shot(page, "09-waxing");
+    await wax.getByRole("button", { name: "Done today" }).click();
+    await expect(wax.getByText("Day 0")).toBeVisible();
+    await expect(wax.getByText("of 40")).toBeVisible();
+    await shot(page, "09-routines-waxing");
     await page.goto("/quran");
     await expect(page.getByRole("heading", { name: "Next class" })).toBeVisible();
     await expect(page.getByText(/Sun \d{2}\/\d{2}\/\d{4}, 19:00/).first()).toBeVisible();
     await shot(page, "10-quran");
-    for (const [path, name] of [["/care/routines", "11-routines"], ["/finance/savings", "12-savings"], ["/projects", "13-projects"], ["/care/dental", "14-dental"], ["/settings/notifications", "15-notifications"], ["/vault", "16-vault"], ["/", "17-dashboard"]] as const) {
+    for (const [path, name] of [["/care/routines", "11-routines"], ["/finance/savings", "12-savings"], ["/projects", "13-projects"], ["/education/applications", "14-applications"], ["/settings/notifications", "15-notifications"], ["/vault", "16-vault"], ["/", "17-dashboard"]] as const) {
       await page.goto(path);
       await expect(page.locator("main")).toBeVisible();
       await shot(page, name);
@@ -237,7 +246,7 @@ test.describe.serial("owner journey (iPhone-like platform authenticator)", () =>
     await openCapture(page, "Capture with AI");
     await page.getByRole("dialog").getByLabel(/What happened/).fill("I cleaned my makeup brushes today");
     await page.getByRole("dialog").getByRole("button", { name: "Preview" }).click();
-    await expect(page.getByRole("dialog").getByText("Log routine event", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText("Log routine (adds it if new)", { exact: true })).toBeVisible();
     await shot(page, "19-mobile-capture");
     await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
     await page.setViewportSize({ width: 1360, height: 900 });

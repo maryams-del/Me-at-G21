@@ -7,11 +7,11 @@ import { and, eq, inArray, isNull, lte, or, desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   reminders, notificationDeliveries, pushSubscriptions, notificationPreferences, users,
-  recurringEvents, jobRuns, aiProposals,
+  recurringEvents, jobRuns, aiProposals, routines,
 } from "@/db/schema";
 import { sendEmail } from "./email";
 import { ensureOccurrences } from "./ops/planning";
-import { applyAnnualFastRules } from "./ops/care";
+import { applyAnnualFastRules, syncRoutine } from "./ops/care";
 import { instantToLocal, localToInstant, addDays } from "@/lib/time";
 
 function configurePush() {
@@ -128,7 +128,7 @@ export async function housekeeping(now = new Date(), force = false) {
   const [last] = await db.select().from(jobRuns).where(eq(jobRuns.job, "housekeeping")).orderBy(desc(jobRuns.startedAt)).limit(1);
   if (!force && last && now.getTime() - last.startedAt.getTime() < 55 * 60_000) return { skipped: true };
   const [run] = await db.insert(jobRuns).values({ job: "housekeeping", startedAt: now }).returning({ id: jobRuns.id });
-  const stats = { events: 0, fastAdditions: 0, expired: 0 };
+  const stats = { events: 0, fastAdditions: 0, expired: 0, routines: 0 };
   try {
     const owners = await db.select().from(users).where(eq(users.onboardingStep, "complete"));
     for (const u of owners) {
@@ -137,6 +137,9 @@ export async function housekeeping(now = new Date(), force = false) {
         const evs = await tx.select({ id: recurringEvents.id }).from(recurringEvents).where(eq(recurringEvents.ownerId, u.id));
         for (const e of evs) { await ensureOccurrences(ctx, e.id); stats.events++; }
         stats.fastAdditions += await applyAnnualFastRules(ctx);
+        // idempotent: keeps every routine's reminders in step (also picks up routines migrated from the old waxing/dental pages)
+        const rs = await tx.select({ id: routines.id }).from(routines).where(eq(routines.ownerId, u.id));
+        for (const r of rs) { await syncRoutine(ctx, r.id); stats.routines++; }
       });
     }
     const exp = await db.update(aiProposals).set({ status: "expired" }).where(and(eq(aiProposals.status, "pending"), lte(aiProposals.expiresAt, now))).returning({ id: aiProposals.id });

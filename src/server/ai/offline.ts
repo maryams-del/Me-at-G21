@@ -135,10 +135,11 @@ function parseClause(c: string, ctx: AiContext, ops: ProposedOp[], questions: st
     return;
   }
   const routineFor = (kind: string) => ctx.routines.find((r) => r.kind === kind);
-  if (/(bed ?sheets?|sheets|bedding)/.test(t)) return routineOp(routineFor("bedsheets"), "completed");
-  if (/toothbrush/.test(t)) return routineOp(routineFor("toothbrush"), /\b(bought|purchased|got a new)\b/.test(t) && !/(start|using|use|opened)/.test(t) ? "purchased" : "first_use");
-  if (/brush/.test(t) && /(clean|wash)/.test(t)) return routineOp(routineFor("brushes"), "completed");
-  function routineOp(r: { alias: string; name: string } | undefined, type: string) {
+  if (/(bed ?sheets?|sheets|bedding)/.test(t)) return routineOp(routineFor("bedsheets"), "completed", "bedsheets");
+  if (/toothbrush/.test(t)) return routineOp(routineFor("toothbrush"), /\b(bought|purchased|got a new)\b/.test(t) && !/(start|using|use|opened)/.test(t) ? "purchased" : "first_use", "toothbrush");
+  if (/brush/.test(t) && /(clean|wash)/.test(t)) return routineOp(routineFor("brushes"), "completed", "brushes");
+  function routineOp(r: { alias: string; name: string } | undefined, type: string, kind?: string) {
+    if (!r && kind) { ops.push({ op: "routine.done", input: { kind, type, onDate }, assumed: assumedDate }); return; }
     const named = r ?? findByName(ctx.routines, t, (x) => x.name);
     ops.push({ op: "routine.log", input: { routineId: named ? `@${named.alias}` : undefined, type, onDate }, missing: named ? [] : ["routineId"], assumed: assumedDate });
     if (!named) questions.push("Which routine is this for?");
@@ -247,7 +248,7 @@ function applyCorrection(text: string, prev: ProposedOp[], ctx: AiContext): Prop
   const ops: ProposedOp[] = structuredClone(prev);
   const moduleOf: Record<string, RegExp> = {
     "charity.create": /donat|charity|gift/, "debt.create": /lend|lent|borrow|loan|debt/, "fasts.complete": /fast/,
-    "routine.log": /sheet|brush|toothbrush|routine/, "waxing.complete": /wax/, "dental.complete": /dental|scaling/,
+    "routine.log": /sheet|brush|toothbrush|routine/, "routine.done": /sheet|brush|toothbrush|routine/, "waxing.complete": /wax/, "dental.complete": /dental|scaling/,
     "savings.deposit": /saving|deposit/, "expiry.create": /passport|expir|licen|iqama|card|membership/, "expiry.renew": /renew/, "task.create": /task/, "homework.create": /homework/,
   };
   const target = (pred: (o: ProposedOp) => boolean) => {

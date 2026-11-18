@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, closeDb } from "@/db";
 import { reminders, routines, recurringEvents, eventOccurrences, homeworkTasks, fastLedgerEvents } from "@/db/schema";
 import { runOpInTx } from "@/server/ops";
-import { fastBalance, applyAnnualFastRules, ensureActivity } from "@/server/ops/care";
+import { fastBalance, applyAnnualFastRules, ensureKindRoutine } from "@/server/ops/care";
 import { debtOutstanding } from "@/server/ops/finance";
 import { ensureOccurrences } from "@/server/ops/planning";
 import { resetDb, makeOwner, withCtx } from "../support/db";
@@ -13,7 +13,7 @@ const at = (d: string, t = "12:00") => localToInstant(d, t);
 let owner: Awaited<ReturnType<typeof makeOwner>>;
 const op = (now: Date, name: string, input: unknown) =>
   withCtx(owner.id, now, (ctx) => runOpInTx(ctx.tx, { ownerId: ctx.ownerId, tz: ctx.tz, source: "manual", now }, name, input));
-const pending = (sourceType: string) => getDb().select().from(reminders)
+const pending = (sourceType = "routine") => getDb().select().from(reminders)
   .where(and(eq(reminders.ownerId, owner.id), eq(reminders.sourceType, sourceType), eq(reminders.status, "scheduled")));
 
 beforeEach(async () => { await resetDb(); owner = await makeOwner(); });
@@ -22,24 +22,24 @@ afterAll(async () => { await closeDb(); });
 describe("Test 1 — waxing resets from the latest actual completion", () => {
   it("Nov 1 schedules 27/30/35/38/40; Nov 29 cancels the old ones and restarts", async () => {
     await op(at("2026-11-01"), "waxing.complete", { completedOn: "2026-11-01" });
-    let r = await pending("waxing");
+    let r = await pending();
     expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-28", "2026-12-01", "2026-12-06", "2026-12-09", "2026-12-11"].map((d) => localToInstant(d, "09:00").toISOString()));
 
     await op(at("2026-11-29"), "waxing.complete", { completedOn: "2026-11-29" });
-    r = await pending("waxing");
+    r = await pending();
     expect(r).toHaveLength(5);
-    expect(r.every((x) => x.dedupeKey.includes("2026-11-29"))).toBe(true);
-    const cancelled = await getDb().select().from(reminders).where(and(eq(reminders.sourceType, "waxing"), eq(reminders.status, "cancelled")));
+    expect(r.every((x) => x.dedupeKey.includes("2026-12-29"))).toBe(true); // due date of the new cycle
+    const cancelled = await getDb().select().from(reminders).where(and(eq(reminders.sourceType, "routine"), eq(reminders.status, "cancelled")));
     expect(cancelled.length).toBeGreaterThanOrEqual(4); // the remaining Nov-1 schedule
   });
 
   it("correcting history recalculates without duplicates", async () => {
     await op(at("2026-11-01"), "waxing.complete", { completedOn: "2026-11-01" });
     const ev = await op(at("2026-11-05"), "waxing.complete", { completedOn: "2026-11-05" });
-    await op(at("2026-11-06"), "maintenance.void", { eventId: ev.id, reason: "logged by mistake" });
-    const r = await pending("waxing");
+    await op(at("2026-11-06"), "routine.void", { eventId: ev.id });
+    const r = await pending();
     expect(r).toHaveLength(5);
-    expect(r.every((x) => x.dedupeKey.includes("2026-11-01"))).toBe(true);
+    expect(r.every((x) => x.dedupeKey.includes("2026-12-01"))).toBe(true);
   });
 
   it("refuses a future completion date", async () => {
@@ -47,16 +47,33 @@ describe("Test 1 — waxing resets from the latest actual completion", () => {
   });
 });
 
+describe("Routines are generic", () => {
+  it("a custom routine with a grace window and after-due nudges, marked private", async () => {
+    const r = await op(at("2026-11-01"), "routine.create", { name: "Threading", intervalValue: 3, intervalUnit: "week", graceDays: 7, reminderOffsetsDays: [0, 7], sensitive: true, reminderTime: "20:00" });
+    await op(at("2026-11-02"), "routine.log", { routineId: r.id, type: "completed", onDate: "2026-11-02" });
+    const rs = await pending();
+    expect(rs.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-23", "2026-11-30"].map((d) => localToInstant(d, "20:00").toISOString()));
+    expect(rs.every((x) => x.sensitive)).toBe(true);
+  });
+  it("templates add an editable routine once", async () => {
+    await op(at("2026-11-01"), "routine.template", { template: "bedsheets" });
+    const rows = await getDb().select().from(routines).where(eq(routines.ownerId, owner.id));
+    expect(rows.map((x) => [x.name, x.intervalValue, x.intervalUnit])).toEqual([["Change bedsheets", 7, "day"]]);
+  });
+});
+
 describe("Test 2 — dental six calendar months", () => {
   it("Jan 31 → due Jul 31 with reminders 14d, 1d, on the day", async () => {
     await op(at("2026-01-31"), "dental.complete", { completedOn: "2026-01-31" });
-    const r = await pending("dental");
+    const r = await pending();
     expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-17", "2026-07-30", "2026-07-31"].map((d) => localToInstant(d, "09:00").toISOString()));
   });
   it("settings change reminder offsets", async () => {
     await op(at("2026-01-31"), "dental.complete", { completedOn: "2026-01-31" });
-    await op(at("2026-02-01"), "maintenance.settings", { kind: "dental", reminderTime: "10:00", remindersEnabled: true, reminderOffsetsDays: [-30, 0] });
-    const r = await pending("dental");
+    const [d] = await getDb().select().from(routines).where(and(eq(routines.ownerId, owner.id), eq(routines.kind, "dental")));
+    expect(d.name).toBe("Dental scaling");
+    await op(at("2026-02-01"), "routine.update", { id: d.id, name: d.name, kind: "dental", anchor: "completed", intervalValue: 6, intervalUnit: "month", reminderTime: "10:00", remindersEnabled: true, reminderOffsetsDays: [-30, 0] });
+    const r = await pending();
     expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-01", "2026-07-31"].map((d) => localToInstant(d, "10:00").toISOString()));
   });
 });
@@ -183,7 +200,8 @@ describe("Test 17 — owner isolation in ops", () => {
     const d = await withCtx(other.id, at("2026-11-18"), (ctx) => runOpInTx(ctx.tx, { ownerId: other.id, tz: ctx.tz, source: "manual", now: ctx.now }, "debt.create", { direction: "lent", counterparty: "X", amount: "10", currency: "SAR", onDate: "2026-11-18" }));
     await expect(op(at("2026-11-18"), "debt.repay", { debtId: d.id, amount: "5", onDate: "2026-11-18" })).rejects.toThrow(/not found/);
     await expect(op(at("2026-11-18"), "charity.delete", { id: d.id })).rejects.toThrow(/not found/);
-    const a = await withCtx(other.id, at("2026-11-18"), (ctx) => ensureActivity(ctx, "waxing"));
+    const a = await withCtx(other.id, at("2026-11-18"), (ctx) => ensureKindRoutine({ ...ctx, source: "manual" }, "waxing"));
     expect(a.ownerId).toBe(other.id);
+    await expect(op(at("2026-11-18"), "routine.log", { routineId: a.id, type: "completed", onDate: "2026-11-18" })).rejects.toThrow(/not found/);
   });
 });

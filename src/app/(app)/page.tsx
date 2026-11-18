@@ -24,6 +24,8 @@ export default async function Dashboard() {
   const tz = o.timezone;
   const charity = s.charityMonth.length ? s.charityMonth.map((c) => formatMoney(Number(c.sum), c.cur)).join(" + ") : formatMoney(0, o.defaultCurrency);
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: tz }).format(new Date()));
+  const nextRoutines = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0)).slice(0, 4);
+  const waxRoutine = s.routines.find((r) => r.routine.kind === "waxing");
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
@@ -38,7 +40,7 @@ export default async function Dashboard() {
 
       <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
-        <OpButton op="waxing.complete" input={{ completedOn: s.today }} label="Waxing completed" className="btn btn-sm" confirmText={`Log waxing completed today (${dmy(s.today)})? This restarts the 40-day cycle.`} />
+        {waxRoutine && <OpButton op="routine.log" input={{ routineId: waxRoutine.routine.id, type: "completed", onDate: s.today }} label={`${waxRoutine.routine.name} completed`} className="btn btn-sm" confirmText={`Log ${waxRoutine.routine.name.toLowerCase()} done today (${dmy(s.today)})? The next one is counted from today.`} />}
         <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
         <Link href="/finance/savings?add=1" className="btn btn-sm">Add savings</Link>
         <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
@@ -89,20 +91,23 @@ export default async function Dashboard() {
           <Glyph kind="charity" size={80} color="var(--paper)" className="glyph-corner" />
         </Link>
 
-        <Link href="/care/waxing" className="tile">
-          <p className="t-small text-ink-2">Waxing</p>
-          {s.wax.last ? (
-            <>
-              <p className="t-num text-[2.6rem] mt-2">Day {s.wax.day}</p>
-              <p className="t-small text-ink-2">of {s.wax.rule.windowDays}. Recommended {fmtShort(s.wax.recommended)}</p>
-              <div className="bar mt-3" aria-hidden><i style={{ width: `${Math.min(100, ((s.wax.day ?? 0) / s.wax.rule.windowDays) * 100)}%`, background: s.wax.overdue ? "var(--rust)" : "var(--ink)" }} /></div>
-            </>
-          ) : <p className="t-small mt-3 text-ink-2">No session logged yet</p>}
-        </Link>
-
-        <Link href="/care/dental" className="tile">
-          <p className="t-small text-ink-2">Dental scaling</p>
-          {s.dental.due ? (<><p className="t-num text-[2.2rem] mt-2">{fmtShort(s.dental.due)}</p><p className="t-small text-ink-2">due {relDays(s.dental.daysLeft)}</p></>) : <p className="t-small mt-3 text-ink-2">No visit logged yet</p>}
+        <Link href="/care/routines" className="tile col-span-2">
+          <p className="t-small text-ink-2">Routines</p>
+          {nextRoutines.length ? (
+            <ul className="mt-3 grid gap-2.5">
+              {nextRoutines.map((r) => (
+                <li key={r.routine.id}>
+                  <div className="flex justify-between gap-3 t-small">
+                    <span className="font-medium">{r.routine.name}</span>
+                    <span style={{ color: r.overdue ? "var(--danger)" : undefined }}>
+                      {r.routine.graceDays ? `Day ${r.daysSince} of ${r.cycleDays}` : r.overdue ? `${-(r.daysLeft ?? 0)} days overdue` : `due ${relDays(r.daysLeft)}`}
+                    </span>
+                  </div>
+                  {r.routine.graceDays && r.cycleDays ? <div className="bar mt-1" aria-hidden style={{ height: 6 }}><i style={{ width: `${Math.min(100, ((r.daysSince ?? 0) / r.cycleDays) * 100)}%`, background: r.overdue ? "var(--rust)" : "var(--ink)" }} /></div> : null}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="t-small mt-3 text-ink-2">{s.routines.length ? "Log the last time you did each routine to see what's due." : "Add the routines you want to track: waxing, dental scaling, bedsheets, anything."}</p>}
         </Link>
 
         <Link href="/finance/savings" className="tile col-span-2">

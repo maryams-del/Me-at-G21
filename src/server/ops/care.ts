@@ -1,143 +1,30 @@
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import {
-  maintenanceActivities, maintenanceCompletionEvents, routines, routineEvents,
-  fastLedgerEvents, annualFastAdditionRules,
-} from "@/db/schema";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { routines, routineEvents, fastLedgerEvents, annualFastAdditionRules } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { addDays, addMonths, addInterval, localToInstant, todayLocal, toHijri, fromHijri, type LocalDate, dmy } from "@/lib/time";
+import { addDays, addInterval, daysBetween, localToInstant, todayLocal, toHijri, fromHijri, type LocalDate, dmy } from "@/lib/time";
 import { syncReminders, cancelReminders, type DesiredReminder } from "../reminders";
 
-/* ───────────── Waxing & dental (maintenance activities) ───────────── */
-
-export type WaxingRule = { windowDays: number; recommendedDay: number; reminderDays: number[] };
-export type DentalRule = { intervalMonths: number; reminderOffsetsDays: number[] };
-
-export const DEFAULT_WAXING_RULE: WaxingRule = { windowDays: 40, recommendedDay: 30, reminderDays: [27, 30, 35, 38, 40] };
-export const DEFAULT_DENTAL_RULE: DentalRule = { intervalMonths: 6, reminderOffsetsDays: [-14, -1, 0] };
-
-export async function ensureActivity(ctx: Pick<Ctx, "tx" | "ownerId">, kind: "waxing" | "dental"): Promise<typeof maintenanceActivities.$inferSelect> {
-  const [a] = await ctx.tx.select().from(maintenanceActivities)
-    .where(and(eq(maintenanceActivities.ownerId, ctx.ownerId), eq(maintenanceActivities.kind, kind)));
-  if (a) return a;
-  const [created] = await ctx.tx.insert(maintenanceActivities).values({
-    ownerId: ctx.ownerId, kind,
-    name: kind === "waxing" ? "Waxing" : "Dental scaling",
-    rule: kind === "waxing" ? DEFAULT_WAXING_RULE : DEFAULT_DENTAL_RULE,
-  }).onConflictDoNothing().returning();
-  return created ?? (await ensureActivity(ctx, kind));
-}
-
-export async function latestCompletion(ctx: Pick<Ctx, "tx">, activityId: string) {
-  const [e] = await ctx.tx.select().from(maintenanceCompletionEvents)
-    .where(and(eq(maintenanceCompletionEvents.activityId, activityId), isNull(maintenanceCompletionEvents.voidedAt)))
-    .orderBy(desc(maintenanceCompletionEvents.completedOn), desc(maintenanceCompletionEvents.createdAt)).limit(1);
-  return e ?? null;
-}
-
-/** Pure: the reminder set for a waxing anchor date. Exported for unit tests. */
-export function waxingReminders(activityId: string, anchor: LocalDate, rule: WaxingRule, time: string, tz: string): DesiredReminder[] {
-  return rule.reminderDays.map((day) => ({
-    dedupeKey: `waxing:${activityId}:${anchor}:d${day}`,
-    fireAt: localToInstant(addDays(anchor, day), time, tz),
-    title: day >= rule.windowDays ? `Waxing: day ${day} — last day of your ${rule.windowDays}-day window` : `Waxing: day ${day} of ${rule.windowDays}`,
-    publicBody: day < rule.recommendedDay ? `Recommended date is day ${rule.recommendedDay}` : day === rule.recommendedDay ? "Recommended date is today" : `Latest target is day ${rule.windowDays}`,
-    sensitive: true,
-    link: "/care/waxing",
-  }));
-}
-
-export function dentalDue(anchor: LocalDate, rule: DentalRule) {
-  return addMonths(anchor, rule.intervalMonths);
-}
-
-export function dentalReminders(activityId: string, anchor: LocalDate, rule: DentalRule, time: string, tz: string): DesiredReminder[] {
-  const due = dentalDue(anchor, rule);
-  return rule.reminderOffsetsDays.map((off) => ({
-    dedupeKey: `dental:${activityId}:${due}:o${off}`,
-    fireAt: localToInstant(addDays(due, off), time, tz),
-    title: "Dental scaling",
-    publicBody: off === 0 ? "Due today (your six-month cadence)" : `Due in ${-off} day${off === -1 ? "" : "s"}`,
-    link: "/care/dental",
-  }));
-}
-
-export async function syncMaintenance(ctx: Ctx, activityId: string) {
-  const [a] = await ctx.tx.select().from(maintenanceActivities).where(eq(maintenanceActivities.id, activityId));
-  const last = await latestCompletion(ctx, activityId);
-  if (!a || !last || !a.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, a?.kind ?? "maintenance", activityId);
-  const desired = a.kind === "waxing"
-    ? waxingReminders(a.id, last.completedOn, a.rule as WaxingRule, a.reminderTime, ctx.tz)
-    : dentalReminders(a.id, last.completedOn, a.rule as DentalRule, a.reminderTime, ctx.tz);
-  await syncReminders(ctx.tx, ctx.ownerId, a.kind, a.id, desired, ctx.now);
-}
-
-function completeOp(kind: "waxing" | "dental") {
-  return defineOp({
-    name: `${kind}.complete`, module: kind, label: kind === "waxing" ? "Waxing completed" : "Dental scaling completed",
-    aiAllowed: true,
-    schema: z.object({ completedOn: zDate, detail: zOptText(200), notes: zOptText() }),
-    summarize: (i) => `Log ${kind === "waxing" ? "waxing" : "dental scaling"} done on ${dmy(i.completedOn)}; restart the ${kind === "waxing" ? "40-day cycle (reminders on days 27, 30, 35, 38, 40)" : "six-month cadence"} from that date`,
-    async run(ctx, i) {
-      if (i.completedOn > todayLocal(ctx.tz, ctx.now)) throw new UserError("Completion date can't be in the future", "completedOn");
-      const a = await ensureActivity(ctx, kind);
-      const [e] = await ctx.tx.insert(maintenanceCompletionEvents).values({
-        ownerId: ctx.ownerId, activityId: a.id, completedOn: i.completedOn, detail: i.detail, notes: i.notes, source: ctx.source,
-      }).returning({ id: maintenanceCompletionEvents.id });
-      await syncMaintenance(ctx, a.id);
-      const msg = `${a.name} completed on ${dmy(i.completedOn)}`;
-      await audit(ctx, kind, "completed", "maintenance_event", e.id, msg, kind === "waxing");
-      return { id: e.id, message: msg };
-    },
-  });
-}
-export const waxingComplete = completeOp("waxing");
-export const dentalComplete = completeOp("dental");
-
-export const maintenanceVoid = defineOp({
-  name: "maintenance.void", module: "care", label: "Remove a logged date", aiAllowed: false,
-  schema: z.object({ eventId: zId, reason: zText(300) }),
-  summarize: (i) => `Remove logged date (${i.reason})`,
-  async run(ctx, i) {
-    const res = await ctx.tx.update(maintenanceCompletionEvents).set({ voidedAt: ctx.now, voidReason: i.reason })
-      .where(and(eq(maintenanceCompletionEvents.id, i.eventId), eq(maintenanceCompletionEvents.ownerId, ctx.ownerId), isNull(maintenanceCompletionEvents.voidedAt)))
-      .returning({ activityId: maintenanceCompletionEvents.activityId, on: maintenanceCompletionEvents.completedOn });
-    if (!res.length) throw new UserError("Entry not found");
-    await syncMaintenance(ctx, res[0].activityId); // recalculates from the remaining latest entry
-    await audit(ctx, "care", "corrected", "maintenance_event", i.eventId, `Removed entry for ${dmy(res[0].on)}: ${i.reason}`, true);
-    return { id: i.eventId, message: "Entry removed and schedule recalculated" };
-  },
-});
-
-export const maintenanceSettings = defineOp({
-  name: "maintenance.settings", module: "care", label: "Reminder settings", aiAllowed: false,
-  schema: z.object({
-    kind: z.enum(["waxing", "dental"]), reminderTime: zTime, remindersEnabled: z.boolean(),
-    reminderDays: z.array(z.number().int().min(1).max(120)).max(10).optional(),
-    reminderOffsetsDays: z.array(z.number().int().min(-90).max(0)).max(10).optional(),
-    intervalMonths: z.number().int().min(1).max(24).optional(),
-  }),
-  summarize: (i) => `Update ${i.kind} reminder settings`,
-  async run(ctx, i) {
-    const a = await ensureActivity(ctx, i.kind);
-    const rule = { ...(a.rule as object) } as Record<string, unknown>;
-    if (i.kind === "waxing" && i.reminderDays) rule.reminderDays = [...new Set(i.reminderDays)].sort((x, y) => x - y);
-    if (i.kind === "dental") {
-      if (i.reminderOffsetsDays) rule.reminderOffsetsDays = [...new Set(i.reminderOffsetsDays)].sort((x, y) => x - y);
-      if (i.intervalMonths) rule.intervalMonths = i.intervalMonths;
-    }
-    await ctx.tx.update(maintenanceActivities).set({ rule, reminderTime: i.reminderTime, remindersEnabled: i.remindersEnabled, updatedAt: ctx.now })
-      .where(eq(maintenanceActivities.id, a.id));
-    await syncMaintenance(ctx, a.id);
-    await audit(ctx, i.kind, "settings", "maintenance_activity", a.id, `Updated ${a.name} reminders`);
-    return { id: a.id, message: "Settings saved" };
-  },
-});
-
-/* ───────────── Routines (toothbrush, brushes, bedsheets, custom) ───────────── */
+/* ───────────── Routines: anything you do on a cycle (waxing, dental scaling, toothbrush, bedsheets, custom) ───────────── */
 
 type RoutineRow = typeof routines.$inferSelect;
+type Unit = "day" | "week" | "month";
+
+/** Ready-made settings people can start from; every field stays editable. */
+export const ROUTINE_TEMPLATES = {
+  waxing: { name: "Waxing", kind: "waxing", anchor: "completed", intervalValue: 30, intervalUnit: "day", graceDays: 10, reminderOffsetsDays: [-3, 0, 5, 8, 10], sensitive: true,
+    blurb: "Next around day 30, at the latest by day 40" },
+  dental: { name: "Dental scaling", kind: "dental", anchor: "completed", intervalValue: 6, intervalUnit: "month", graceDays: null, reminderOffsetsDays: [-14, -1, 0], sensitive: false,
+    blurb: "Every 6 calendar months" },
+  toothbrush: { name: "Replace toothbrush", kind: "toothbrush", anchor: "first_use", intervalValue: 3, intervalUnit: "month", graceDays: null, reminderOffsetsDays: [-14, 0], sensitive: false,
+    blurb: "3 months after you start using it" },
+  brushes: { name: "Clean makeup brushes", kind: "brushes", anchor: "completed", intervalValue: 7, intervalUnit: "day", graceDays: null, reminderOffsetsDays: [-1, 0], sensitive: false,
+    blurb: "Every 7 days" },
+  bedsheets: { name: "Change bedsheets", kind: "bedsheets", anchor: "completed", intervalValue: 7, intervalUnit: "day", graceDays: null, reminderOffsetsDays: [0], sensitive: false,
+    blurb: "Every 7 days" },
+} as const;
+export type TemplateKey = keyof typeof ROUTINE_TEMPLATES;
 
 export async function routineAnchor(ctx: Pick<Ctx, "tx">, r: RoutineRow): Promise<LocalDate | null> {
   const types = r.anchor === "first_use" ? ["first_use", "skipped"] : ["completed", "skipped"];
@@ -149,8 +36,25 @@ export async function routineAnchor(ctx: Pick<Ctx, "tx">, r: RoutineRow): Promis
 
 export function routineDue(r: Pick<RoutineRow, "intervalValue" | "intervalUnit" | "snoozedUntil">, anchor: LocalDate | null): LocalDate | null {
   if (!anchor) return null;
-  const due = addInterval(anchor, r.intervalValue, r.intervalUnit as "day" | "week" | "month");
+  const due = addInterval(anchor, r.intervalValue, r.intervalUnit as Unit);
   return r.snoozedUntil && r.snoozedUntil > due ? r.snoozedUntil : due;
+}
+
+/** Pure: reminders for a routine whose next due date is `due`. Exported for tests. */
+export function routineReminders(r: Pick<RoutineRow, "id" | "name" | "reminderOffsetsDays" | "reminderTime" | "graceDays" | "sensitive">, anchor: LocalDate, due: LocalDate, tz: string): DesiredReminder[] {
+  const cycle = daysBetween(anchor, due);
+  return [...new Set(r.reminderOffsetsDays)].sort((a, b) => a - b).map((off) => {
+    const day = cycle + off;
+    const last = r.graceDays !== null && r.graceDays !== undefined && off === r.graceDays;
+    return {
+      dedupeKey: `routine:${r.id}:${due}:o${off}`,
+      fireAt: localToInstant(addDays(due, off), r.reminderTime, tz),
+      title: off < 0 ? `${r.name}: due in ${-off} day${off === -1 ? "" : "s"}` : off === 0 ? `${r.name}: due today` : last ? `${r.name}: last day (day ${day})` : `${r.name}: ${off} day${off === 1 ? "" : "s"} past due`,
+      publicBody: r.graceDays ? `Day ${day} since last time. Latest by day ${cycle + r.graceDays}` : off > 0 ? "Mark it done when you can" : "Open the app to mark it done",
+      sensitive: r.sensitive,
+      link: "/care/routines",
+    };
+  });
 }
 
 export async function syncRoutine(ctx: Ctx, routineId: string) {
@@ -158,33 +62,41 @@ export async function syncRoutine(ctx: Ctx, routineId: string) {
   if (!r) return;
   const anchor = await routineAnchor(ctx, r);
   const due = routineDue(r, anchor);
-  if (!due || r.paused || !r.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "routine", r.id);
-  const desired = r.reminderOffsetsDays.map((off) => ({
-    dedupeKey: `routine:${r.id}:${due}:o${off}`,
-    fireAt: localToInstant(addDays(due, off), r.reminderTime, ctx.tz),
-    title: r.name,
-    publicBody: off === 0 ? "Due today" : `Due in ${-off} day${off === -1 ? "" : "s"}`,
-    link: "/care/routines",
-  }));
-  await syncReminders(ctx.tx, ctx.ownerId, "routine", r.id, desired, ctx.now);
+  if (!anchor || !due || r.paused || !r.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "routine", r.id);
+  await syncReminders(ctx.tx, ctx.ownerId, "routine", r.id, routineReminders(r, anchor, due, ctx.tz), ctx.now);
 }
 
 const routineInput = z.object({
-  name: zText(120), kind: z.enum(["toothbrush", "brushes", "bedsheets", "custom"]).default("custom"),
+  name: zText(120), kind: z.string().trim().max(40).default("custom"),
   anchor: z.enum(["completed", "first_use"]).default("completed"),
   intervalValue: z.number().int().min(1).max(365), intervalUnit: z.enum(["day", "week", "month"]),
-  reminderOffsetsDays: z.array(z.number().int().min(-60).max(0)).max(6).default([0]),
+  reminderOffsetsDays: z.array(z.number().int().min(-120).max(120)).max(10).default([0]),
+  graceDays: z.number().int().min(1).max(365).optional().nullable(),
+  sensitive: z.boolean().default(false),
   reminderTime: zTime.default("09:00"), remindersEnabled: z.boolean().default(true), notes: zOptText(),
 });
 
 export const routineCreate = defineOp({
   name: "routine.create", module: "routines", label: "New routine", aiAllowed: true,
   schema: routineInput,
-  summarize: (i) => `Create routine “${i.name}” every ${i.intervalValue} ${i.intervalUnit}${i.intervalValue > 1 ? "s" : ""}`,
+  summarize: (i) => `Create routine “${i.name}” every ${i.intervalValue} ${i.intervalUnit}${i.intervalValue > 1 ? "s" : ""}${i.graceDays ? `, at the latest ${i.graceDays} days after` : ""}`,
   async run(ctx, i) {
-    const [r] = await ctx.tx.insert(routines).values({ ownerId: ctx.ownerId, ...i }).returning({ id: routines.id });
-    await audit(ctx, "routines", "created", "routine", r.id, `Created routine “${i.name}”`);
+    const [r] = await ctx.tx.insert(routines).values({ ownerId: ctx.ownerId, ...i, graceDays: i.graceDays ?? null }).returning({ id: routines.id });
+    await audit(ctx, "routines", "created", "routine", r.id, `Created routine “${i.name}”`, i.sensitive);
     return { id: r.id, message: `Routine “${i.name}” created` };
+  },
+});
+
+export const routineFromTemplate = defineOp({
+  name: "routine.template", module: "routines", label: "Add routine from template", aiAllowed: false,
+  schema: z.object({ template: z.enum(Object.keys(ROUTINE_TEMPLATES) as [TemplateKey, ...TemplateKey[]]) }),
+  summarize: (i) => `Add “${ROUTINE_TEMPLATES[i.template].name}”`,
+  async run(ctx, i) {
+    const { blurb: _b, ...t } = ROUTINE_TEMPLATES[i.template];
+    void _b;
+    const [r] = await ctx.tx.insert(routines).values({ ownerId: ctx.ownerId, ...t, reminderOffsetsDays: [...t.reminderOffsetsDays] }).returning({ id: routines.id });
+    await audit(ctx, "routines", "created", "routine", r.id, `Added routine “${t.name}”`, t.sensitive);
+    return { id: r.id, message: `“${t.name}” added. Log the last time you did it to start the count.` };
   },
 });
 
@@ -194,14 +106,38 @@ export const routineUpdate = defineOp({
   summarize: (i) => `Update routine “${i.name}”`,
   async run(ctx, i) {
     const { id: rid, ...rest } = i;
-    const res = await ctx.tx.update(routines).set({ ...rest, updatedAt: ctx.now })
+    const res = await ctx.tx.update(routines).set({ ...rest, graceDays: rest.graceDays ?? null, updatedAt: ctx.now })
       .where(and(eq(routines.id, rid), eq(routines.ownerId, ctx.ownerId))).returning({ id: routines.id });
     if (!res.length) throw new UserError("Routine not found");
     await syncRoutine(ctx, rid);
-    await audit(ctx, "routines", i.paused ? "paused" : "edited", "routine", rid, `Updated routine “${i.name}”`);
+    await audit(ctx, "routines", i.paused ? "paused" : "edited", "routine", rid, `Updated routine “${i.name}”`, i.sensitive);
     return { id: rid, message: "Routine updated" };
   },
 });
+
+export const routineDelete = defineOp({
+  name: "routine.delete", module: "routines", label: "Delete routine", aiAllowed: false,
+  schema: z.object({ id: zId }),
+  summarize: () => "Delete routine and its history",
+  async run(ctx, i) {
+    const res = await ctx.tx.delete(routines).where(and(eq(routines.id, i.id), eq(routines.ownerId, ctx.ownerId))).returning({ name: routines.name, sensitive: routines.sensitive });
+    if (!res.length) throw new UserError("Routine not found");
+    await cancelReminders(ctx.tx, ctx.ownerId, "routine", i.id);
+    await audit(ctx, "routines", "deleted", "routine", i.id, `Deleted routine “${res[0].name}”`, res[0].sensitive);
+    return { id: i.id, message: "Routine deleted" };
+  },
+});
+
+async function logRoutine(ctx: Ctx, r: RoutineRow, type: string, onDate: string, notes: string | null) {
+  if (onDate > todayLocal(ctx.tz, ctx.now)) throw new UserError("Date can't be in the future", "onDate");
+  const [e] = await ctx.tx.insert(routineEvents).values({ ownerId: ctx.ownerId, routineId: r.id, type, onDate, notes, source: ctx.source }).returning({ id: routineEvents.id });
+  if (r.snoozedUntil) await ctx.tx.update(routines).set({ snoozedUntil: null }).where(eq(routines.id, r.id));
+  await syncRoutine(ctx, r.id);
+  const verb = { completed: "done", skipped: "skipped", purchased: "purchased", first_use: "first used" }[type] ?? type;
+  const msg = `${r.name}: ${verb} on ${dmy(onDate)}`;
+  await audit(ctx, "routines", type, "routine_event", e.id, msg, r.sensitive);
+  return { id: e.id, message: msg };
+}
 
 export const routineLog = defineOp({
   name: "routine.log", module: "routines", label: "Log routine event", aiAllowed: true,
@@ -215,16 +151,44 @@ export const routineLog = defineOp({
   async run(ctx, i) {
     const [r] = await ctx.tx.select().from(routines).where(and(eq(routines.id, i.routineId), eq(routines.ownerId, ctx.ownerId)));
     if (!r) throw new UserError("Routine not found");
-    if (i.onDate > todayLocal(ctx.tz, ctx.now)) throw new UserError("Date can't be in the future", "onDate");
-    const [e] = await ctx.tx.insert(routineEvents).values({ ownerId: ctx.ownerId, routineId: r.id, type: i.type, onDate: i.onDate, notes: i.notes, source: ctx.source }).returning({ id: routineEvents.id });
-    if (r.snoozedUntil) await ctx.tx.update(routines).set({ snoozedUntil: null }).where(eq(routines.id, r.id));
-    await syncRoutine(ctx, r.id);
-    const verb = { completed: "done", skipped: "skipped", purchased: "purchased", first_use: "first used" }[i.type];
-    const msg = `${r.name} — ${verb} on ${dmy(i.onDate)}`;
-    await audit(ctx, "routines", i.type, "routine_event", e.id, msg);
-    return { id: e.id, message: msg };
+    return logRoutine(ctx, r, i.type, i.onDate, i.notes);
   },
 });
+
+/** Find the owner's routine of a template kind, creating it from the template if needed. */
+export async function ensureKindRoutine(ctx: Ctx, kind: TemplateKey): Promise<RoutineRow> {
+  const [r] = await ctx.tx.select().from(routines).where(and(eq(routines.ownerId, ctx.ownerId), eq(routines.kind, kind))).orderBy(asc(routines.createdAt)).limit(1);
+  if (r) return r;
+  const { blurb: _b, ...t } = ROUTINE_TEMPLATES[kind];
+  void _b;
+  const [created] = await ctx.tx.insert(routines).values({ ownerId: ctx.ownerId, ...t, reminderOffsetsDays: [...t.reminderOffsetsDays] }).returning();
+  return created;
+}
+
+/** Shortcuts kept for Capture and the dashboard: "I waxed today", "dental scaling done". */
+function completeOp(kind: "waxing" | "dental") {
+  return defineOp({
+    name: `${kind}.complete`, module: "routines", label: kind === "waxing" ? "Waxing completed" : "Dental scaling completed", aiAllowed: true,
+    schema: z.object({ completedOn: zDate, detail: zOptText(200), notes: zOptText() }),
+    summarize: (i) => `Log ${kind === "waxing" ? "waxing" : "dental scaling"} done on ${dmy(i.completedOn)}; the next one is counted from that date`,
+    async run(ctx, i) {
+      const r = await ensureKindRoutine(ctx, kind);
+      return logRoutine(ctx, r, "completed", i.completedOn, [i.detail, i.notes].filter(Boolean).join(". ") || null);
+    },
+  });
+}
+/** "Changed bedsheets" when no bedsheets routine exists yet: adds it from the template, then logs it. */
+export const routineDone = defineOp({
+  name: "routine.done", module: "routines", label: "Log routine (adds it if new)", aiAllowed: true,
+  schema: z.object({ kind: z.enum(Object.keys(ROUTINE_TEMPLATES) as [TemplateKey, ...TemplateKey[]]), type: z.enum(["completed", "purchased", "first_use"]).default("completed"), onDate: zDate, notes: zOptText() }),
+  summarize: (i) => `${ROUTINE_TEMPLATES[i.kind].name}: ${{ completed: "done", purchased: "purchased", first_use: "first used" }[i.type]} on ${dmy(i.onDate)} (starts tracking it if you don't yet)`,
+  async run(ctx, i) {
+    const r = await ensureKindRoutine(ctx, i.kind);
+    return logRoutine(ctx, r, i.type, i.onDate, i.notes);
+  },
+});
+export const waxingComplete = completeOp("waxing");
+export const dentalComplete = completeOp("dental");
 
 export const routineSnooze = defineOp({
   name: "routine.snooze", module: "routines", label: "Snooze routine", aiAllowed: false,
@@ -232,10 +196,10 @@ export const routineSnooze = defineOp({
   summarize: (i) => `Snooze until ${dmy(i.until)}`,
   async run(ctx, i) {
     const res = await ctx.tx.update(routines).set({ snoozedUntil: i.until, updatedAt: ctx.now })
-      .where(and(eq(routines.id, i.routineId), eq(routines.ownerId, ctx.ownerId))).returning({ name: routines.name });
+      .where(and(eq(routines.id, i.routineId), eq(routines.ownerId, ctx.ownerId))).returning({ name: routines.name, sensitive: routines.sensitive });
     if (!res.length) throw new UserError("Routine not found");
     await syncRoutine(ctx, i.routineId);
-    await audit(ctx, "routines", "snoozed", "routine", i.routineId, `${res[0].name} snoozed until ${dmy(i.until)}`);
+    await audit(ctx, "routines", "snoozed", "routine", i.routineId, `${res[0].name} snoozed until ${dmy(i.until)}`, res[0].sensitive);
     return { id: i.routineId, message: `Snoozed until ${dmy(i.until)}` };
   },
 });
@@ -249,9 +213,9 @@ export const routineVoid = defineOp({
       .where(and(eq(routineEvents.id, i.eventId), eq(routineEvents.ownerId, ctx.ownerId), isNull(routineEvents.voidedAt)))
       .returning({ routineId: routineEvents.routineId });
     if (!res.length) throw new UserError("Entry not found");
-    await syncRoutine(ctx, res[0].routineId);
+    await syncRoutine(ctx, res[0].routineId); // recalculates from the remaining latest entry, no duplicates
     await audit(ctx, "routines", "corrected", "routine_event", i.eventId, "Removed a routine entry");
-    return { id: i.eventId, message: "Entry removed" };
+    return { id: i.eventId, message: "Entry removed and schedule recalculated" };
   },
 });
 

@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-or
 import { getDb } from "@/db";
 import {
   aiProposals, aiProposalOperations, captureDrafts, routines, savingsGoals, debts, projects, tasks,
-  charityPayments, maintenanceActivities, expiryItems, people, mastersApplications, maintenanceCompletionEvents, routineEvents, fastLedgerEvents,
+  charityPayments, expiryItems, people, mastersApplications, routineEvents, fastLedgerEvents,
   savingsTransactions, auditEvents, homeworkTasks,
 } from "@/db/schema";
 import { getOp, runOpInTx } from "../ops";
@@ -280,17 +280,14 @@ export async function runSearch(owner: { id: string; timezone: string }, q: Sear
   switch (q.type) {
     case "last_event": {
       if (q.target === "waxing" || q.target === "dental") {
-        const rows = await db.select({ e: maintenanceCompletionEvents }).from(maintenanceCompletionEvents)
-          .innerJoin(maintenanceActivities, eq(maintenanceActivities.id, maintenanceCompletionEvents.activityId))
-          .where(and(eq(maintenanceCompletionEvents.ownerId, ownerId), eq(maintenanceActivities.kind, q.target), isNull(maintenanceCompletionEvents.voidedAt)))
-          .orderBy(desc(maintenanceCompletionEvents.completedOn)).limit(3);
         const label = q.target === "waxing" ? "waxing" : "dental scaling";
+        const [r] = await db.select().from(routines).where(and(eq(routines.ownerId, ownerId), eq(routines.kind, q.target))).limit(1);
+        const rows = r ? await db.select().from(routineEvents).where(and(eq(routineEvents.routineId, r.id), eq(routineEvents.type, "completed"), isNull(routineEvents.voidedAt))).orderBy(desc(routineEvents.onDate)).limit(3) : [];
         if (!rows.length) return { answer: `I couldn't find any logged ${label}.`, sources: [] };
-        const last = rows[0].e;
-        const ago = daysBetween(last.completedOn, todayLocal(tz));
+        const ago = daysBetween(rows[0].onDate, todayLocal(tz));
         return {
-          answer: `Your last ${label} was on ${fmt(last.completedOn)} (${ago} day${ago === 1 ? "" : "s"} ago).`,
-          sources: rows.map((r) => ({ label: `${label[0].toUpperCase() + label.slice(1)} logged`, date: dmy(r.e.completedOn), href: `/care/${q.target}` })),
+          answer: `Your last ${label} was on ${fmt(rows[0].onDate)} (${ago} day${ago === 1 ? "" : "s"} ago).`,
+          sources: rows.map((e) => ({ label: `${r!.name} done`, date: dmy(e.onDate), href: "/care/routines" })),
         };
       }
       if (q.target === "fasts") {

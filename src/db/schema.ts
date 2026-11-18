@@ -252,9 +252,14 @@ export const routines = pgTable("routines", {
   anchor: text("anchor").notNull().default("completed"),
   intervalValue: integer("interval_value").notNull(),
   intervalUnit: text("interval_unit").notNull(), // day | week | month
+  /** days relative to the due date: negative = before, 0 = on the day, positive = after (overdue nudges) */
   reminderOffsetsDays: jsonb("reminder_offsets_days").$type<number[]>().notNull().default([0]),
   reminderTime: text("reminder_time").notNull().default("09:00"),
   remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  /** optional window after the due date before it counts as overdue (e.g. waxing: due day 30, latest day 40) */
+  graceDays: integer("grace_days"),
+  /** private: lock-screen notifications say only "Personal reminder" (unless the owner allows details) */
+  sensitive: boolean("sensitive").notNull().default(false),
   paused: boolean("paused").notNull().default(false),
   snoozedUntil: date("snoozed_until"),
   notes: text("notes"),
