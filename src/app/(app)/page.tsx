@@ -1,203 +1,126 @@
-import { dmy } from "@/lib/time";
 import Link from "next/link";
 import { pageOwner, dashboardState } from "@/server/queries";
-import { Glyph } from "@/components/Glyph";
-import { OpButton } from "@/components/OpForm";
-import { OpenCaptureButton } from "@/components/AppShell";
-import { ReminderList } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
-import { formatHijri, formatLocalDate } from "@/lib/time";
-import { fmtDateTime, fmtShort, relDays } from "@/lib/format";
+import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
+import { relDays } from "@/lib/format";
+import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
+import { AiBar } from "@/components/home/AiBar";
+import { OpButton } from "@/components/OpForm";
+import { SpacesWave, type Space } from "@/components/home/SpacesWave";
 
-function until(at: Date) {
-  const mins = Math.round((at.getTime() - Date.now()) / 60000);
-  if (mins < 60) return `in ${mins} min`;
-  const h = Math.floor(mins / 60);
-  if (h < 24) return `in ${h} h ${mins % 60} min`;
-  const d = Math.floor(h / 24);
-  return `in ${d} day${d === 1 ? "" : "s"} ${h % 24} h`;
-}
+const TINT = {
+  amber: "radial-gradient(circle at 35% 30%, #FFE2B5, #F0A94B)",
+  blush: "radial-gradient(circle at 35% 30%, #FFDCCD, #E8A08A)",
+  sky: "radial-gradient(circle at 35% 30%, #DCE8F6, #8FB0D8)",
+  moss: "radial-gradient(circle at 35% 30%, #E3F0D2, #9DBE78)",
+};
 
 export default async function Dashboard() {
   const o = await pageOwner();
   const s = await dashboardState(o);
   const tz = o.timezone;
-  const charity = s.charityMonth.length ? s.charityMonth.map((c) => formatMoney(Number(c.sum), c.cur)).join(" + ") : formatMoney(0, o.defaultCurrency);
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: tz }).format(new Date()));
-  const nextRoutines = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0)).slice(0, 4);
-  const waxRoutine = s.routines.find((r) => r.routine.kind === "waxing");
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const hm = (at: Date) => formatInstant(at, tz, { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  // Next 7 days: everything with a date, grouped by local day.
+  const days: Day[] = Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(s.today, i);
+    const weekday = formatLocalDate(date, { weekday: "short" });
+    return { date, weekday, dayNum: date.slice(8, 10), title: i === 0 ? "Today" : `${weekday} ${dmy(date).slice(0, 5)}`, items: [] };
+  });
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const add = (date: string, text: string, href?: string) => {
+    const d = byDate.get(date);
+    if (d && !d.items.some((x) => x.text === text)) d.items.push({ text, href });
+  };
+  if (s.nextClass) add(instantToLocal(s.nextClass.startsAt, tz).date, `Quran class · ${hm(s.nextClass.startsAt)}`, "/quran");
+  for (const r of s.upcoming) add(instantToLocal(r.fireAt, tz).date, `${r.title} · ${hm(r.fireAt)}`);
+  for (const tk of s.tasksDueSoon) if (tk.dueOn) add(tk.dueOn, `Task: ${tk.title}`, "/projects");
+  for (const e of s.expiring) add(e.expiresOn, `${e.label} expires`, "/admin/expiries");
+  for (const d of s.debts) if (d.debt.status === "open" && d.debt.dueDate) {
+    add(d.debt.dueDate, d.debt.direction === "lent" ? `${d.debt.counterparty} owes you ${formatMoney(d.outstanding, d.debt.currency)}` : `Repay ${d.debt.counterparty} ${formatMoney(d.outstanding, d.debt.currency)}`, "/finance/debts");
+  }
+
+  for (const r of s.routines) if (r.due && !r.routine.paused) add(r.due, `${r.routine.name} due`, "/care/routines");
+  for (const c of s.subscriptions.upcoming) add(c.date, `${c.name} renews · ${formatMoney(c.amountMinor, c.currency)}`, "/finance/subscriptions");
+  for (const r of s.appDeadlines) if (r.app.deadlineAt) add(instantToLocal(r.app.deadlineAt, tz).date, `${r.app.university} deadline · ${hm(r.app.deadlineAt)}`, `/education/applications/${r.app.id}`);
+
+  const nextRoutine = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
+  const p = s.period;
+  const periodStat = !p ? "" : p.open ? `Day ${p.openDay}` : p.estimate && p.settings.showEstimate ? `Next ${relDays(p.daysToEstimate)} (estimate)` : p.cycles[0] ? `Last started ${dmy(p.cycles[0].startDate)}` : "Nothing logged yet";
+  const nApps = s.appDeadlines.length;
+  const charity = s.charityMonth.length ? s.charityMonth.map((c) => formatMoney(Number(c.sum), c.cur)).join(" + ") : formatMoney(0, o.defaultCurrency);
+  const nTasks = s.tasksDueSoon.length;
+  const spaces: Space[] = [
+    { key: "money", name: "Money", stat: `${charity} given this month`, href: "/finance", glyph: "finance", tint: TINT.amber },
+    { key: "care", name: "Care", stat: nextRoutine ? `${nextRoutine.routine.name} ${nextRoutine.overdue ? "overdue" : `due ${relDays(nextRoutine.daysLeft)}`}` : "Routines & self-care", href: "/care", glyph: "care", tint: TINT.blush },
+    ...(p ? [{ key: "period", name: "Period", stat: periodStat, href: "/care/period", glyph: "period" as const, tint: TINT.blush }] : []),
+    { key: "fasts", name: "Fasts", stat: s.fasts.hasInitial || s.fasts.ledger.length ? `${s.fasts.balance} make-up fasts left` : "Set your opening balance", href: "/faith/fasts", glyph: "fasts", tint: TINT.sky },
+    { key: "quran", name: "Quran", stat: s.nextClass ? `Class ${formatInstant(s.nextClass.startsAt, tz, { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false })}` : "No class scheduled", href: "/quran", glyph: "quran", tint: TINT.moss },
+    { key: "admin", name: "Admin", stat: s.expiring.length ? `${s.expiring.length} expiring in 90 days` : "Expiries & documents", href: "/admin", glyph: "admin", tint: TINT.amber },
+    { key: "education", name: "Education", stat: nApps ? `${nApps} deadline${nApps === 1 ? "" : "s"} in 30 days` : "Applications & achievements", href: "/education", glyph: "education", tint: TINT.sky },
+    { key: "projects", name: "Projects", stat: nTasks ? `${nTasks} task${nTasks === 1 ? "" : "s"} due this week` : "Projects & tasks", href: "/projects", glyph: "projects", tint: TINT.moss },
+    { key: "vault", name: "Vault", stat: "Locked away", href: "/vault", glyph: "vault", tint: TINT.sky },
+    { key: "history", name: "History", stat: "Search everything", href: "/history", glyph: "history", tint: TINT.blush },
+  ];
 
   return (
-    <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="t-small text-ink-2">{formatLocalDate(s.today, { weekday: "long" })} {dmy(s.today)}, {formatHijri(s.today)}</p>
-          <h1 className="t-display mt-1">{greet}{o.displayName ? `, ${o.displayName}` : ""}</h1>
-        </div>
-        <OpenCaptureButton label="Add entry by AI" />
-      </header>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] lg:gap-8 items-start">
+      <div className="grid gap-5 min-w-0">
+        <h1 className="t-display">{greet}{o.displayName ? `, ${o.displayName}` : ""}</h1>
 
-      <nav aria-label="Quick actions" className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        <Link href="/finance/charity?add=1" className="btn btn-sm">Log charity</Link>
-        {s.period && (s.period.open
-          ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
-          : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />)}
-        {waxRoutine && <OpButton op="routine.log" input={{ routineId: waxRoutine.routine.id, type: "completed", onDate: s.today }} label={`${waxRoutine.routine.name} completed`} className="btn btn-sm" confirmText={`Log ${waxRoutine.routine.name.toLowerCase()} done today (${dmy(s.today)})? The next one is counted from today.`} />}
-        <OpButton op="fasts.complete" input={{ onDate: s.today }} label="Fast completed" className="btn btn-sm" confirmText={`Record one make-up fast completed today (${dmy(s.today)})?`} />
-        <Link href="/finance/savings?add=1" className="btn btn-sm">Add savings</Link>
-        <Link href="/projects?add=1" className="btn btn-sm">Add task</Link>
-      </nav>
-
-      {!s.notif.pushEnabled && (
-        <div className="panel p-4 flex flex-wrap items-center justify-between gap-3" style={{ background: "var(--tint-slate)" }}>
-          <p className="t-small prose-w">Reminders currently appear only inside the app. Turn on notifications to get them on this device.</p>
-          <Link href="/settings/notifications" className="btn btn-sm">Set up notifications</Link>
-        </div>
-      )}
-
-      {s.overdue.length > 0 && (
-        <section aria-labelledby="overdue-h" className="panel p-4" style={{ borderColor: "var(--rust)", boxShadow: "inset 6px 0 0 var(--rust)" }}>
-          <h2 id="overdue-h" className="t-h3 mb-2">Overdue</h2>
-          <ul className="list">
-            {s.overdue.map((x, i) => (
-              <li key={i} className="py-2 flex justify-between gap-3 t-small"><Link href={x.href} className="underline underline-offset-4">{x.label}</Link><span className="text-ink-2">{x.detail}</span></li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <Link href="/quran" className="tile slate col-span-2 min-h-[11rem]">
-          <p className="t-small" style={{ opacity: 0.85 }}>Quran class</p>
-          {s.nextClass ? (
-            <>
-              <p className="t-num text-[2.6rem] mt-2">{until(s.nextClass.startsAt)}</p>
-              <p className="t-small mt-2">{fmtDateTime(s.nextClass.startsAt, tz)}. {s.openHomework.length ? `${s.openHomework.length} homework item${s.openHomework.length === 1 ? "" : "s"} open.` : "No open homework."}</p>
-              <p className="t-small mt-1" style={{ opacity: 0.85 }}>{s.study ? (s.study.paused ? "Translation study reminder not active yet." : `Translation study: ${["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][s.study.weekday]} ${s.study.localTime}.`) : ""}</p>
-            </>
-          ) : <p className="t-small mt-2">No upcoming class scheduled.</p>}
-          <Glyph kind="quran" size={110} color="var(--paper)" className="glyph-corner" />
-        </Link>
-
-        <Link href="/faith/fasts" className="tile mustard">
-          <p className="t-small">Make-up fasts</p>
-          {s.fasts.hasInitial || s.fasts.ledger.length ? (
-            <><p className="t-num text-[3.4rem] mt-2">{s.fasts.balance}</p><p className="t-small">remaining</p></>
-          ) : <p className="t-small mt-3">Set your opening balance</p>}
-          <Glyph kind="fasts" size={84} color="var(--ink)" accent="var(--ink)" className="glyph-corner" />
-        </Link>
-
-        <Link href="/finance/charity" className="tile rust">
-          <p className="t-small">Charity this month</p>
-          <p className="t-num text-[2rem] mt-3 break-words">{charity}</p>
-          <Glyph kind="charity" size={80} color="var(--paper)" className="glyph-corner" />
-        </Link>
-
-        {s.period && (
-          <Link href="/care/period" className="tile">
-            <p className="t-small text-ink-2">Period</p>
-            {s.period.open ? <><p className="t-num text-[2.4rem] mt-2">Day {s.period.openDay}</p><p className="t-small text-ink-2">since {fmtShort(s.period.open.startDate)}</p></>
-              : s.period.estimate && s.period.settings.showEstimate ? <><p className="t-num text-[2rem] mt-2">{fmtShort(s.period.estimate.nextStart)}</p><p className="t-small text-ink-2">estimate, {relDays(s.period.daysToEstimate)}</p></>
-              : <p className="t-small mt-3 text-ink-2">{s.period.cycles[0] ? `Last started ${fmtShort(s.period.cycles[0].startDate)}` : "Nothing logged yet"}</p>}
-          </Link>
-        )}
-
-        <Link href="/care/routines" className="tile col-span-2">
-          <p className="t-small text-ink-2">Routines</p>
-          {nextRoutines.length ? (
-            <ul className="mt-3 grid gap-2.5">
-              {nextRoutines.map((r) => (
-                <li key={r.routine.id}>
-                  <div className="flex justify-between gap-3 t-small">
-                    <span className="font-medium">{r.routine.name}</span>
-                    <span style={{ color: r.overdue ? "var(--danger)" : undefined }}>
-                      {r.routine.graceDays ? `Day ${r.daysSince} of ${r.cycleDays}` : r.overdue ? `${-(r.daysLeft ?? 0)} days overdue` : `due ${relDays(r.daysLeft)}`}
-                    </span>
-                  </div>
-                  {r.routine.graceDays && r.cycleDays ? <div className="bar mt-1" aria-hidden style={{ height: 6 }}><i style={{ width: `${Math.min(100, ((r.daysSince ?? 0) / r.cycleDays) * 100)}%`, background: r.overdue ? "var(--rust)" : "var(--ink)" }} /></div> : null}
-                </li>
+        {s.overdue.length > 0 && (
+          <section aria-labelledby="overdue-h" className="panel p-4" style={{ boxShadow: "inset 0 0 0 1.5px var(--rust), var(--glass-shadow)" }}>
+            <h2 id="overdue-h" className="t-h3 mb-1" style={{ color: "var(--rust)" }}>Overdue</h2>
+            <ul className="list">
+              {s.overdue.map((x, i) => (
+                <li key={i} className="py-2 flex justify-between gap-3 t-small"><Link href={x.href} className="underline underline-offset-4">{x.label}</Link><span className="text-ink-2">{x.detail}</span></li>
               ))}
             </ul>
-          ) : <p className="t-small mt-3 text-ink-2">{s.routines.length ? "Log the last time you did each routine to see what's due." : "Add the routines you want to track: waxing, dental scaling, bedsheets, anything."}</p>}
-        </Link>
-
-        {s.subscriptions.active.length > 0 && (
-          <Link href="/finance/subscriptions" className="tile col-span-2">
-            <p className="t-small text-ink-2">Subscriptions</p>
-            <p className="t-num text-[2rem] mt-2">{Object.entries(s.subscriptions.totals).map(([c, v]) => formatMoney(v.monthly, c)).join(" + ")}<span className="t-small text-ink-2"> / month</span></p>
-            {s.subscriptions.upcoming[0] && <p className="t-small text-ink-2">Next: {s.subscriptions.upcoming[0].name}, {formatMoney(s.subscriptions.upcoming[0].amountMinor, s.subscriptions.upcoming[0].currency)} on {fmtShort(s.subscriptions.upcoming[0].date)}</p>}
-          </Link>
+          </section>
         )}
 
-        <Link href="/finance/savings" className="tile col-span-2">
-          <p className="t-small text-ink-2">Savings</p>
-          {s.savings.length ? (
-            <ul className="mt-3 grid gap-3">
-              {s.savings.filter((g) => g.goal.status === "active").slice(0, 3).map((g) => (
-                <li key={g.goal.id}>
-                  <div className="flex justify-between t-small"><span className="font-medium">{g.goal.name}</span><span>{formatMoney(g.balance, g.goal.currency)} of {formatMoney(g.goal.targetMinor, g.goal.currency)}</span></div>
-                  <div className="bar mt-1" role="img" aria-label={`${g.pct}%`}><i style={{ width: `${g.pct}%` }} /></div>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="t-small mt-3 text-ink-2">Create a goal to track progress</p>}
-        </Link>
+        <NextSevenDays days={days} />
+        <AiBar />
+
+        {p && (
+          <div className="flex flex-wrap gap-2">
+            {p.open
+              ? <OpButton op="period.end" input={{ endDate: s.today }} label="Period ended" className="btn btn-sm" confirmText={`Log period ended today (${dmy(s.today)})?`} />
+              : <OpButton op="period.start" input={{ startDate: s.today }} label="Period started" className="btn btn-sm" confirmText={`Log period started today (${dmy(s.today)})?`} />}
+          </div>
+        )}
+
+        {(s.pendingAi > 0 || s.drafts.length > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {s.pendingAi > 0 && <span className="chip chip-mustard">{s.pendingAi} capture preview{s.pendingAi === 1 ? "" : "s"} waiting for you</span>}
+            {s.drafts.length > 0 && <Link href="/inbox" className="chip chip-fill no-underline">{s.drafts.length} need{s.drafts.length === 1 ? "s" : ""} details →</Link>}
+          </div>
+        )}
+
+        {!s.notif.pushEnabled && (
+          <div className="panel p-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="t-small prose-w">Reminders currently appear only inside the app. Turn on notifications to get them on this device.</p>
+            <Link href="/settings/notifications" className="btn btn-sm">Set up notifications</Link>
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <section className="panel p-5" aria-labelledby="up-h">
-          <h2 id="up-h" className="t-h2 mb-3">Next 7 days</h2>
-          <ReminderList items={s.upcoming} tz={tz} />
-          {s.tasksDueSoon.length > 0 && (
-            <>
-              <h3 className="t-h3 mt-5 mb-2">Tasks due</h3>
-              <ul className="list">{s.tasksDueSoon.map((tk) => <li key={tk.id} className="py-2 flex justify-between t-small"><Link href="/projects" className="underline underline-offset-4">{tk.title}</Link><span className="t-meta">{fmtShort(tk.dueOn)}</span></li>)}</ul>
-            </>
-          )}
-          {s.appDeadlines.length > 0 && (
-            <>
-              <h3 className="t-h3 mt-5 mb-2">Application deadlines (30 days)</h3>
-              <ul className="list">{s.appDeadlines.map((r) => <li key={r.app.id} className="py-2 flex justify-between gap-3 t-small"><Link href={`/education/applications/${r.app.id}`} className="underline underline-offset-4">{r.app.university}, {r.app.program}</Link><span className="t-meta whitespace-nowrap">{fmtDateTime(r.app.deadlineAt!, tz)}</span></li>)}</ul>
-            </>
-          )}
-          {s.expiring.length > 0 && (
-            <>
-              <h3 className="t-h3 mt-5 mb-2">Expiring within 90 days</h3>
-              <ul className="list">{s.expiring.map((e) => <li key={e.id} className="py-2 flex justify-between t-small"><Link href="/admin/expiries" className="underline underline-offset-4">{e.label}</Link><span className="t-meta">{fmtShort(e.expiresOn)}</span></li>)}</ul>
-            </>
-          )}
-          {s.debts.some((d) => d.debt.status === "open") && (
-            <>
-              <h3 className="t-h3 mt-5 mb-2">Lent & borrowed</h3>
-              <ul className="list">{s.debts.filter((d) => d.debt.status === "open").slice(0, 5).map((d) => (
-                <li key={d.debt.id} className="py-2 flex justify-between t-small gap-3">
-                  <span>{d.debt.direction === "lent" ? `${d.debt.counterparty} owes you` : `You owe ${d.debt.counterparty}`}</span>
-                  <span className="whitespace-nowrap">{formatMoney(d.outstanding, d.debt.currency)}{d.debt.dueDate ? `, due ${fmtShort(d.debt.dueDate)}` : ""}</span>
-                </li>))}</ul>
-            </>
-          )}
-        </section>
-
-        <div className="grid gap-6 content-start">
-          <section className="panel p-5" aria-labelledby="nd-h">
-            <div className="flex justify-between items-baseline"><h2 id="nd-h" className="t-h2">Needs details</h2><Link href="/inbox" className="t-small underline underline-offset-4">Open</Link></div>
-            {s.drafts.length ? (
-              <ul className="list mt-2">{s.drafts.slice(0, 4).map((d) => <li key={d.id} className="py-2 t-small">{d.sourceText.slice(0, 80)}<span className="t-meta block">Missing: {d.missingFields.join(", ")}</span></li>)}</ul>
-            ) : <p className="t-meta mt-2">Nothing waiting. Incomplete captures land here.</p>}
-            {s.pendingAi > 0 && <p className="t-small mt-3"><span className="chip chip-mustard">{s.pendingAi}</span> capture preview{s.pendingAi === 1 ? "" : "s"} waiting for your confirmation</p>}
-          </section>
-
-          <section className="panel p-5" aria-labelledby="rc-h">
-            <div className="flex justify-between items-baseline"><h2 id="rc-h" className="t-h2">Recent activity</h2><Link href="/history" className="t-small underline underline-offset-4">History</Link></div>
-            {s.recent.length ? (
-              <ul className="list mt-2">{s.recent.slice(0, 6).map((r) => (
-                <li key={r.id} className="py-2 t-small flex justify-between gap-3"><span>{r.sensitive ? "Private entry" : r.summary}</span><span className="t-meta whitespace-nowrap">{r.source === "ai" ? "AI, " : ""}{fmtDateTime(r.occurredAt, tz)}</span></li>
-              ))}</ul>
-            ) : <p className="t-meta mt-2">Your log is empty. Try the quick actions above.</p>}
-          </section>
+      <section aria-labelledby="spaces-h" className="spaces-panel px-[18px] pt-6 pb-5 md:px-8 md:pt-8 -mx-[18px] md:mx-0">
+        <div aria-hidden className="absolute inset-0 pointer-events-none">
+          <div className="absolute rounded-full" style={{ left: "6%", top: "30%", width: 240, height: 240, background: "radial-gradient(circle, rgba(240,169,75,.55), rgba(240,169,75,0) 70%)" }} />
+          <div className="absolute rounded-full" style={{ right: "4%", top: "8%", width: 260, height: 260, background: "radial-gradient(circle, rgba(110,140,80,.45), rgba(110,140,80,0) 70%)" }} />
+          <div className="absolute rounded-full" style={{ left: "40%", bottom: -60, width: 280, height: 220, background: "radial-gradient(circle, rgba(214,140,110,.4), rgba(214,140,110,0) 70%)" }} />
         </div>
-      </div>
+        <div className="relative flex justify-between items-baseline gap-3 pl-[88px] md:pl-[120px]">
+          <h2 id="spaces-h" className="t-h2">Your spaces</h2>
+          <span className="t-meta muted font-semibold">Swipe ↔</span>
+        </div>
+        <div className="relative mt-2">
+          <SpacesWave spaces={spaces} />
+        </div>
+      </section>
     </div>
   );
 }

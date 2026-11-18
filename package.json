@@ -17,7 +17,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",
-    "@fontsource-variable/jost": "^5.3.0",
+    "@fontsource-variable/fredoka": "^5.3.0",
+    "@fontsource-variable/nunito": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/bagel-fat-one": "^5.3.0",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.1.0",
     "@vercel/blob": "^2.9.0",
