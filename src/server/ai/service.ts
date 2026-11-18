@@ -85,7 +85,9 @@ function describe(op: ProposedOp & { input: Record<string, unknown> }, aliases: 
   const names = Object.fromEntries(Object.values(aliases).map((a) => [a.id, a.name]));
   for (const [k, v] of Object.entries(op.input)) {
     if (v === null || v === undefined || (Array.isArray(v) && !v.length)) continue;
-    display[k] = typeof v === "string" && names[v] ? names[v] : Array.isArray(v) ? v.join(", ") : String(v);
+    display[k] = typeof v === "string" && names[v] ? names[v]
+      : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? formatLocalDate(v, { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+      : Array.isArray(v) ? v.join(", ") : String(v);
   }
   if (!def || !def.aiAllowed) return { def: null, display, valid: false, error: "This action isn't allowed from AI capture", summary: op.op };
   const parsed = def.schema.safeParse(op.input);
@@ -195,6 +197,7 @@ export async function correct(owner: { id: string; timezone: string; defaultCurr
   return loadPreview(owner.id, p.id);
 }
 
+type Outcome = { position: number; status: string; message: string; id: string | null };
 export type Selection = { position: number; mode: "apply" | "draft" | "skip" };
 
 /**
@@ -210,7 +213,7 @@ export async function confirm(owner: { id: string; timezone: string }, proposalI
     if (!p) throw new UserError("Proposal not found");
     if (p.status === "confirmed") {
       const [done] = await tx.select({ result: aiProposals.result }).from(aiProposals).where(eq(aiProposals.id, p.id));
-      return { alreadyConfirmed: true, outcomes: ((done.result as { outcomes?: unknown[] })?.outcomes ?? []) };
+      return { alreadyConfirmed: true, outcomes: ((done.result as { outcomes?: Outcome[] })?.outcomes ?? []) };
     }
     if (p.status !== "pending") throw new UserError(`This proposal is ${p.status}`);
     if (new Date(p.expires_at) < new Date()) throw new UserError("This proposal expired. Nothing was saved.");
@@ -218,7 +221,7 @@ export async function confirm(owner: { id: string; timezone: string }, proposalI
 
     const ops = await tx.select().from(aiProposalOperations).where(and(eq(aiProposalOperations.proposalId, p.id), eq(aiProposalOperations.version, version))).orderBy(asc(aiProposalOperations.position));
     const now = new Date();
-    const outcomes: { position: number; status: string; message: string; id: string | null }[] = [];
+    const outcomes: Outcome[] = [];
     for (const o of ops) {
       const sel = selections.find((s) => s.position === o.position)?.mode ?? "skip";
       const pl = o.payload as { input: Record<string, unknown>; valid: boolean };

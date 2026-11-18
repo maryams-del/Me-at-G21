@@ -1,0 +1,70 @@
+import { and, desc, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { captureDrafts, routines, savingsGoals, debts } from "@/db/schema";
+import { pageOwner } from "@/server/queries";
+import { PageHeader, Empty } from "@/components/ui";
+import { OpForm, OpButton, type FieldDef } from "@/components/OpForm";
+import { charityFields, currencyField } from "@/components/fields";
+import { todayLocal } from "@/lib/time";
+import { fmtDateTime } from "@/lib/format";
+
+export default async function InboxPage() {
+  const o = await pageOwner();
+  const db = getDb();
+  const drafts = await db.select().from(captureDrafts).where(and(eq(captureDrafts.ownerId, o.id), eq(captureDrafts.status, "open"))).orderBy(desc(captureDrafts.createdAt));
+  const [rs, gs, ds] = await Promise.all([
+    db.select().from(routines).where(eq(routines.ownerId, o.id)),
+    db.select().from(savingsGoals).where(and(eq(savingsGoals.ownerId, o.id), eq(savingsGoals.status, "active"))),
+    db.select().from(debts).where(and(eq(debts.ownerId, o.id), eq(debts.status, "open"))),
+  ]);
+  const today = todayLocal(o.timezone);
+  const formFor = (action: string): FieldDef[] | null => {
+    switch (action) {
+      case "charity.create": return charityFields(o.defaultCurrency);
+      case "debt.create": return [
+        { name: "direction", label: "Type", type: "select", required: true, options: [{ value: "lent", label: "I lent" }, { value: "borrowed", label: "I borrowed" }] },
+        { name: "counterparty", label: "Person", required: true }, { name: "amount", label: "Amount", type: "amount", required: true }, currencyField(o.defaultCurrency),
+        { name: "onDate", label: "Date", type: "date", required: true }, { name: "dueDate", label: "Due date", type: "date", nullable: true }];
+      case "fasts.complete": return [{ name: "onDate", label: "Date fasted", type: "date", required: true }];
+      case "waxing.complete": case "dental.complete": return [{ name: "completedOn", label: "Date", type: "date", required: true }];
+      case "routine.log": return [{ name: "routineId", label: "Routine", type: "select", required: true, options: rs.map((r) => ({ value: r.id, label: r.name })) },
+        { name: "type", label: "What happened", type: "select", required: true, options: [{ value: "completed", label: "Done" }, { value: "first_use", label: "First use" }, { value: "purchased", label: "Purchased" }, { value: "skipped", label: "Skipped" }] },
+        { name: "onDate", label: "Date", type: "date", required: true }];
+      case "savings.deposit": case "savings.withdraw": return [{ name: "goalId", label: "Goal", type: "select", required: true, options: gs.map((g) => ({ value: g.id, label: g.name })) },
+        { name: "amount", label: "Amount", type: "amount", required: true }, { name: "onDate", label: "Date", type: "date", required: true }];
+      case "debt.repay": return [{ name: "debtId", label: "Record", type: "select", required: true, options: ds.map((d) => ({ value: d.id, label: d.counterparty })) },
+        { name: "amount", label: "Amount", type: "amount", required: true }, { name: "onDate", label: "Date", type: "date", required: true }];
+      case "task.create": return [{ name: "title", label: "Task", required: true, wide: true }, { name: "dueOn", label: "Due date", type: "date", nullable: true }, { name: "dueTime", label: "Time", type: "time", nullable: true }];
+      case "homework.create": return [{ name: "title", label: "Homework", required: true, wide: true }, { name: "reference", label: "Surah / verses", nullable: true }];
+      case "project.create": return [{ name: "name", label: "Project", required: true }, { name: "targetDate", label: "Target date", type: "date", nullable: true }];
+      case "savings.goal.create": return [{ name: "name", label: "Goal", required: true }, { name: "target", label: "Target", type: "amount", required: true }, currencyField(o.defaultCurrency)];
+      default: return null;
+    }
+  };
+
+  return (
+    <>
+      <PageHeader glyph="inbox" title="Needs details" intro="Captures you chose to finish later. Fill in what's missing and save; nothing here counts until you do." />
+      {drafts.length === 0 ? <Empty>Nothing waiting. When a capture is missing something, choose “Fill details later” and it will appear here.</Empty> : (
+        <ul className="grid gap-4">
+          {drafts.map((d) => {
+            const fields = formFor(d.action);
+            const payload = d.payload as Record<string, unknown>;
+            const initial = { paidOn: today, onDate: today, completedOn: today, status: "completed", currency: o.defaultCurrency, ...payload };
+            return (
+              <li key={d.id} className="panel p-4 grid gap-3">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <p className="t-h3">“{d.sourceText}”</p>
+                  <p className="t-meta">{fmtDateTime(d.createdAt, o.timezone)}</p>
+                </div>
+                <p className="t-small"><span className="chip chip-mustard">Missing: {d.missingFields.join(", ")}</span> <span className="text-ink-2 ml-2">For: {d.targetModule}</span></p>
+                {fields ? <OpForm op={d.action} endpoint="/api/drafts/resolve" nestKey="input" nestExtra={{ id: d.id }} nestBase={payload} fields={fields} initial={initial} submitLabel="Save entry" /> : <p className="t-small">Open the matching tracker to add this manually.</p>}
+                <OpButton op="draft.discard" input={{ id: d.id }} label="Discard draft" className="btn btn-sm btn-ghost justify-self-start" confirmText="Discard this draft?" />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}

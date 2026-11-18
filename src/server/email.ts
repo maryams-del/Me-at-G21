@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { appendFileSync } from "node:fs";
 
 /**
  * Transactional email (initial verification, recovery verification, security alerts, optional
@@ -10,6 +11,7 @@ export async function sendEmail(to: string, subject: string, text: string) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV === "production") throw new Error("Email is not configured (RESEND_API_KEY)");
+    if (process.env.DEV_EMAIL_OUTBOX) appendFileSync(process.env.DEV_EMAIL_OUTBOX, JSON.stringify({ to, subject, text, at: Date.now() }) + "\n");
     console.info(`\n──── DEV EMAIL (not sent) ────\nTo: ${to}\nSubject: ${subject}\n\n${text}\n──────────────────────────────\n`);
     return;
   }

@@ -194,7 +194,7 @@ async function syncDebtReminders(ctx: Ctx, debtId: string) {
   if (d.status === "settled" || outstanding <= 0 || !d.remindersEnabled || !d.dueDate) {
     return cancelReminders(ctx.tx, ctx.ownerId, "debt", d.id);
   }
-  const verb = d.direction === "lent" ? `Collect from ${d.counterparty}` : `Repay ${d.counterparty}`;
+  const verb = d.direction === "lent" ? `from ${d.counterparty}` : `to ${d.counterparty}`;
   const amount = formatMoney(outstanding, d.currency);
   const desired: DesiredReminder[] = d.reminderOffsetsDays.map((off) => ({
     dedupeKey: `debt:${d.id}:${d.dueDate}:o${off}`,

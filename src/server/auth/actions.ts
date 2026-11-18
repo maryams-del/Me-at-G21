@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { and, desc, eq, gt, isNull, ne, sql, count } from "drizzle-orm";
+import { and, desc, eq, gt, lt, isNull, ne, sql, count } from "drizzle-orm";
 import {
   generateRegistrationOptions, verifyRegistrationResponse,
   generateAuthenticationOptions, verifyAuthenticationResponse,
@@ -256,7 +256,8 @@ const totpSetup: Handler = async () => {
   if (s.user.onboardingStep === "complete") assertSensitiveAllowed(s);
   else if (s.user.onboardingStep !== "totp") throw new AuthError(400, "Register a passkey first");
   const secret = generateSecret({ length: 20 });
-  await getDb().delete(totpAuthenticators).where(and(eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.verifiedAt)));
+  // Clean up only stale, never-verified setups. Concurrent setups each keep their own pending row.
+  await getDb().delete(totpAuthenticators).where(and(eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.verifiedAt), lt(totpAuthenticators.createdAt, new Date(Date.now() - 3600_000))));
   const [row] = await getDb().insert(totpAuthenticators).values({ userId: s.user.id, secretEnc: encryptField(secret, env.dataKey, `totp:${s.user.id}`) }).returning({ id: totpAuthenticators.id });
   const uri = generateURI({ issuer: RP_NAME, label: s.user.email, secret });
   const qr = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
@@ -273,6 +274,7 @@ const totpVerify: Handler = async (body) => {
   // Replace any previous authenticator only after the new one is proven.
   await getDb().update(totpAuthenticators).set({ revokedAt: new Date() }).where(and(eq(totpAuthenticators.userId, s.user.id), ne(totpAuthenticators.id, t.id), isNull(totpAuthenticators.revokedAt)));
   await getDb().update(totpAuthenticators).set({ verifiedAt: new Date() }).where(eq(totpAuthenticators.id, t.id));
+  await getDb().delete(totpAuthenticators).where(and(eq(totpAuthenticators.userId, s.user.id), isNull(totpAuthenticators.verifiedAt)));
   if (s.user.onboardingStep === "totp") await getDb().update(users).set({ onboardingStep: "recovery_codes" }).where(eq(users.id, s.user.id));
   await securityEvent(s.user.id, "totp_added", {}, s.user.onboardingStep === "complete");
   return { ok: true };
@@ -409,6 +411,17 @@ const logout: Handler = async () => {
   return { ok: true };
 };
 
+const profileUpdate: Handler = async (body) => {
+  const s = await requireUser();
+  const p = z.object({
+    displayName: z.string().trim().max(60).optional().nullable(),
+    timezone: z.string().refine((tz) => { try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; } }, "Unknown timezone"),
+    defaultCurrency: z.string().regex(/^[A-Z]{3}$/),
+  }).parse(body);
+  await getDb().update(users).set({ displayName: p.displayName || null, timezone: p.timezone, defaultCurrency: p.defaultCurrency, updatedAt: new Date() }).where(eq(users.id, s.user.id));
+  return { ok: true, message: "Settings saved" };
+};
+
 const status: Handler = async () => {
   const s = await getSession();
   return s ? { signedIn: true, method: s.method, onboardingStep: s.user.onboardingStep } : { signedIn: false };
@@ -423,7 +436,7 @@ export const authHandlers: Record<string, Handler> = {
   "totp-setup": totpSetup, "totp-verify": totpVerify, "totp-remove": totpRemove,
   "recovery-codes-generate": recoveryCodesGenerate, "onboarding-complete": onboardingComplete,
   "recovery-start": recoveryStart, "recovery-verify": recoveryVerify,
-  "security-overview": securityOverview, "session-revoke": sessionRevoke, logout, status,
+  "security-overview": securityOverview, "profile-update": profileUpdate, "session-revoke": sessionRevoke, logout, status,
 };
 
 export { randomToken };
