@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { THEME_COOKIE, type ThemeChoice } from "@/lib/theme";
+import { THEME_COOKIE, THEME_COLORS, type ThemeChoice } from "@/lib/theme";
 
 function current(): ThemeChoice {
   const set = document.documentElement.dataset.theme;
@@ -17,6 +17,12 @@ export function ThemeToggle() {
     document.documentElement.dataset.theme = t;
     document.cookie = `${THEME_COOKIE}=${t}; path=/; max-age=31536000; samesite=lax`;
     setTheme(t);
+    // Keep the browser / iPhone status bar in step with the chosen mode, not the device setting.
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
+    const meta = document.createElement("meta");
+    meta.name = "theme-color";
+    meta.content = THEME_COLORS[t];
+    document.head.appendChild(meta);
   }
 
   return (

@@ -13,7 +13,6 @@ export default function CareIndex() {
       <ul className="grid gap-3 sm:grid-cols-2">
         {items.map((i) => <li key={i.href}><Link href={i.href} className="tile"><Glyph kind={i.glyph} size={30} accent="var(--rust)" /><p className="t-h3 mt-3">{i.label}</p><p className="t-small text-ink-2">{i.d}</p></Link></li>)}
       </ul>
-      <p className="t-meta mt-6">The private period log arrives in Phase B.</p>
     </>
   );
 }

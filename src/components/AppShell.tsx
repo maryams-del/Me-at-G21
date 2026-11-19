@@ -17,6 +17,9 @@ const ICONS = {
   inbox: "M5 5h10l4 4v10H5zM9 13h6M9 16h4",
   settings: "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4",
 };
+/** Main tabs: reachable from the nav at all times, so they get no Back button. */
+const TOP_LEVEL = ["/", "/more", "/history", "/inbox", "/settings"];
+
 export const SPARKLE = "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z";
 
 function Icon({ d, size = 22 }: { d: string; size?: number }) {
@@ -93,7 +96,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
           <svg width="2340" height="16" viewBox="0 0 2340 16"><path d={"M0 8 " + Array.from({ length: 24 }, (_, i) => (i === 0 ? "Q48.75 16 97.5 8" : `T${97.5 * (i + 1)} 8`)).join(" ")} fill="none" stroke="var(--slate)" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </div>
 
-        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{path !== "/" && <BackButton path={path} />}{children}</main>
+        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
       </div>
 
       <nav aria-label="Main" className="md:hidden bottom-nav">
