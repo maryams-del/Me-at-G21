@@ -265,3 +265,15 @@ a.tile:hover { transform: translateY(-2px); }
   .space-card { width: 184px; height: 240px; margin-left: -92px; padding: 20px; border-radius: 34px; }
   .space-card .ico { width: 56px; height: 56px; border-radius: 18px; }
 }
+
+/* Page-transition skeleton (src/app/(app)/loading.tsx) */
+.page-loading { animation: fade-in .18s ease both; animation-delay: 80ms; }
+.skeleton, .skeleton-panel { position: relative; overflow: hidden; }
+.skeleton { border-radius: 10px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.skeleton::after, .skeleton-panel::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--ink) 7%, transparent) 50%, transparent 80%);
+  transform: translateX(-100%); animation: shimmer 1.2s ease-in-out infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

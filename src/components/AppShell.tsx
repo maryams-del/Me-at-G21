@@ -6,7 +6,7 @@ import { CaptureSheet } from "./Capture";
 import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
-import { BackButton } from "./BackButton";
+import { BackButton, trackPath } from "./BackButton";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -52,7 +52,7 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
     return () => { window.removeEventListener("ld-toast", onToast); window.removeEventListener("ld-capture", onOpen); window.removeEventListener("keydown", onKey); };
   }, []);
 
-  useEffect(() => { recordVisit(path); }, [path]);
+  useEffect(() => { recordVisit(path); trackPath(path); }, [path]);
 
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const spacesPaths = ["/more", "/finance", "/care", "/faith", "/quran", "/projects", "/admin", "/vault", "/education", "/spaces"];
