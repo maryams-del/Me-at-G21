@@ -20,17 +20,17 @@ beforeEach(async () => { await resetDb(); owner = await makeOwner(); });
 afterAll(async () => { await closeDb(); });
 
 describe("Test 1 — waxing resets from the latest actual completion", () => {
-  it("Nov 1 schedules 27/30/35/38/40; Nov 29 cancels the old ones and restarts", async () => {
+  it("Nov 1 schedules 27/30 and one overdue nudge on 31; Nov 29 cancels the old ones and restarts", async () => {
     await op(at("2026-11-01"), "waxing.complete", { completedOn: "2026-11-01" });
     let r = await pending();
-    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-28", "2026-12-01", "2026-12-06", "2026-12-09", "2026-12-11"].map((d) => localToInstant(d, "09:00").toISOString()));
+    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-28", "2026-12-01", "2026-12-02"].map((d) => localToInstant(d, "09:00").toISOString()));
 
     await op(at("2026-11-29"), "waxing.complete", { completedOn: "2026-11-29" });
     r = await pending();
-    expect(r).toHaveLength(5);
+    expect(r).toHaveLength(3);
     expect(r.every((x) => x.dedupeKey.includes("2026-12-29"))).toBe(true); // due date of the new cycle
     const cancelled = await getDb().select().from(reminders).where(and(eq(reminders.sourceType, "routine"), eq(reminders.status, "cancelled")));
-    expect(cancelled.length).toBeGreaterThanOrEqual(4); // the remaining Nov-1 schedule
+    expect(cancelled.length).toBeGreaterThanOrEqual(2); // the remaining Nov-1 schedule
   });
 
   it("correcting history recalculates without duplicates", async () => {
@@ -38,7 +38,7 @@ describe("Test 1 — waxing resets from the latest actual completion", () => {
     const ev = await op(at("2026-11-05"), "waxing.complete", { completedOn: "2026-11-05" });
     await op(at("2026-11-06"), "routine.void", { eventId: ev.id });
     const r = await pending();
-    expect(r).toHaveLength(5);
+    expect(r).toHaveLength(3);
     expect(r.every((x) => x.dedupeKey.includes("2026-12-01"))).toBe(true);
   });
 
@@ -48,11 +48,11 @@ describe("Test 1 — waxing resets from the latest actual completion", () => {
 });
 
 describe("Routines are generic", () => {
-  it("a custom routine with a grace window and after-due nudges, marked private", async () => {
+  it("a custom routine nudges once the day after it is due, marked private", async () => {
     const r = await op(at("2026-11-01"), "routine.create", { name: "Threading", intervalValue: 3, intervalUnit: "week", graceDays: 7, reminderOffsetsDays: [0, 7], sensitive: true, reminderTime: "20:00" });
     await op(at("2026-11-02"), "routine.log", { routineId: r.id, type: "completed", onDate: "2026-11-02" });
     const rs = await pending();
-    expect(rs.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-23", "2026-11-30"].map((d) => localToInstant(d, "20:00").toISOString()));
+    expect(rs.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-11-23", "2026-11-24"].map((d) => localToInstant(d, "20:00").toISOString()));
     expect(rs.every((x) => x.sensitive)).toBe(true);
   });
   it("templates add an editable routine once", async () => {
@@ -66,7 +66,7 @@ describe("Test 2 — dental six calendar months", () => {
   it("Jan 31 → due Jul 31 with reminders 14d, 1d, on the day", async () => {
     await op(at("2026-01-31"), "dental.complete", { completedOn: "2026-01-31" });
     const r = await pending();
-    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-17", "2026-07-30", "2026-07-31"].map((d) => localToInstant(d, "09:00").toISOString()));
+    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-17", "2026-07-30", "2026-07-31", "2026-08-01"].map((d) => localToInstant(d, "09:00").toISOString()));
   });
   it("settings change reminder offsets", async () => {
     await op(at("2026-01-31"), "dental.complete", { completedOn: "2026-01-31" });
@@ -74,7 +74,7 @@ describe("Test 2 — dental six calendar months", () => {
     expect(d.name).toBe("Dental scaling");
     await op(at("2026-02-01"), "routine.update", { id: d.id, name: d.name, kind: "dental", anchor: "completed", intervalValue: 6, intervalUnit: "month", reminderTime: "10:00", remindersEnabled: true, reminderOffsetsDays: [-30, 0] });
     const r = await pending();
-    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-01", "2026-07-31"].map((d) => localToInstant(d, "10:00").toISOString()));
+    expect(r.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2026-07-01", "2026-07-31", "2026-08-01"].map((d) => localToInstant(d, "10:00").toISOString()));
   });
 });
 
@@ -85,7 +85,7 @@ describe("Test 3 — toothbrush uses first-use date", () => {
     expect(await pending("routine")).toHaveLength(0); // purchase alone doesn't start the clock
     await op(at("2026-11-10"), "routine.log", { routineId: r.id, type: "first_use", onDate: "2026-11-10" });
     const rem = await pending("routine");
-    expect(rem.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2027-01-27", "2027-02-10"].map((d) => localToInstant(d, "09:00").toISOString()));
+    expect(rem.map((x) => x.fireAt.toISOString()).sort()).toEqual(["2027-01-27", "2027-02-10", "2027-02-11"].map((d) => localToInstant(d, "09:00").toISOString()));
   });
 });
 
