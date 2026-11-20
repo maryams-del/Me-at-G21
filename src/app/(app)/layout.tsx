@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { missingConfig } from "@/lib/config";
 import { AppShell } from "@/components/AppShell";
-import { pageOwner, inboxCount } from "@/server/queries";
+import { pageOwner, attentionCount } from "@/server/queries";
 import { todayLocal, formatLocalDate, formatHijri, dmy } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   if (missingConfig().length) redirect("/setup");
   const owner = await pageOwner();
-  const n = await inboxCount(owner.id);
+  const n = await attentionCount(owner);
   const today = todayLocal(owner.timezone);
   const dateLine = `${formatLocalDate(today, { weekday: "long" })} ${dmy(today)}`;
   return (

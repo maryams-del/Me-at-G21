@@ -178,6 +178,7 @@ a.tile:hover { transform: translateY(-2px); }
 .tile.rust { --card-tint: var(--rust); color: var(--ink); }
 .tile.mustard { --card-tint: var(--mustard); color: var(--ink); }
 .tile.slate { --card-tint: var(--slate); color: var(--ink); }
+.tile.min-h-0 { min-height: 0; } /* the utility alone loses to .tile's own min-height */
 .tile .glyph-corner { position: absolute; right: -0.6rem; bottom: -0.6rem; opacity: 0.35; pointer-events: none; }
 
 /* Controls */

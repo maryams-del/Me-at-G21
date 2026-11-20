@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/ui";
 import { type GlyphKind } from "@/components/Glyph";
-import { pageOwner, inboxCount, customSpacesState, dashboardState } from "@/server/queries";
+import { pageOwner, attentionCount, customSpacesState, dashboardState } from "@/server/queries";
 import { OpForm, Reveal } from "@/components/OpForm";
 import { isSpaceGlyph, spacesOrderOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
@@ -14,7 +14,7 @@ type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: s
 /** Spaces: every section of the app in one place (the "Spaces" menu item on phone and web). */
 export default async function Spaces() {
   const o = await pageOwner();
-  const n = await inboxCount(o.id);
+  const n = await attentionCount(o);
   const mine = await customSpacesState(o);
   const s = await dashboardState(o);
   const money = (rows: { sum: number | string; cur: string }[]) => rows.length ? rows.map((c) => formatMoney(Number(c.sum), c.cur)).join(" + ") : null;
@@ -31,7 +31,7 @@ export default async function Spaces() {
     "/education/applications": s.appDeadlines.length ? `${s.appDeadlines.length} deadline${s.appDeadlines.length === 1 ? "" : "s"} soon` : undefined,
     "/projects": s.tasksDueSoon.length ? `${s.tasksDueSoon.length} due this week` : undefined,
     "/admin/expiries": s.expiring[0] ? `${s.expiring[0].label} · ${dmy(s.expiring[0].expiresOn)}` : undefined,
-    "/inbox": n ? `${n} waiting` : undefined,
+    "/inbox": n ? `${n} to look at` : undefined,
   };
   const groups: { title: string; items: Item[] }[] = [
     { title: "Money", items: [
@@ -60,7 +60,7 @@ export default async function Spaces() {
       { href: "/vault", label: "Secure vault", glyph: "vault", d: "Locked away" },
     ] },
     { title: "You", items: [
-      { href: "/inbox", label: "Needs details", glyph: "inbox", d: "Captures waiting for more info", note: n ? `${n} waiting` : undefined },
+      { href: "/inbox", label: "Attention needed", glyph: "inbox", d: "Missing details, overdue items, storage", note: n ? `${n} to look at` : undefined },
       { href: "/history", label: "History & search", glyph: "history", d: "Everything you've logged" },
       { href: "/settings", label: "Settings", glyph: "settings", d: "Profile, security, notifications" },
       { href: "/settings/data", label: "Data & backups", glyph: "documents", d: "Exports, backups, undo" },

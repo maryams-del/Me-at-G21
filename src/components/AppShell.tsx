@@ -126,7 +126,7 @@ function MobileLink({ it, active }: { it: NavItem; active: boolean }) {
     <Link href={it.href} aria-current={active ? "page" : undefined}>
       <Icon d={ICONS[it.icon]} />
       <span>{it.label}</span>
-      {!!it.badge && <span className="absolute top-1.5 right-[24%] w-2.5 h-2.5 rounded-full" style={{ background: "var(--mustard)" }} aria-label={`${it.badge} need details`} />}
+      {!!it.badge && <span className="absolute top-1 right-[18%] min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-[18px] text-center" style={{ background: "var(--rust)", color: "#fff" }} aria-label={`${it.badge} need attention`}>{it.badge > 99 ? "99+" : it.badge}</span>}
     </Link>
   );
 }

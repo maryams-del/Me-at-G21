@@ -42,8 +42,7 @@ export default async function FastsPage() {
         <Reveal label="Manual adjustment">
           <OpForm op="fasts.adjust" initial={{ onDate: today }} submitLabel="Save adjustment" fields={[
             { name: "delta", label: "Change (+ adds, − removes)", type: "int", required: true }, { name: "onDate", label: "Date", type: "date", required: true },
-            { name: "reason", label: "Reason (required)", required: true, wide: true },
-            { name: "overrideNegative", label: "I understand this may make the balance negative", type: "checkbox", wide: true }]} />
+            { name: "reason", label: "Reason (required)", required: true, wide: true }]} />
         </Reveal>
       </div>
 
