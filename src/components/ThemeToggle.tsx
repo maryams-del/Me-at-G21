@@ -28,8 +28,8 @@ export function ThemeToggle() {
   return (
     <div className="flex flex-col items-center shrink-0">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/mascot.png" alt="" width={56} height={75} className="relative z-[2] -mb-[13px] object-contain" style={{ filter: "drop-shadow(0 6px 8px rgba(0,0,0,.3))" }} />
-      <div className="seg glass" role="group" aria-label="Appearance">
+      <img src="/mascot.png" alt="" width={48} height={64} data-splash="mascot" className="relative z-[2] -mb-[11px] object-contain w-[48px] h-[64px]" style={{ filter: "drop-shadow(0 6px 8px rgba(0,0,0,.25))" }} />
+      <div className="seg quiet" role="group" aria-label="Appearance">
         <button type="button" aria-pressed={theme === "dark"} onClick={() => choose("dark")}>Dark</button>
         <button type="button" aria-pressed={theme === "light"} onClick={() => choose("light")}>Light</button>
       </div>

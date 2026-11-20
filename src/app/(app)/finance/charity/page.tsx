@@ -30,8 +30,8 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader glyph="charity" title="Charity" />
       <div className="money-tiles mb-8">
-        <div className="tile rust min-h-0"><p className="t-small">This month</p><p className="t-num text-[2.4rem] mt-2">{sum(thisMonth)}</p></div>
-        <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[2.4rem] mt-2">{sum(yearTotals)}</p></div>
+        <div className="tile rust min-h-0"><p className="t-small">This month</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(thisMonth)}</p></div>
+        <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(yearTotals)}</p></div>
       </div>
 
       <div className="toolbar mb-8">

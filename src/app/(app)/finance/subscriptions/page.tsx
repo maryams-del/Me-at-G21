@@ -38,8 +38,8 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       <PageHeader glyph="subscriptions" title="Subscriptions" />
 
       <div className="money-tiles mb-6">
-        <div className="tile mustard min-h-0"><p className="t-small">Per month (average)</p><p className="t-num text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.monthly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p><p className="t-small mt-1">{s.active.length} active</p></div>
-        <div className="tile min-h-0"><p className="t-small text-ink-2">Per year</p><p className="t-num text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.yearly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p></div>
+        <div className="tile mustard min-h-0"><p className="t-small">Per month (average)</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.monthly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p><p className="t-small mt-1">{s.active.length} active</p></div>
+        <div className="tile min-h-0"><p className="t-small text-ink-2">Per year</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.yearly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p></div>
       </div>
 
       <div className="mb-8"><Reveal label="Add subscription" open={sp.add === "1"}>

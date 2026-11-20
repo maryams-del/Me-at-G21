@@ -36,7 +36,7 @@ export default async function QuranPage() {
             <h2 id="next-h" className="t-small">Next class</h2>
             {next ? (
               <>
-                <p className="t-num text-[2.6rem] mt-2">{fmtDateTime(next.startsAt, o.timezone)}</p>
+                <p className="t-num text-[2rem] md:text-[2.6rem] mt-2">{fmtDateTime(next.startsAt, o.timezone)}</p>
                 <p className="t-small mt-1" style={{ opacity: 0.85 }}>Reminder {next.reminderLeadMinutes ?? cls.reminderLeadMinutes} minutes before{cls.remindersEnabled ? "" : " (reminders off)"}</p>
                 <div className="mt-4 p-4" style={{ background: "var(--paper)", color: "var(--ink)", border: "1.5px solid var(--ink)" }}>
                   <h3 className="t-h3 mb-2">Homework for this class</h3>

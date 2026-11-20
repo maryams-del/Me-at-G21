@@ -42,7 +42,7 @@ export function Stat({ value, label, sub }: { value: React.ReactNode; label: str
   return (
     <div>
       <p className="t-meta" style={{ color: "inherit", opacity: 0.8 }}>{label}</p>
-      <p className="t-num text-[2.6rem] mt-1">{value}</p>
+      <p className="t-num text-[2rem] md:text-[2.6rem] mt-1">{value}</p>
       {sub && <p className="t-small mt-1" style={{ opacity: 0.85 }}>{sub}</p>}
     </div>
   );
