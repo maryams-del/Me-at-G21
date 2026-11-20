@@ -94,7 +94,11 @@ export function AppShell({ children, inboxCount, dateLine }: { children: React.R
           <svg width="2340" height="16" viewBox="0 0 2340 16"><path d={"M0 8 " + Array.from({ length: 24 }, (_, i) => (i === 0 ? "Q48.75 16 97.5 8" : `T${97.5 * (i + 1)} 8`)).join(" ")} fill="none" stroke="var(--slate)" strokeWidth="1.5" strokeLinecap="round" /></svg>
         </div>
 
-        <main id="main" className="pt-5 pb-36 md:pt-8 md:pb-14">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
+        <main id="main" className="pt-5 md:pt-8">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
+        <footer className="mt-16 pt-6 pb-36 md:pb-12 text-center rule-t">
+          <p className="logo text-[22px]">Me @ G21</p>
+          <p className="t-meta mt-1">A project by Project G21</p>
+        </footer>
       </div>
 
       <nav aria-label="Main" className="md:hidden bottom-nav">

@@ -7,7 +7,7 @@ export default async function SettingsPage() {
   const o = await pageOwner();
   return (
     <>
-      <PageHeader glyph="settings" title={o.displayName || "Settings"} />
+      <PageHeader glyph="settings" title="Me @ G21" />
       <div className="grid gap-3 sm:grid-cols-2 mb-9">
         <Link href="/settings/security" className="tile min-h-0"><p className="t-h3">Security</p></Link>
         <Link href="/settings/notifications" className="tile min-h-0"><p className="t-h3">Notifications</p></Link>
