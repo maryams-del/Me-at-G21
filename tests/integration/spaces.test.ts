@@ -4,6 +4,10 @@ import { runOpInTx } from "@/server/ops";
 import { customSpacesState, customSpaceDetail } from "@/server/queries";
 import { listTrash } from "@/server/ops/trash";
 import { resetDb, makeOwner, withCtx } from "../support/db";
+import { getDb } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { spacesOrderOf, bySavedOrder } from "@/lib/spaces";
 
 let owner: Awaited<ReturnType<typeof makeOwner>>;
 const now = new Date("2026-11-19T09:00:00Z");
@@ -41,5 +45,13 @@ describe("Custom spaces", () => {
     expect((await listTrash(owner.id, now)).map((x) => x.kind)).toContain("space");
     await op("trash.restore", { kind: "space", id: s.id });
     expect((await customSpacesState(owner)).map((x) => x.space.name)).toEqual(["Trips"]);
+  });
+
+  it("saves the owner's order of sections and cards", async () => {
+    await op("spaces.order", { sections: ["Faith", "Money"], cards: { Money: ["/finance/zakat", "/finance/charity"] } });
+    const [u] = await getDb().select().from(users).where(eq(users.id, owner.id));
+    const order = spacesOrderOf(u.settings);
+    expect(bySavedOrder(["Money", "Care", "Faith"], (x) => x, order.sections)).toEqual(["Faith", "Money", "Care"]);
+    expect(bySavedOrder(["/finance/charity", "/finance/savings", "/finance/zakat"], (x) => x, order.cards.Money)).toEqual(["/finance/zakat", "/finance/charity", "/finance/savings"]);
   });
 });
