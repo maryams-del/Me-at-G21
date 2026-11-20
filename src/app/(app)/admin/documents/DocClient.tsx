@@ -136,6 +136,14 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [compress, setCompress] = useState(false);
   const [remind, setRemind] = useState(false);
+  const [tab, setTab] = useState<"details" | "reminders">("details");
+  const flip = (on: boolean) => { setRemind(on); setTab(on ? "reminders" : "details"); };
+  const sw = (where: string) => (
+    <div className="flex items-center justify-between gap-3">
+      <label htmlFor={`doc-rem-${where}`} className="grid gap-0.5 cursor-pointer"><span className="font-semibold">Reminders</span><span className="t-meta">{remind ? "On" : "Off"}</span></label>
+      <input id={`doc-rem-${where}`} type="checkbox" role="switch" className="switch" checked={remind} onChange={(e) => flip(e.target.checked)} />
+    </div>
+  );
   const close = useRevealClose();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -179,7 +187,11 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
 
   return (
     <form className="grid gap-4" onSubmit={submit} noValidate>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="seg-tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" aria-selected={tab === "details"} onClick={() => setTab("details")}>Details</button>
+        <button type="button" role="tab" aria-selected={tab === "reminders"} disabled={!remind} title={!remind ? "Turn reminders on in Details" : undefined} onClick={() => setTab("reminders")}>Reminders</button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2" hidden={tab !== "details"}>
         <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" /></label>
         <label className="field"><span className="label">Type</span>
           <select className="select" name="kind" defaultValue="passport">{DOC_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
@@ -201,16 +213,15 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
           <label className="check t-small"><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size
             <span className="t-meta">(photos only; leave unticked to keep full quality)</span></label>
         </div>
-        <div className="sm:col-span-2 rounded-[16px] p-3 grid gap-3" style={{ border: "1px solid var(--hair)", background: "color-mix(in srgb, var(--field-bg) 60%, transparent)" }}>
-          <label className="check"><input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} /><span className="font-semibold">Reminders on</span></label>
-          {remind && (
-            <div className="grid gap-4 sm:grid-cols-2 preview-enter">
-              <label className="field"><span className="label">Remind me this many days before</span><input className="input" name="remindDays" defaultValue="90, 30, 7" inputMode="numeric" /></label>
-              <label className="field"><span className="label">Reminder time</span><input className="input" type="time" name="reminderTime" defaultValue="09:00" /></label>
-            </div>
-          )}
-        </div>
         <label className="field sm:col-span-2"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" name="notes" /></label>
+        <div className="sm:col-span-2 rule-t pt-4">{sw("details")}</div>
+      </div>
+      <div className="grid gap-4" hidden={tab !== "reminders"}>
+        {sw("reminders")}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="field"><span className="label">Remind me this many days before expiry</span><input className="input" name="remindDays" defaultValue="90, 30, 7" inputMode="numeric" /></label>
+          <label className="field"><span className="label">Reminder time</span><input className="input" type="time" name="reminderTime" defaultValue="09:00" /></label>
+        </div>
       </div>
       {error && <p role="alert" className="error">{error}</p>}
       <div><button className="btn btn-primary" disabled={!!busy}>{busy ?? "Save document"}</button></div>

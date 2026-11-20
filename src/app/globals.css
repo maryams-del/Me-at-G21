@@ -379,6 +379,7 @@ input.input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .seg-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; border-radius: 999px; background: var(--field-bg); box-shadow: inset 0 0 0 1px var(--hair); }
 .seg-tabs button { min-height: 40px; border-radius: 999px; border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
 .seg-tabs button[aria-selected="true"] { background: var(--btn-primary-bg); color: var(--btn-primary-ink); }
+.seg-tabs button:disabled { color: var(--ink-3); opacity: .45; cursor: not-allowed; }
 .due-well { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: 18px; padding: 12px 16px; background: var(--field-bg); box-shadow: inset 0 0 0 1px var(--hair); }
 .switch { -webkit-appearance: none; appearance: none; position: relative; flex: none; width: 52px; height: 32px; margin: 0; border-radius: 16px; background: var(--hair); box-shadow: inset 0 0 0 1px var(--rule); cursor: pointer; transition: background .2s ease; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 13px; background: var(--switch-knob); box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s ease; }

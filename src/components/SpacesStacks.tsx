@@ -120,6 +120,14 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
         )}
         {!reorder && addSlot}
       </div>
+      {!reorder && !query && Object.values(open).some(Boolean) && (
+        <div className="flex justify-end">
+          <button type="button" className="btn btn-sm icon-btn" onClick={() => setOpen(() => ({}))}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M7 4l5 5 5-5M7 20l5-5 5 5" /></svg>
+            Collapse all
+          </button>
+        </div>
+      )}
       {query && <p className="t-meta mb-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
       <div className="grid gap-x-6 md:grid-cols-2 items-start">
