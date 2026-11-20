@@ -34,11 +34,13 @@ const config: NextConfig = {
   // Icons now have versioned names; anything still asking for an old name gets the current mark.
   async redirects() {
     return [
-      { source: "/favicon.svg", destination: "/favicon-v2.svg", permanent: true },
-      { source: "/favicon.png", destination: "/favicon-v2.png", permanent: true },
-      { source: "/apple-touch-icon.png", destination: "/icons/apple-touch-icon-v2.png", permanent: true },
-      { source: "/apple-touch-icon-precomposed.png", destination: "/icons/apple-touch-icon-v2.png", permanent: true },
-      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512).png", destination: "/icons/:name-v2.png", permanent: true },
+      { source: "/favicon.svg", destination: "/favicon-v3.svg", permanent: true },
+      { source: "/favicon.png", destination: "/favicon-v3.png", permanent: true },
+      { source: "/apple-touch-icon.png", destination: "/icons/apple-touch-icon-v3.png", permanent: true },
+      { source: "/apple-touch-icon-precomposed.png", destination: "/icons/apple-touch-icon-v3.png", permanent: true },
+      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512).png", destination: "/icons/:name-v3.png", permanent: true },
+      { source: "/favicon-v2.:ext(svg|png)", destination: "/favicon-v3.:ext", permanent: true },
+      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512)-v2.png", destination: "/icons/:name-v3.png", permanent: true },
     ];
   },
   async headers() {
