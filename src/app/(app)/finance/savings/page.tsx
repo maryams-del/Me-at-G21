@@ -48,13 +48,13 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
 
       <div className="grid gap-6">
         {goals.map(({ goal: g, balance, pct, txs, byMonth }) => (
-          <article key={g.id} className="panel p-5" style={{ opacity: g.status === "archived" ? 0.6 : 1 }}>
+          <article key={g.id} className="panel p-4 sm:p-5" style={{ opacity: g.status === "archived" ? 0.6 : 1 }}>
             <div className="flex flex-wrap justify-between gap-3 items-baseline">
               <h2 className="t-h2">{g.name} {g.status !== "active" && <span className="chip chip-pine">{g.status}</span>}</h2>
               <p className="t-small text-ink-2">{g.targetDate ? `Target ${fmtDate(g.targetDate)}` : "No target date"}</p>
             </div>
             <div className="mt-4 grid gap-1">
-              <div className="flex justify-between items-end"><span className="t-num text-[2.4rem]">{formatMoney(balance, g.currency)}</span><span className="t-small">{pct}% of {formatMoney(g.targetMinor, g.currency)}</span></div>
+              <div className="flex justify-between items-end"><span className="t-num text-[1.7rem] sm:text-[2.4rem]">{formatMoney(balance, g.currency)}</span><span className="t-small">{pct}% of {formatMoney(g.targetMinor, g.currency)}</span></div>
               <div className="bar" style={{ height: 14 }}><i style={{ width: `${pct}%` }} /></div>
               <div className="flex justify-between t-meta"><span>{[25, 50, 75].filter((m) => pct >= m).map((m) => `${m}%`).join(", ") || "No milestones yet"}{pct >= 25 ? " reached" : ""}</span><span>{formatMoney(Math.max(0, g.targetMinor - balance), g.currency)} to go</span></div>
               {g.plannedMonthlyMinor && <p className="t-meta">Plan: {formatMoney(g.plannedMonthlyMinor, g.currency)} a month{g.remindersEnabled && g.reminderDayOfMonth ? `, reminder on day ${g.reminderDayOfMonth}` : ""}</p>}

@@ -200,7 +200,7 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
                       <span className="font-bold text-[15px] truncate">{c.label}</span>
                       {!reorder && <span className="ml-auto t-meta shrink-0">Open →</span>}
                     </span>
-                    {c.stat && <span className="mt-auto text-[21px] leading-tight truncate" style={{ fontFamily: "var(--font-display)", fontWeight: "var(--display-weight)" as unknown as number }}>{c.stat}</span>}
+                    {c.stat && <span className="mt-auto pt-2 text-[14px] font-semibold leading-snug text-ink-2 line-clamp-2 break-words">{c.stat}</span>}
                   </Link>
                   {reorder && (
                     <button type="button" className="grip absolute right-2.5 top-2 z-10" aria-label={`Drag to move ${c.label}`}

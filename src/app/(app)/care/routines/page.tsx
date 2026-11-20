@@ -1,6 +1,6 @@
 import { pageOwner, routinesState } from "@/server/queries";
 import { PageHeader, Empty, Section } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { ROUTINE_TEMPLATES, type TemplateKey } from "@/server/ops/care";
 import { todayLocal, addDays, dmy } from "@/lib/time";
 import { fmtDate, relDays } from "@/lib/format";
@@ -50,7 +50,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
       {rows.length === 0 && <Empty>No routines yet. Use quick add above, or create your own.</Empty>}
 
       <ul className="grid gap-4 md:grid-cols-2">
-        {rows.map(({ routine: r, anchor, due, latest, daysSince, cycleDays, daysLeft, overdue, events, lastPurchase }) => {
+        {rows.map(({ routine: r, anchor, due, latest, daysSince, cycleDays, daysLeft, overdue, events }) => {
           const isFirstUse = r.anchor === "first_use";
           const pct = r.graceDays && cycleDays && daysSince !== null ? Math.min(100, (daysSince / cycleDays) * 100) : null;
           const dueMark = r.graceDays && cycleDays ? ((cycleDays - r.graceDays) / cycleDays) * 100 : null;
@@ -78,22 +78,20 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
                   <p className="t-meta">Last {fmtDate(anchor)}. Recommended {fmtDate(due)}, latest {fmtDate(latest)}.</p>
                 </div>
               )}
-              {isFirstUse && <p className="t-small text-ink-2">Bought: {lastPurchase ? fmtDate(lastPurchase) : "not recorded"}. First used: {anchor ? fmtDate(anchor) : "not recorded"}.</p>}
+              {isFirstUse && <p className="t-small text-ink-2">Started: {anchor ? fmtDate(anchor) : "not recorded"}</p>}
               <div className="flex flex-wrap gap-2">
                 {isFirstUse ? (
                   <>
                     <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label="Started a new one today" className="btn btn-sm btn-primary" />
-                    <OpButton op="routine.log" input={{ routineId: r.id, type: "purchased", onDate: today }} label="Bought one today" className="btn btn-sm" />
                   </>
                 ) : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done today" className="btn btn-sm btn-primary" confirmText={r.graceDays ? `Log ${r.name.toLowerCase()} done today (${dmy(today)})? The next one is counted from today.` : undefined} />}
                 {due && <OpButton op="routine.snooze" input={{ routineId: r.id, until: addDays(due < today ? today : due, 1) }} label="Snooze 1 day" className="btn btn-sm" />}
                 {due && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" className="btn btn-sm btn-ghost" confirmText="Skip this cycle? The next due date will count from today." />}
               </div>
-              <details>
-                <summary className="t-small cursor-pointer">Log a past date, history and settings</summary>
-                <div className="mt-3 grid gap-4">
+              <EditPanel label="Log a past date, history and settings">
+                <div className="grid gap-4">
                   <OpForm op="routine.log" fixed={{ routineId: r.id }} initial={{ onDate: today, type: isFirstUse ? "first_use" : "completed" }} submitLabel="Save entry" compact fields={[
-                    { name: "type", label: "What happened", type: "select", required: true, options: isFirstUse ? [{ value: "first_use", label: "First use" }, { value: "purchased", label: "Purchased" }] : [{ value: "completed", label: "Done" }, { value: "skipped", label: "Skipped" }] },
+                    { name: "type", label: "What happened", type: "select", required: true, options: isFirstUse ? [{ value: "first_use", label: "Started a new one" }] : [{ value: "completed", label: "Done" }, { value: "skipped", label: "Skipped" }] },
                     { name: "onDate", label: "Date", type: "date", required: true }, { name: "notes", label: "Note", nullable: true, wide: true }]} />
                   {events.length > 0 && <ul className="list">{events.map((e) => (
                     <li key={e.id} className="py-1.5 flex justify-between items-center t-small" style={{ opacity: e.voidedAt ? 0.5 : 1 }}>
@@ -105,7 +103,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
                   </Section>
                   <OpButton op="routine.delete" input={{ id: r.id }} label="Delete routine" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${r.name}” and its history?`} />
                 </div>
-              </details>
+              </EditPanel>
             </li>
           );
         })}

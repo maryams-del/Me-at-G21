@@ -8,7 +8,7 @@ import { api, ApiError, toast } from "./api";
 export type FieldDef = {
   name: string;
   label: string;
-  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime" | "checks";
+  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime" | "checks" | "interval";
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -28,6 +28,12 @@ export type FieldDef = {
   /** send under a different key */
   sendAs?: string;
   wide?: boolean;
+  /** text/int: suggestions shown as you type (you can still type anything) */
+  suggestions?: string[];
+  /** only show this field while another field has one of these values */
+  showIf?: { field: string; values: string[] };
+  /** interval: "Every [n] [unit]" — `name` holds the number, `unitName` the unit chosen from `options` */
+  unitName?: string;
 };
 
 type Props = {
@@ -62,6 +68,13 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
     }
     if (f.type === "checkbox") { out[f.name] = form.get(f.name) === "on"; continue; }
     if (f.type === "checks") { out[key] = form.getAll(f.name).map(String); continue; }
+    if (f.type === "interval") {
+      if (!form.has(f.name)) continue;
+      const n = String(form.get(f.name) ?? "").trim();
+      if (n) out[f.name] = Number(n);
+      if (f.unitName) out[f.unitName] = String(form.get(f.unitName) ?? "");
+      continue;
+    }
     const v = String(form.get(f.name) ?? "").trim();
     if (v === "") { if (f.nullable) out[f.name] = null; continue; }
     if (f.type === "int") out[f.name] = Number(v);
@@ -86,13 +99,19 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
   const reveal = useContext(RevealCtx);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
+  const [watch, setWatch] = useState<Record<string, string>>(() => {
+    const w: Record<string, string> = {};
+    for (const f of fields) if (f.showIf) w[f.showIf.field] = initial[f.showIf.field] == null ? "" : String(initial[f.showIf.field]);
+    return w;
+  });
+  const visible = (f: FieldDef) => !f.showIf || f.showIf.values.includes(watch[f.showIf.field] ?? "");
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true); setError(null);
     const form = e.currentTarget;
-    const input = { ...toInput(fields, new FormData(form)), ...fixed };
+    const input = { ...toInput(fields.filter(visible), new FormData(form)), ...fixed };
     try {
       const body = nestKey ? { ...nestExtra, [nestKey]: { ...nestBase, ...input } } : input;
       const res = await api<{ message?: string }>(endpoint ?? `/api/ops/${op}`, body);
@@ -114,9 +133,10 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
   };
 
   return (
-    <form onSubmit={submit} className={compact ? "grid gap-3" : "grid gap-4"} noValidate>
+    <form onSubmit={submit} className={compact ? "grid gap-3" : "grid gap-4"} noValidate
+      onChange={(e) => { const t = e.target as unknown as HTMLInputElement; if (t.name && t.name in watch) setWatch((w) => ({ ...w, [t.name]: t.value })); }}>
       <div className={fields.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-        {fields.map((f) => {
+        {fields.filter(visible).map((f) => {
           const fid = `${id}-${f.name}`;
           const invalid = error?.field === f.name;
           const common = { id: fid, name: f.name, required: f.required, "aria-invalid": invalid || undefined, "aria-describedby": f.help ? `${fid}-h` : undefined };
@@ -139,6 +159,17 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               </fieldset>
             );
           }
+          if (f.type === "interval") return (
+            <fieldset key={f.name} className="field min-w-0">
+              <legend className="label mb-1">{f.label}</legend>
+              <div className="interval-row">
+                <input className="input" {...common} aria-label={`${f.label} (number)`} defaultValue={val(f) || "1"} inputMode="numeric" />
+                <select className="select" name={f.unitName} aria-label={`${f.label} (unit)`} defaultValue={f.unitName && initial[f.unitName] != null ? String(initial[f.unitName]) : f.options?.[0]?.value}>
+                  {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </fieldset>
+          );
           return (
             <label key={f.name} htmlFor={fid} className={`field ${f.wide || f.type === "textarea" ? "sm:col-span-2" : ""}`}>
               <span className="label">{f.label}{f.required ? "" : <span className="t-meta"> (optional)</span>}</span>
@@ -152,8 +183,10 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               ) : (
                 <input className="input" {...common} defaultValue={val(f)} placeholder={f.placeholder}
                   type={f.type === "date" ? "date" : f.type === "time" ? "time" : f.type === "datetime" ? "datetime-local" : "text"}
-                  inputMode={f.type === "amount" ? "decimal" : f.type === "int" ? "numeric" : undefined} />
+                  inputMode={f.type === "amount" ? "decimal" : f.type === "int" ? "numeric" : undefined}
+                  list={f.suggestions?.length ? `${fid}-l` : undefined} autoComplete={f.suggestions?.length ? "off" : undefined} />
               )}
+              {!!f.suggestions?.length && <datalist id={`${fid}-l`}>{f.suggestions.map((x) => <option key={x} value={x} />)}</datalist>}
               {f.help && <span id={`${fid}-h`} className="t-meta">{f.help}</span>}
             </label>
           );
@@ -196,6 +229,21 @@ export function Reveal({ label, children, open: initialOpen = false, buttonClass
     <div>
       <button className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
       {open && <div id={id} className="mt-4 panel p-4 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+    </div>
+  );
+}
+
+/**
+ * The one way to edit an entry, used across the app: an "Edit" button that opens the form inline under the entry.
+ * Saving (any OpForm inside) closes it again. No URL change, so Back leaves the page instead of closing the form.
+ */
+export function EditPanel({ children, label = "Edit", buttonClass = "btn btn-sm btn-ghost" }: { children: React.ReactNode; label?: string; buttonClass?: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className={open ? "col-span-full basis-full w-full min-w-0" : "min-w-0"}>
+      <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+      {open && <div id={id} className="mt-3 panel p-4 grid gap-3 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );
 }

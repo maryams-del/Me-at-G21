@@ -83,7 +83,13 @@ export async function charityState(o: Owner, filter: { q?: string; year?: string
     mm.set(r.currency, (mm.get(r.currency) ?? 0) + r.amountMinor);
     monthly.set(m, mm);
   }
-  return { rows, year, monthly };
+  // Suggestions for the form: the platforms/recipients and causes used most often, across all years.
+  const top = async (col: typeof t.charityPayments.recipient | typeof t.charityPayments.cause) => (await db()
+    .select({ v: col, n: sql<number>`count(*)` }).from(t.charityPayments)
+    .where(and(eq(t.charityPayments.ownerId, o.id), isNull(t.charityPayments.deletedAt), sql`${col} is not null and ${col} <> ''`))
+    .groupBy(col).orderBy(sql`count(*) desc`).limit(12)).map((r) => r.v as string);
+  const [recipients, causes] = await Promise.all([top(t.charityPayments.recipient), top(t.charityPayments.cause)]);
+  return { rows, year, monthly, recipients, causes };
 }
 
 export async function savingsState(o: Owner) {

@@ -13,8 +13,8 @@ export default function FinanceIndex() {
   return (
     <>
       <PageHeader glyph="finance" title="Money" />
-      <ul className="grid gap-3 sm:grid-cols-3">
-        {items.map((i) => <li key={i.href}><Link href={i.href} className="tile"><Glyph kind={i.glyph} size={30} accent="var(--rust)" /><p className="t-h3 mt-3">{i.label}</p><p className="t-small text-ink-2">{i.d}</p></Link></li>)}
+      <ul className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+        {items.map((i) => <li key={i.href}><Link href={i.href} className="tile min-h-0"><Glyph kind={i.glyph} size={30} accent="var(--rust)" /><p className="t-h3 mt-3">{i.label}</p></Link></li>)}
       </ul>
     </>
   );
