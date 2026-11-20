@@ -1,7 +1,7 @@
 import { pageOwner, documentsState, documentStorageBytes, peopleList } from "@/server/queries";
 import { PeopleManager } from "../People";
 import { FilterPanel } from "@/components/FilterPanel";
-import { PageHeader, Empty } from "@/components/ui";
+import { PageHeader, Empty, SearchPill } from "@/components/ui";
 import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { UploadButton, ProtectedId, ShareFile, NewDocumentForm } from "./DocClient";
@@ -36,14 +36,11 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader glyph="documents" title="Documents & IDs" />
-      <div className="mb-8 flex flex-wrap gap-3 items-start">
-        <Reveal label="Add a document" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <NewDocumentForm />
-        </Reveal>
-        <PeopleManager people={people} />
-        <FilterPanel active={!!(filtered || sp.sort)}>
+      <div className="toolbar mb-8">
+        <SearchPill q={q} placeholder="Search documents" keep={{ kind, reminders, sort: sp.sort }} />
+        <FilterPanel active={!!(kind || reminders || sp.sort)}>
           <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter documents">
-          <label className="field"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. maryam passport" /></label>
+          {q && <input type="hidden" name="q" value={q} />}
           <label className="field"><span className="label">Reminders</span>
             <select name="reminders" defaultValue={reminders ?? ""} className="select"><option value="">All</option><option value="on">On</option><option value="off">Off</option></select></label>
           <label className="field"><span className="label">Type</span>
@@ -54,6 +51,10 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
           {(filtered || sp.sort) && <a href="/admin/documents" className="btn btn-ghost">Clear</a>}
         </form>
         </FilterPanel>
+        <Reveal label="Add a document" iconOnly open={sp.add === "1"}>
+          <NewDocumentForm />
+        </Reveal>
+        <PeopleManager people={people} />
       </div>
       <div className="mb-6 grid gap-1 max-w-md" aria-label="File storage used">
         <div className="flex justify-between t-small"><span>File storage</span><span>{kb(used)} of 1 GB free</span></div>

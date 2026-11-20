@@ -65,3 +65,15 @@ export function ReminderList({ items, tz }: { items: { id: string; title: string
     </ul>
   );
 }
+
+/** Search box for a page toolbar (sits on one line with the filter and + buttons). Keeps the other active filters. */
+export function SearchPill({ q, placeholder = "Search", keep = {} }: { q?: string; placeholder?: string; keep?: Record<string, string | undefined> }) {
+  return (
+    <form className="glass search-pill" role="search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="opacity-70 shrink-0"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4 4" /></svg>
+      <label className="sr-only" htmlFor="toolbar-q">{placeholder}</label>
+      <input id="toolbar-q" type="search" name="q" defaultValue={q} placeholder={placeholder} />
+      {Object.entries(keep).map(([k, v]) => v ? <input key={k} type="hidden" name={k} value={v} /> : null)}
+    </form>
+  );
+}

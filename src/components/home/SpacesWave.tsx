@@ -26,13 +26,15 @@ export function SpacesWave({ spaces }: { spaces: Space[] }) {
     return () => ro.disconnect();
   }, []);
 
-  const clamp = (v: number) => Math.max(0, Math.min(n - 1, v));
-  const snap = (v: number) => { setDrag(false); setPos(clamp(Math.round(v))); };
+  // Circular: the position runs freely in both directions and every card is placed at its nearest wrapped offset.
+  const clamp = (v: number) => v;
+  const snap = (v: number) => { setDrag(false); setPos(Math.round(v)); };
+  const wrap = (v: number) => ((v % n) + n) % n;
   const wide = width >= 600;
   const gap = k * (wide ? Math.min(210, Math.max(170, width * 0.22)) : Math.min(150, Math.max(118, width * 0.35)));
   const lift = k * (wide ? 100 : 72);
   const top = k * (wide ? 40 : 30);
-  const cur = Math.round(pos);
+  const cur = n ? wrap(Math.round(pos)) : 0;
 
   return (
     <div>
@@ -63,17 +65,18 @@ export function SpacesWave({ spaces }: { spaces: Space[] }) {
           <path className="flow-line" d="M-20 330 C 90 330 170 250 260 250 S 340 246 400 246 S 520 248 540 250 S 700 330 820 330" fill="none" stroke="#C77A2E" strokeOpacity=".7" strokeWidth="2" strokeDasharray="6 10" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         </svg>
         {spaces.map((s, i) => {
-          const o = i - pos, a = Math.abs(o);
+          let o = wrap(i - pos); if (o > n / 2) o -= n;
+          const a = Math.abs(o);
           const hidden = a > 2.6;
           const tf = `translate(${Math.round(o * gap)}px, ${Math.round(top + lift * (1 - Math.cos(Math.min(a, 2.8) * 0.85)))}px) rotate(${(o * 8).toFixed(2)}deg) scale(${(1 - Math.min(a, 3) * 0.11).toFixed(3)})`;
           return (
             <Link key={s.key} href={s.href} className="space-card glass-light"
               aria-current={i === cur ? "true" : undefined}
               tabIndex={hidden ? -1 : 0}
-              onFocus={() => { if (i !== cur) snap(i); }}
-              onClick={(e) => { if (g.current.moved) { e.preventDefault(); g.current.moved = false; return; } if (i !== cur) { e.preventDefault(); snap(i); } }}
+              onFocus={() => { if (i !== cur) snap(pos + o); }}
+              onClick={(e) => { if (g.current.moved) { e.preventDefault(); g.current.moved = false; return; } if (i !== cur) { e.preventDefault(); snap(pos + o); } }}
               style={{ transform: tf, opacity: hidden ? 0 : 1 - Math.min(a, 2) * 0.22, zIndex: 100 - Math.round(a * 10), pointerEvents: hidden ? "none" : undefined,
-                transition: drag ? "none" : "transform .5s cubic-bezier(.2,.9,.3,1), opacity .35s ease" }}>
+                transition: drag || a > 2.4 ? "none" : "transform .5s cubic-bezier(.2,.9,.3,1), opacity .35s ease" }}>
               <span className="ico" style={{ background: s.tint, ["--paper" as string]: "#FFF8EC" }}><Glyph kind={s.glyph} size={wide ? 28 : 24} color="#26331F" accent="#8A4A12" /></span>
               <span className="relative mt-auto font-bold text-[19px] md:text-[23px]" style={{ fontFamily: "var(--font-display)" }}>{s.name}</span>
               <span className="relative mt-0.5 text-[13px] md:text-[14px] font-semibold muted">{s.stat}</span>
@@ -82,13 +85,13 @@ export function SpacesWave({ spaces }: { spaces: Space[] }) {
         })}
       </div>
       <div className="flex items-center justify-between md:justify-center gap-5 mt-1">
-        <button type="button" onClick={() => snap(pos - 1)} disabled={cur === 0} aria-label="Previous space" className="glass-light w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40">
+        <button type="button" onClick={() => snap(pos - 1)} aria-label="Previous space" className="glass-light w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40">
           <svg className="relative" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M15 6l-6 6 6 6" /></svg>
         </button>
         <div className="flex gap-1.5" aria-hidden>
           {spaces.map((s, i) => <span key={s.key} className="h-1.5 rounded-full transition-all" style={{ width: i === cur ? 18 : 6, background: i === cur ? "var(--spaces-ink)" : "rgba(30,36,24,.22)" }} />)}
         </div>
-        <button type="button" onClick={() => snap(pos + 1)} disabled={cur === n - 1} aria-label="Next space" className="glass-light w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40">
+        <button type="button" onClick={() => snap(pos + 1)} aria-label="Next space" className="glass-light w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40">
           <svg className="relative" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
         </button>
       </div>

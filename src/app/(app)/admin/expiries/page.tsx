@@ -1,6 +1,6 @@
 import { pageOwner, expiriesState, remindersFor, peopleList } from "@/server/queries";
 import { PeopleManager } from "../People";
-import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
+import { PageHeader, Section, Empty, ReminderList, SearchPill } from "@/components/ui";
 import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { fmtDate, relDays } from "@/lib/format";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -33,14 +33,11 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader glyph="expiries" title="Expiries & renewals" />
-      <div className="mb-8 flex flex-wrap gap-3 items-start">
-        <Reveal label="Track something" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <OpForm op="expiry.create" fields={fields} initial={{ kind: "passport", reminderOffsetsDays: [-90, -30, -7], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Start tracking" />
-        </Reveal>
-        <PeopleManager people={people} />
-        <FilterPanel active={filtering || sort === "latest"}>
+      <div className="toolbar mb-8">
+        <SearchPill q={q} placeholder="Search expiries" keep={{ kind, reminders, sort: sort === "latest" ? sort : undefined }} />
+        <FilterPanel active={!!(kind || reminders) || sort === "latest"}>
           <form className="panel p-3 flex flex-wrap gap-3 items-end" role="search" aria-label="Filter and sort">
-            <label className="field flex-1 min-w-[10rem]"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. passport" /></label>
+            {q && <input type="hidden" name="q" value={q} />}
             <label className="field"><span className="label">Type</span>
               <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
             <label className="field"><span className="label">Reminders</span>
@@ -51,6 +48,10 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
             {(filtering || sort === "latest") && <a href="/admin/expiries" className="btn btn-ghost">Clear</a>}
           </form>
         </FilterPanel>
+        <Reveal label="Track something" iconOnly open={sp.add === "1"}>
+          <OpForm op="expiry.create" fields={fields} initial={{ kind: "passport", reminderOffsetsDays: [-90, -30, -7], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Start tracking" />
+        </Reveal>
+        <PeopleManager people={people} />
       </div>
       {active.length === 0 && filtering ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
         <ul className="grid gap-3">

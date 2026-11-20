@@ -10,12 +10,12 @@ export function FilterPanel({ active = false, children, className = "" }: { acti
   const [open, setOpen] = useState(active);
   const id = useId();
   return (
-    <div className={`${open ? "basis-full w-full" : ""} min-w-0 ${className}`}>
-      <button type="button" className="btn icon-btn relative" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        <FilterIcon />Filter
+    <div className={`contents ${className}`}>
+      <button type="button" className="btn icon-btn relative shrink-0" style={{ width: 46, height: 46, padding: 0 }} aria-label="Filter" title="Filter" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <FilterIcon size={19} />
         {active && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: "var(--mustard)" }} aria-label="Filters applied" />}
       </button>
-      {open && <div id={id} className="mt-3 preview-enter">{children}</div>}
+      {open && <div id={id} className="basis-full w-full min-w-0 order-last mt-1 preview-enter">{children}</div>}
     </div>
   );
 }
@@ -34,11 +34,11 @@ export function IconToggle({ icon, label, count, children }: { icon: "family"; l
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
-    <div className={`${open ? "basis-full w-full" : ""} min-w-0`}>
+    <div className="contents">
       <button type="button" className="btn icon-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
         {icon === "family" && <FamilyIcon />}{label}{count !== undefined && ` (${count})`}
       </button>
-      {open && <div id={id} className="mt-3 panel p-4 preview-enter">{children}</div>}
+      {open && <div id={id} className="basis-full w-full min-w-0 order-last mt-1 panel p-4 preview-enter">{children}</div>}
     </div>
   );
 }

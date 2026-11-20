@@ -85,12 +85,11 @@ export default async function Spaces() {
   return (
     <>
       <PageHeader title="Spaces" />
-      <div className="mb-6">
-        <Reveal label="+ Add a space" buttonClass="btn btn-accent">
+      <SpacesStacks groups={stacked} addSlot={
+        <Reveal label="Add a space" iconOnly>
           <OpForm op="space.create" fields={spaceFields(sections)} initial={{ section: "You", glyph: "projects" }} submitLabel="Add space" />
         </Reveal>
-      </div>
-      <SpacesStacks groups={stacked} />
+      } />
     </>
   );
 }

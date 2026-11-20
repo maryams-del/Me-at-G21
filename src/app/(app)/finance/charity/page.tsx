@@ -1,6 +1,6 @@
 import { dmy } from "@/lib/time";
 import { pageOwner, charityState } from "@/server/queries";
-import { PageHeader, Section, Empty } from "@/components/ui";
+import { PageHeader, Section, Empty, SearchPill } from "@/components/ui";
 import { OpForm, OpButton, Reveal, EditPanel } from "@/components/OpForm";
 import { charityFields } from "@/components/fields";
 import { formatMoney, fromMinor } from "@/lib/money";
@@ -34,8 +34,17 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
         <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[2.4rem] mt-2">{sum(yearTotals)}</p></div>
       </div>
 
-      <div className="mb-8">
-        <Reveal label="Log a donation" buttonClass="btn btn-primary" open={sp.add === "1"}>
+      <div className="toolbar mb-8">
+        <SearchPill q={sp.q} placeholder="Search donations" keep={{ year: sp.year }} />
+        <FilterPanel active={s.year !== today.slice(0, 4)}>
+          <form className="panel p-3 flex flex-wrap gap-2 items-end">
+            {sp.q && <input type="hidden" name="q" value={sp.q} />}
+            <label className="field w-[7rem]"><span className="label">Year</span><input name="year" defaultValue={s.year} className="input" inputMode="numeric" /></label>
+            <button className="btn">Apply</button>
+            {(sp.q || s.year !== today.slice(0, 4)) && <a href="/finance/charity" className="btn btn-ghost">Clear</a>}
+          </form>
+        </FilterPanel>
+        <Reveal label="Log a donation" iconOnly open={sp.add === "1"}>
           <OpForm op="charity.create" fields={charityFields(o.defaultCurrency, { ...suggest, repeatUpTo: 12 - Number(today.slice(5, 7)) })}
             initial={{ paidOn: today, status: "completed", currency: o.defaultCurrency }} submitLabel="Save donation" />
         </Reveal>
@@ -52,14 +61,6 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
       )}
 
       <Section title="History">
-        <FilterPanel active={!!sp.q || s.year !== today.slice(0, 4)} className="mb-4">
-          <form className="panel p-3 flex flex-wrap gap-2 items-end" role="search">
-            <label className="field flex-1 min-w-[10rem]"><span className="label">Search</span><input name="q" defaultValue={sp.q} className="input" placeholder="Recipient or cause" /></label>
-            <label className="field w-[6rem]"><span className="label">Year</span><input name="year" defaultValue={s.year} className="input" inputMode="numeric" /></label>
-            <button className="btn">Apply</button>
-            {(sp.q || s.year !== today.slice(0, 4)) && <a href="/finance/charity" className="btn btn-ghost">Clear</a>}
-          </form>
-        </FilterPanel>
         {s.rows.length === 0 ? <Empty>No donations in {s.year}{sp.q ? ` matching “${sp.q}”` : ""}. Log one above, or say “I donated 100 SAR via Ehsan” in Capture.</Empty> : (
           <div className="grid gap-5">
             {[...byMonth].map(([m, rows]) => (
