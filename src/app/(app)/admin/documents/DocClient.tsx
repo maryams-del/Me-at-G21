@@ -63,7 +63,7 @@ export function UploadButton({ documentId, hasFiles }: { documentId: string; has
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <input ref={input} type="file" accept="application/pdf,image/jpeg,image/png,image/heic,image/webp" className="sr-only" onChange={onPick} aria-label="Choose a file to upload" />
-      <button className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Encrypting & uploading…" : hasFiles ? "Upload new version" : "Upload file"}</button>
+      <button className="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Encrypting & uploading…" : hasFiles ? "Add another file or image" : "Upload file or image"}</button>
       <label className="check t-small" style={{ minHeight: 36 }}><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size</label>
     </span>
   );
@@ -226,5 +226,66 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
       {error && <p role="alert" className="error">{error}</p>}
       <div><button className="btn btn-primary" disabled={!!busy}>{busy ?? "Save document"}</button></div>
     </form>
+  );
+}
+
+type AttachedFile = { id: string; filename: string };
+
+/**
+ * Files on an entry: each shown as its name with a × to remove it, plus "Upload file or image" (several at once).
+ * If the entry has no document yet, `attach` creates one first.
+ */
+export function AttachedFiles({ files, documentId, attach }: { files: AttachedFile[]; documentId: string | null; attach?: { op: string; input: Record<string, unknown> } }) {
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!picked.length) return;
+    setBusy(true);
+    try {
+      const id = documentId ?? (attach ? (await api<{ id: string }>(`/api/ops/${attach.op}`, attach.input)).id : null);
+      if (!id) throw new Error("Couldn't attach files here");
+      for (const p of picked) {
+        // Photos over the limit are shrunk automatically; PDFs must already fit.
+        const { file } = p.size > 4 * 1024 * 1024 ? await compressIfImage(p) : { file: p };
+        if (file.size > 4 * 1024 * 1024) throw new Error(`${p.name} is over 4 MB`);
+        await uploadFile(id, file);
+      }
+      toast(picked.length === 1 ? "File added" : `${picked.length} files added`);
+      router.refresh();
+    } catch (err) { toast((err as Error).message, "error"); }
+    finally { setBusy(false); }
+  }
+
+  async function remove(f: AttachedFile) {
+    if (!window.confirm(`Remove ${f.filename}?`)) return;
+    setRemoving(f.id);
+    try { await api("/api/ops/document.file.delete", { fileId: f.id }); toast("File removed"); router.refresh(); }
+    catch (err) { toast(err instanceof ApiError ? err.message : "Couldn't remove the file", "error"); }
+    finally { setRemoving(null); }
+  }
+
+  return (
+    <div className="grid gap-2">
+      <span className="label">Files</span>
+      {files.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <li key={f.id} className="file-chip">
+              <a href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener" className="truncate">{f.filename}</a>
+              <button type="button" aria-label={`Remove ${f.filename}`} title="Remove" disabled={removing === f.id} onClick={() => remove(f)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input ref={input} type="file" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/webp" className="sr-only" onChange={onPick} aria-label="Choose files to upload" />
+      <button type="button" className="btn btn-sm justify-self-start" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Uploading…" : "Upload file or image"}</button>
+    </div>
   );
 }
