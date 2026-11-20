@@ -42,8 +42,8 @@ export default async function ZakatPage() {
                 </div>
                 {p.notes && <p className="t-small text-ink-2">{p.notes}</p>}
                 <EditPanel>
-                    <OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact />
-                    <OpButton op="zakat.payment.delete" input={{ id: p.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this payment record?" />
+                    <OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact 
+                      deleteAction={{ op: "zakat.payment.delete", input: { id: p.id }, confirm: "Delete this payment record?", label: "Delete" }} />
                   </EditPanel>
               </li>
             ))}

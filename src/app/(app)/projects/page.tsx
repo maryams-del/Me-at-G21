@@ -18,7 +18,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     { name: "dueOn", label: "Due date", type: "date", nullable: true },
     { name: "dueTime", label: "Due time", type: "time", nullable: true },
     { name: "priority", label: "Priority", type: "select", options: prio, nullable: true },
-    { name: "reminderOffsetsDays", label: "Remind days before (0 = on the day)", type: "intlist", negative: true },
+    { name: "reminderOffsetsDays", label: "Remind me before", type: "intlist", negative: true, presets: [7, 3, 1, 0], maxDays: 60, maxCount: 6 },
     { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
     { name: "notes", label: "Notes", type: "textarea", nullable: true },
   ];
@@ -101,8 +101,8 @@ function TaskRow({ t, today, project, fields, board }: { t: T; today: string; pr
         </div>
       </div>
       <EditPanel>
-          <OpForm op="task.update" fields={fields} fixed={{ id: t.id, checklist: t.checklist }} initial={t} submitLabel="Save task" compact />
-          <OpButton op="task.delete" input={{ id: t.id }} label="Delete task" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this task?" />
+          <OpForm op="task.update" fields={fields} fixed={{ id: t.id, checklist: t.checklist }} initial={t} submitLabel="Save task" compact 
+                      deleteAction={{ op: "task.delete", input: { id: t.id }, confirm: "Delete this task?", label: "Delete task" }} />
         </EditPanel>
     </li>
   );

@@ -104,7 +104,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                       <OpForm op="document.reminders" fixed={{ documentId: d.id }} submitLabel="Save reminders" compact
                         initial={{ remindersEnabled: !!rem?.remindersEnabled, reminderOffsetsDays: rem?.reminderOffsetsDays ?? [-90, -30, -7], reminderTime: rem?.reminderTime ?? "09:00" }}
                         fields={[
-                          { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true },
+                          { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true, anchorDate: d.expiresOn },
                           { name: "reminderTime", label: "Reminder time", type: "time", required: true },
                           { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
                         ]} />
@@ -117,9 +117,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                       { name: "idNumber", label: d.idMasked ? "Replace ID number" : "ID number", help: d.idMasked ? "Leave empty to keep the current number." : undefined },
                       ...(d.idMasked ? [{ name: "clearId", label: "Remove the stored ID number", type: "checkbox", wide: true } as FieldDef] : []),
                       baseFields[5],
-                    ]} />
+                    ]} 
+                      deleteAction={{ op: "document.delete", input: { id: d.id }, confirm: `Delete “${d.title}”, its ID number and all its files? This can't be undone.`, label: "Delete document" }} />
                   </div>
-                  <OpButton op="document.delete" input={{ id: d.id }} label="Delete document" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${d.title}”, its ID number and all its files? This can't be undone.`} />
                 </div>
               </EditPanel>
             </li>

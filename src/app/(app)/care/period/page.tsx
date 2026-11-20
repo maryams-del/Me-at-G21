@@ -132,8 +132,8 @@ export default async function PeriodPage() {
                 </div>
                 {(c.symptoms.length > 0 || c.notes) && <p className="t-small text-ink-2">{[c.symptoms.join(", "), c.notes].filter(Boolean).join(". ")}</p>}
                 <EditPanel label="Correct or delete">
-                    <OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact />
-                    <OpButton op="period.delete" input={{ id: c.id }} label="Delete entry" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this period entry?" />
+                    <OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact 
+                      deleteAction={{ op: "period.delete", input: { id: c.id }, confirm: "Delete this period entry?", label: "Delete entry" }} />
                   </EditPanel>
               </li>
             ))}
