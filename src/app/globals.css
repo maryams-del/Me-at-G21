@@ -49,7 +49,7 @@
   --sheen: 0;
   --accent-ink: #3F6B4E;
   --mark-stone: #D6C6A6;
-  --mark-green: #4C7A5C;
+  --mark-green: #5E8A6C;
   --mark-bar: #1F2620;
   --wave-display: none;
   --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
@@ -452,7 +452,8 @@ input.input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .home-week { background: var(--wk-bg); padding: var(--wk-pad); box-shadow: var(--wk-shadow); border-radius: 28px; color: var(--wk-ink); --ink: var(--wk-ink); --ink-3: var(--wk-ink-3); --hair: var(--wk-hair); }
 .home-spaces { background: var(--sp-bg); padding: var(--sp-pad); box-shadow: var(--sp-shadow); border-radius: 28px; color: var(--sp-ink); --ink: var(--sp-ink); --ink-3: var(--sp-ink-3); --hair: var(--sp-hair); --paper: var(--sp-paper); }
 .home-week, .home-spaces { -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%); }
-.ring { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.rings { display: flex; gap: 8px; }
+.ring { flex: 0 0 auto; width: 40px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
 .ring .rl { font-size: 10px; font-weight: 600; color: var(--ink-3); }
 .ring.today .rl { color: var(--ink); }
 .ring .rn { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; box-shadow: inset 0 0 0 1px var(--hair); transition: background .2s ease; }
@@ -461,7 +462,8 @@ input.input::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .ring .rd { display: flex; gap: 2px; height: 4px; }
 .ring .rd i { width: 4px; height: 4px; border-radius: 2px; background: var(--wk-acc); }
 .ring[aria-pressed="true"] .rd i { background: transparent; }
-@media (min-width: 768px) { .ring .rn { width: 44px; height: 44px; font-size: 14px; } }
+@media (min-width: 768px) { .rings { gap: 12px; } .ring { width: 46px; } .ring .rn { width: 44px; height: 44px; font-size: 14px; } }
+@media (max-width: 380px) { .rings { gap: 4px; } .ring { width: 38px; } .ring .rn { width: 34px; height: 34px; } }
 .sp-tile { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12px; text-align: center; text-decoration: none; color: inherit; min-width: 0; }
 .sp-tile .ic { width: 52px; height: 52px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: var(--sp-acc); background: color-mix(in srgb, var(--sp-acc) 13%, transparent); transition: transform .15s ease; }
 .sp-tile:hover .ic { transform: translateY(-2px); }

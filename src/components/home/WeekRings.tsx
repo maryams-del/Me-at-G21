@@ -12,7 +12,7 @@ export function WeekRings({ days }: { days: Day[] }) {
   return (
     <section aria-labelledby="week-h" className="home-week">
       <h2 id="week-h" className="t-label mb-3.5" style={{ color: "var(--ink-3)" }}>This week</h2>
-      <div className="flex -mx-1">
+      <div className="rings">
         {days.map((d, i) => (
           <button key={d.date} type="button" onClick={() => setSel(i)} aria-pressed={i === sel}
             aria-label={`${d.title}, ${d.items.length ? `${d.items.length} thing${d.items.length === 1 ? "" : "s"}` : "nothing planned"}`}
