@@ -50,7 +50,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <PageHeader glyph="achievements" title="Achievements & hobbies" intro="Your bank of accomplishments for CVs, portfolios and applications. Exports use only what you wrote here; the AI never adds results or numbers." />
+      <PageHeader glyph="achievements" title="Achievements & hobbies" />
 
       <div className="mb-6"><Reveal label="Add achievement" open={sp.add === "1"}>
         <OpForm op="achievement.create" fields={fields} initial={{ kind: "accomplishment", area: "work" }} submitLabel="Save achievement" />

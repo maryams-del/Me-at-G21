@@ -14,7 +14,7 @@ export default async function NotificationsPage() {
   const [lastRun] = await db.select().from(jobRuns).where(eq(jobRuns.job, "dispatch")).orderBy(desc(jobRuns.startedAt)).limit(1);
   return (
     <>
-      <PageHeader glyph="settings" title="Notifications" intro="Reminders are always listed in the app. Push and email are extra channels you switch on." />
+      <PageHeader glyph="settings" title="Notifications" />
       <NotificationsClient
         vapidKey={process.env.VAPID_PUBLIC_KEY ?? ""}
         prefs={{ pushEnabled: prefs?.pushEnabled ?? false, emailFallback: prefs?.emailFallback ?? false, showSensitivePreviews: prefs?.showSensitivePreviews ?? false, quietStart: prefs?.quietStart ?? null, quietEnd: prefs?.quietEnd ?? null }}

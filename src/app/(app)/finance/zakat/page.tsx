@@ -24,7 +24,7 @@ export default async function ZakatPage() {
 
   return (
     <>
-      <PageHeader glyph="zakat" title="Zakat" intro="Work out an estimate step by step, save it, and log what you actually paid. Estimates and payments are kept separate; nothing here moves money." />
+      <PageHeader glyph="zakat" title="Zakat" />
 
       <Section title="Calculator">
         <ZakatCalculator today={today} currency={o.defaultCurrency} />

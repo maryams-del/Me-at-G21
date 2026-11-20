@@ -9,7 +9,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const s = await historyState(o, sp);
   return (
     <>
-      <PageHeader glyph="history" title="History & search" intro="Everything you've logged, newest first. Personal-care entries show their details only here, on your device." />
+      <PageHeader glyph="history" title="History & search" />
       <SearchBox />
       <form className="panel p-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end mb-6" role="search" aria-label="Filter history">
         <label className="field"><span className="label">Keywords</span><input name="q" defaultValue={sp.q} className="input" /></label>

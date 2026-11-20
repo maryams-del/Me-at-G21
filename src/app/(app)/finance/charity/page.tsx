@@ -19,7 +19,7 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader glyph="charity" title="Charity" intro="Payments you've made. Planned donations are kept separate and never count as paid." />
+      <PageHeader glyph="charity" title="Charity" />
       <div className="grid gap-3 sm:grid-cols-2 mb-8">
         <div className="tile rust min-h-0"><p className="t-small">This month</p><p className="t-num text-[2.4rem] mt-2">{thisMonth ? [...thisMonth].map(([c, v]) => formatMoney(v, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p></div>
         <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[2.4rem] mt-2">{yearTotals.size ? [...yearTotals].map(([c, v]) => formatMoney(v, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p></div>

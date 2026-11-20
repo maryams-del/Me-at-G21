@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
+import { useSizes } from "@/lib/sizes";
 
 export type Space = { key: string; name: string; stat: string; href: string; glyph: GlyphKind; tint: string };
 
@@ -11,6 +12,7 @@ export type Space = { key: string; name: string; stat: string; href: string; gly
  */
 export function SpacesWave({ spaces }: { spaces: Space[] }) {
   const n = spaces.length;
+  const k = useSizes().waveCards;
   const [pos, setPos] = useState(0);
   const [drag, setDrag] = useState(false);
   const [width, setWidth] = useState(360);
@@ -27,9 +29,9 @@ export function SpacesWave({ spaces }: { spaces: Space[] }) {
   const clamp = (v: number) => Math.max(0, Math.min(n - 1, v));
   const snap = (v: number) => { setDrag(false); setPos(clamp(Math.round(v))); };
   const wide = width >= 600;
-  const gap = wide ? Math.min(210, Math.max(170, width * 0.22)) : Math.min(150, Math.max(118, width * 0.35));
-  const lift = wide ? 100 : 72;
-  const top = wide ? 40 : 30;
+  const gap = k * (wide ? Math.min(210, Math.max(170, width * 0.22)) : Math.min(150, Math.max(118, width * 0.35)));
+  const lift = k * (wide ? 100 : 72);
+  const top = k * (wide ? 40 : 30);
   const cur = Math.round(pos);
 
   return (

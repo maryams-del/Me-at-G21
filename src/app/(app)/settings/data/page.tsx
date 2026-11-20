@@ -25,7 +25,7 @@ export default async function DataPage() {
 
   return (
     <>
-      <PageHeader glyph="settings" title="Data & backups" intro="Download your data, keep backups, restore from one, and undo deletes." />
+      <PageHeader glyph="settings" title="Data & backups" />
 
       <Section title="Spreadsheets">
         <p className="t-small text-ink-2 mb-4 prose-w">One file per section, for Excel, Numbers or Google Sheets. Dates are dd/mm/yyyy. Passwords, sign-in details, full ID numbers and uploaded files are never included.</p>

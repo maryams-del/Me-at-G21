@@ -48,7 +48,7 @@ export default async function InboxPage() {
 
   return (
     <>
-      <PageHeader glyph="inbox" title="Needs details" intro="Captures you chose to finish later. Fill in what's missing and save; nothing here counts until you do." />
+      <PageHeader glyph="inbox" title="Needs details" />
       {drafts.length === 0 ? <Empty>Nothing waiting. When a capture is missing something, choose “Fill details later” and it will appear here.</Empty> : (
         <ul className="grid gap-4">
           {drafts.map((d) => {

@@ -33,7 +33,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader glyph="routines" title="Routines" intro="Anything you do on a cycle: waxing, dental scaling, changing bedsheets, a haircut. Logging it records the date and counts the next one from then. Nothing is ever marked done for you." />
+      <PageHeader glyph="routines" title="Routines" />
 
       <div className="mb-8 grid gap-4">
         {templates.length > 0 && (

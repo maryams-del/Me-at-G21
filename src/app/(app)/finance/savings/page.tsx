@@ -27,7 +27,7 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader glyph="savings" title="Savings" intro="Progress counts only real deposits and withdrawals. Targets and planned contributions are plans." />
+      <PageHeader glyph="savings" title="Savings" />
       <div className="mb-8 flex flex-wrap gap-3 items-start">
         {active.length > 0 && (
           <Reveal label="Add savings" buttonClass="btn btn-primary" open={sp.add === "1"}>

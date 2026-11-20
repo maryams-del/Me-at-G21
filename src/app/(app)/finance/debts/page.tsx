@@ -21,7 +21,7 @@ export default async function DebtsPage() {
 
   return (
     <>
-      <PageHeader glyph="debts" title="Lent & borrowed" intro="Nothing is ever sent to the other person. Reminders are for you only." />
+      <PageHeader glyph="debts" title="Lent & borrowed" />
       <div className="grid gap-3 sm:grid-cols-2 mb-8">
         <div className="tile slate min-h-0"><p className="t-small">Owed to me (I need to collect)</p><p className="t-num text-[2.2rem] mt-2">{sum(owedToMe)}</p></div>
         <div className="tile rust min-h-0"><p className="t-small">I owe (I need to repay)</p><p className="t-num text-[2.2rem] mt-2">{sum(iOwe)}</p></div>

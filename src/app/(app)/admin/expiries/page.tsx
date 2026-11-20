@@ -31,7 +31,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
   const archived = s.items.filter((x) => x.item.status !== "active");
   return (
     <>
-      <PageHeader glyph="expiries" title="Expiries & renewals" intro="Reminders say only the item name on your lock screen, never numbers." />
+      <PageHeader glyph="expiries" title="Expiries & renewals" />
       <div className="mb-8 flex flex-wrap gap-3 items-start">
         <Reveal label="Track something" buttonClass="btn btn-primary" open={sp.add === "1"}>
           <OpForm op="expiry.create" fields={fields} initial={{ kind: "passport", reminderOffsetsDays: [-90, -30, -7], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Start tracking" />

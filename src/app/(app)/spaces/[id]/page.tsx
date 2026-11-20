@@ -18,7 +18,7 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <p className="t-label mb-2">Spaces · {s.section}</p>
-      <PageHeader glyph={isSpaceGlyph(s.glyph) ? s.glyph : "projects"} title={s.name} intro={s.description ?? undefined} />
+      <PageHeader glyph={isSpaceGlyph(s.glyph) ? s.glyph : "projects"} title={s.name} />
 
       <div className="mb-5">
         <Reveal label="Edit space">
