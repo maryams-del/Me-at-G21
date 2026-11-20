@@ -1,8 +1,8 @@
 import { pageOwner, documentsState, documentStorageBytes, peopleList } from "@/server/queries";
-import { PeopleManager, personLabel, personOptions } from "../People";
+import { PeopleManager } from "../People";
 import { FilterPanel } from "@/components/FilterPanel";
 import { PageHeader, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { UploadButton, ProtectedId, ShareFile, NewDocumentForm } from "./DocClient";
 
@@ -21,15 +21,15 @@ const baseFields: FieldDef[] = [
 ];
 const kb = (n: number) => (n === 0 ? "0 MB" : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; q?: string; sort?: string; person?: string }> }) {
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; q?: string; sort?: string; reminders?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
   const kind = KINDS.some((k) => k.value === sp.kind) ? sp.kind : undefined;
   const q = sp.q?.trim().slice(0, 80) || undefined;
   const people = await peopleList(o.id);
-  const person = sp.person === "me" || people.some((p) => p.id === sp.person) ? sp.person : undefined;
-  const rows = await documentsState(o, { kind, q, sort: sp.sort, person });
-  const filtered = !!(kind || q || person);
+  const reminders = sp.reminders === "on" || sp.reminders === "off" ? sp.reminders : undefined;
+  const rows = await documentsState(o, { kind, q, sort: sp.sort, reminders });
+  const filtered = !!(kind || q || reminders);
   const used = await documentStorageBytes(o.id);
   const LIMIT = 1024 * 1024 * 1024; // Vercel Blob free (Hobby) allowance
   const pct = Math.min(100, (used / LIMIT) * 100);
@@ -38,14 +38,14 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       <PageHeader glyph="documents" title="Documents & IDs" />
       <div className="mb-8 flex flex-wrap gap-3 items-start">
         <Reveal label="Add a document" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <NewDocumentForm people={people} />
+          <NewDocumentForm />
         </Reveal>
         <PeopleManager people={people} />
         <FilterPanel active={!!(filtered || sp.sort)}>
           <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter documents">
           <label className="field"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. maryam passport" /></label>
-          <label className="field"><span className="label">Belongs to</span>
-            <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
+          <label className="field"><span className="label">Reminders</span>
+            <select name="reminders" defaultValue={reminders ?? ""} className="select"><option value="">All</option><option value="on">On</option><option value="off">Off</option></select></label>
           <label className="field"><span className="label">Type</span>
             <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
           <label className="field"><span className="label">Sort</span>
@@ -62,53 +62,68 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       </div>
       {rows.length === 0 ? (filtered ? <Empty>No documents match{kind ? ` type “${KINDS.find((k) => k.value === kind)?.label}”` : ""}{q ? ` “${q}”` : ""}.</Empty> : <Empty>No documents yet. Add your passport, national ID, transcripts, certificates or CV versions.</Empty>) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {rows.map(({ doc: d, files, tracked }) => (
-            <li key={d.id} className="panel p-4 grid gap-3 content-start">
-              <div className="flex justify-between gap-3">
-                <div>
-                  <h2 className="t-h3">{d.title}</h2>
-                  {d.personId && <span className="chip chip-mustard mt-1">{personLabel(people, d.personId)}</span>}
-                  <p className="t-meta">{[KINDS.find((k) => k.value === d.kind)?.label, d.issuer].filter((x) => x && x !== d.title).join(", ")}</p>
+          {rows.map(({ doc: d, files, reminders: rem }) => {
+            const latest = files[0];
+            return (
+            <li key={d.id} className="panel p-4 grid gap-2 content-start">
+              <div className="flex justify-between items-baseline gap-3">
+                <h2 className="t-h3 min-w-0 truncate">{d.title}</h2>
+                <p className="t-small text-ink-2 shrink-0">{d.expiresOn ? `Expires ${fmtDate(d.expiresOn)}` : d.issuedOn ? `Issued ${fmtDate(d.issuedOn)}` : ""}</p>
+              </div>
+              {latest
+                ? <a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0" href={`/api/documents/file/${latest.id}?view=1`} target="_blank" rel="noopener">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>
+                    <span className="truncate">{latest.filename}</span></a>
+                : <p className="t-meta">No file attached</p>}
+              <EditPanel label="Edit details" buttonClass="btn btn-sm">
+                <div className="grid gap-4">
+                  <div>
+                    <h3 className="t-small font-semibold mb-1">Files</h3>
+                    {files.length ? (
+                      <ul className="list">
+                        {files.map((f, i) => (
+                          <li key={f.id} className="py-2 grid gap-1">
+                            <span className="t-small break-words">{f.filename} <span className="t-meta">v{f.version}{i === 0 ? " (latest)" : ""}, {kb(f.sizeBytes)}, {fmtDateTime(f.createdAt, o.timezone)}</span></span>
+                            <span className="flex flex-wrap gap-1">
+                              <ShareFile fileId={f.id} filename={f.filename} contentType={f.contentType} />
+                              <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener">View</a>
+                              <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}`}>Download</a>
+                              <OpButton op="document.file.delete" input={{ fileId: f.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Delete ${f.filename} v${f.version}? This can't be undone.`} />
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="t-meta">No file uploaded.</p>}
+                    <div className="mt-2"><UploadButton documentId={d.id} hasFiles={files.length > 0} /></div>
+                  </div>
+                  {d.idMasked && <div className="t-small"><span className="text-ink-3 mr-2">ID number</span><ProtectedId documentId={d.id} masked={d.idMasked} /></div>}
+                  {d.expiresOn && (
+                    <div>
+                      <h3 className="t-small font-semibold mb-2">Expiry reminders</h3>
+                      <OpForm op="document.reminders" fixed={{ documentId: d.id }} submitLabel="Save reminders" compact
+                        initial={{ remindersEnabled: !!rem?.remindersEnabled, reminderOffsetsDays: rem?.reminderOffsetsDays ?? [-90, -30, -7], reminderTime: rem?.reminderTime ?? "09:00" }}
+                        fields={[
+                          { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true },
+                          { name: "reminderTime", label: "Reminder time", type: "time", required: true },
+                          { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
+                        ]} />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="t-small font-semibold mb-2">Details</h3>
+                    <OpForm op="document.update" fixed={{ id: d.id, personId: d.personId }} initial={{ ...d, idNumber: "" }} submitLabel="Save details" compact fields={[
+                      ...baseFields.slice(0, 5),
+                      { name: "idNumber", label: d.idMasked ? "Replace ID number" : "ID number", help: d.idMasked ? "Leave empty to keep the current number." : undefined },
+                      ...(d.idMasked ? [{ name: "clearId", label: "Remove the stored ID number", type: "checkbox", wide: true } as FieldDef] : []),
+                      baseFields[5],
+                    ]} />
+                  </div>
+                  <OpButton op="document.delete" input={{ id: d.id }} label="Delete document" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${d.title}”, its ID number and all its files? This can't be undone.`} />
                 </div>
-                {d.expiresOn && <p className="t-small text-right">Expires<br /><span className="font-medium">{fmtDate(d.expiresOn)}</span>{tracked && <span className="block t-meta">reminders on</span>}</p>}
-              </div>
-              {d.idMasked && <div className="t-small"><span className="text-ink-3 mr-2">ID number</span><ProtectedId documentId={d.id} masked={d.idMasked} /></div>}
-              {d.issuedOn && <p className="t-small text-ink-2">Issued {fmtDate(d.issuedOn)}</p>}
-              {d.notes && <p className="t-small text-ink-2">{d.notes}</p>}
-              <div>
-                <h3 className="t-small font-semibold mb-1">Files</h3>
-                {files.length ? (
-                  <ul className="list">
-                    {files.map((f, i) => (
-                      <li key={f.id} className="py-2 grid gap-1">
-                        <span className="t-small">{f.filename} <span className="t-meta">v{f.version}{i === 0 ? " (latest)" : ""}, {kb(f.sizeBytes)}, {fmtDateTime(f.createdAt, o.timezone)}</span></span>
-                        <span className="flex flex-wrap gap-1">
-                          <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener">View</a>
-                          <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}`}>Download</a>
-                          <ShareFile fileId={f.id} filename={f.filename} contentType={f.contentType} />
-                          <OpButton op="document.file.delete" input={{ fileId: f.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Delete ${f.filename} v${f.version}? This can't be undone.`} />
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="t-meta">No file uploaded.</p>}
-              </div>
-              <UploadButton documentId={d.id} hasFiles={files.length > 0} />
-              <div className="flex flex-wrap gap-2 pt-2" style={{ borderTop: "1px solid var(--hair)" }}>
-                <Reveal label="Edit details" buttonClass="btn btn-sm">
-                  <OpForm op="document.update" fixed={{ id: d.id }} initial={{ ...d, idNumber: "" }} submitLabel="Save" fields={[
-                    baseFields[0],
-                    { name: "personId", label: "Belongs to", type: "select", nullable: true, options: personOptions(people) },
-                    ...baseFields.slice(1, 5),
-                    { name: "idNumber", label: d.idMasked ? "Replace ID number" : "ID number", help: d.idMasked ? "Leave empty to keep the current number." : undefined },
-                    ...(d.idMasked ? [{ name: "clearId", label: "Remove the stored ID number", type: "checkbox", wide: true } as FieldDef] : []),
-                    baseFields[5],
-                  ]} />
-                </Reveal>
-                <OpButton op="document.delete" input={{ id: d.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Delete “${d.title}”, its ID number and all its files? This can't be undone.`} />
-              </div>
+              </EditPanel>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </>

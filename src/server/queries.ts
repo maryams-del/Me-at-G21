@@ -197,14 +197,11 @@ export async function peopleList(ownerId: string) {
   return db().select().from(t.people).where(and(eq(t.people.ownerId, ownerId), isNull(t.people.deletedAt))).orderBy(asc(t.people.createdAt));
 }
 /** "me" = the owner's own items (person_id is null); a UUID = that family member. */
-const personCond = (col: typeof t.documents.personId | typeof t.expiryItems.personId, person?: string) =>
-  person === "me" ? isNull(col) : person ? eq(col, person) : undefined;
-
-export async function expiriesState(o: Owner, f: { kind?: string; sort?: string; person?: string } = {}) {
+export async function expiriesState(o: Owner, f: { kind?: string; sort?: string; reminders?: string; q?: string } = {}) {
   const conds = [eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt)];
   if (f.kind) conds.push(eq(t.expiryItems.kind, f.kind));
-  const pc = personCond(t.expiryItems.personId, f.person);
-  if (pc) conds.push(pc);
+  if (f.reminders === "on" || f.reminders === "off") conds.push(eq(t.expiryItems.remindersEnabled, f.reminders === "on"));
+  if (f.q) conds.push(sql`(${t.expiryItems.label} ilike ${"%" + f.q + "%"} or ${t.expiryItems.notes} ilike ${"%" + f.q + "%"})`);
   const items = await db().select().from(t.expiryItems).where(and(...conds))
     .orderBy(asc(t.expiryItems.status), f.sort === "latest" ? desc(t.expiryItems.expiresOn) : asc(t.expiryItems.expiresOn));
   const renewals = items.length ? await db().select().from(t.renewalEvents).where(inArray(t.renewalEvents.itemId, items.map((i) => i.id))).orderBy(desc(t.renewalEvents.renewedOn)) : [];
@@ -213,11 +210,9 @@ export async function expiriesState(o: Owner, f: { kind?: string; sort?: string;
   return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id) })), docs, today };
 }
 
-export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; person?: string } = {}) {
+export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; reminders?: string } = {}) {
   const conds = [eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)];
   if (f.kind) conds.push(eq(t.documents.kind, f.kind));
-  const pc = personCond(t.documents.personId, f.person);
-  if (pc) conds.push(pc);
   const order = f.sort === "expiry" ? [sql`${t.documents.expiresOn} asc nulls last`, asc(t.documents.title)]
     : f.sort === "recent" ? [desc(t.documents.updatedAt)] : [asc(t.documents.kind), asc(t.documents.title)];
   let docs = await db().select().from(t.documents).where(and(...conds)).orderBy(...order);
@@ -230,8 +225,13 @@ export async function documentsState(o: Owner, f: { kind?: string; q?: string; s
     id: t.documentFiles.id, documentId: t.documentFiles.documentId, version: t.documentFiles.version, filename: t.documentFiles.filename,
     contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, createdAt: t.documentFiles.createdAt,
   }).from(t.documentFiles).where(and(inArray(t.documentFiles.documentId, docs.map((d) => d.id)), isNull(t.documentFiles.deletedAt))).orderBy(desc(t.documentFiles.version)) : [];
-  const tracked = docs.length ? await db().select({ documentId: t.expiryItems.documentId, id: t.expiryItems.id }).from(t.expiryItems).where(and(inArray(t.expiryItems.documentId, docs.map((d) => d.id)), isNull(t.expiryItems.deletedAt))) : [];
-  return docs.map((d) => ({ doc: d, files: files.filter((f) => f.documentId === d.id), tracked: tracked.some((x) => x.documentId === d.id) }));
+  const tracked = docs.length ? await db().select({ documentId: t.expiryItems.documentId, id: t.expiryItems.id, remindersEnabled: t.expiryItems.remindersEnabled, reminderOffsetsDays: t.expiryItems.reminderOffsetsDays, reminderTime: t.expiryItems.reminderTime })
+    .from(t.expiryItems).where(and(inArray(t.expiryItems.documentId, docs.map((d) => d.id)), isNull(t.expiryItems.deletedAt))) : [];
+  const out = docs.map((d) => {
+    const it = tracked.find((x) => x.documentId === d.id) ?? null;
+    return { doc: d, files: files.filter((f) => f.documentId === d.id), tracked: !!it?.remindersEnabled, reminders: it };
+  });
+  return f.reminders === "on" ? out.filter((x) => x.tracked) : f.reminders === "off" ? out.filter((x) => !x.tracked) : out;
 }
 
 const DOC_KIND_WORDS: Record<string, string> = {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { api, ApiError, toast } from "./api";
 import { useSizes } from "@/lib/sizes";
@@ -10,6 +10,7 @@ export type StackCard = { key: string; href: string; label: string; glyph: Glyph
 export type StackGroup = { title: string; tint: string; custom: boolean; cards: StackCard[] };
 
 const LONG_PRESS_MS = 600;
+const OPEN_KEY = "g21-stacks-open";
 
 function Grip() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M5 8h14M5 12h14M5 16h14" /></svg>;
@@ -25,7 +26,12 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
   const k = useSizes().stackCards;
   const CARD_H = Math.round(112 * k), OPEN_STEP = Math.round(122 * k), CLOSED_STEP = Math.round(48 * k);
   const [groups, setGroups] = useState(initial);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  // Which stacks are fanned out survives going to a space and coming back (Back / swipe).
+  const [open, setOpenState] = useState<Record<string, boolean>>({});
+  useEffect(() => { try { setOpenState(JSON.parse(sessionStorage.getItem(OPEN_KEY) || "{}")); } catch { /* private mode */ } }, []);
+  const setOpen = (f: (o: Record<string, boolean>) => Record<string, boolean>) => setOpenState((o) => {
+    const n = f(o); try { sessionStorage.setItem(OPEN_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n;
+  });
   const [q, setQ] = useState("");
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);

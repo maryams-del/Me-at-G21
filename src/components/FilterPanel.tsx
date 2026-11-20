@@ -36,7 +36,7 @@ export function IconToggle({ icon, label, count, children }: { icon: "family"; l
   return (
     <div className={`${open ? "basis-full w-full" : ""} min-w-0`}>
       <button type="button" className="btn icon-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        {icon === "family" && <FamilyIcon />}{label}{!!count && <span className="chip" style={{ padding: "0 .45rem" }}>{count}</span>}
+        {icon === "family" && <FamilyIcon />}{label}{count !== undefined && ` (${count})`}
       </button>
       {open && <div id={id} className="mt-3 panel p-4 preview-enter">{children}</div>}
     </div>
