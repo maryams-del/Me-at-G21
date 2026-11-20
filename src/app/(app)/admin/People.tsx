@@ -1,4 +1,4 @@
-import { OpForm, OpButton, Reveal } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, EditPanel } from "@/components/OpForm";
 
 export const RELATION_OPTIONS = [
   { value: "spouse", label: "Spouse" }, { value: "child", label: "Child" }, { value: "parent", label: "Parent" },
@@ -27,10 +27,8 @@ export function PeopleManager({ people }: { people: Person[] }) {
                   <span className="font-medium">{p.name} <span className="t-meta font-normal">{RELATION_OPTIONS.find((r) => r.value === p.relation)?.label}</span></span>
                   <OpButton op="person.delete" input={{ id: p.id }} label="Remove" className="btn btn-sm btn-ghost" confirmText={`Remove ${p.name}? Their documents and expiries stay, but will show as yours.`} />
                 </div>
-                <details><summary className="t-meta cursor-pointer">Edit</summary>
-                  <div className="mt-2"><OpForm op="person.update" fixed={{ id: p.id }} initial={p} submitLabel="Save" compact fields={[
-                    { name: "name", label: "Name", required: true }, { name: "relation", label: "Relation", type: "select", required: true, options: RELATION_OPTIONS }]} /></div>
-                </details>
+                <EditPanel><OpForm op="person.update" fixed={{ id: p.id }} initial={p} submitLabel="Save" compact fields={[
+                    { name: "name", label: "Name", required: true }, { name: "relation", label: "Relation", type: "select", required: true, options: RELATION_OPTIONS }]} /></EditPanel>
               </li>
             ))}
           </ul>

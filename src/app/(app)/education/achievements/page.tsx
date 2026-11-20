@@ -1,6 +1,6 @@
 import { pageOwner, achievementsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
 import { ACHIEVEMENT_KINDS, ACHIEVEMENT_AREAS } from "@/db/schema";
 import { datesLabel } from "@/server/ops/career";
 import { fmtDate } from "@/lib/format";
@@ -89,14 +89,11 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
                     {a.links.map((l) => <li key={l.url}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></li>)}
                   </ul>
                 )}
-                <details>
-                  <summary className="t-small cursor-pointer">Edit</summary>
-                  <div className="mt-3 grid gap-3">
+                <EditPanel>
                     <OpForm op="achievement.update" fields={fields} fixed={{ id: a.id }} compact submitLabel="Save"
                       initial={{ ...a, skillsText: a.skills.join(", "), tagsText: a.tags.join(", "), linksText: linksText(a.links) }} />
                     <OpButton op="achievement.delete" input={{ id: a.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${a.title}”?`} />
-                  </div>
-                </details>
+                  </EditPanel>
               </li>
             ))}
           </ul>
@@ -121,13 +118,10 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
                 </div>
                 {h.notes && <p className="t-small text-ink-2">{h.notes}</p>}
                 {h.links.length > 0 && <p className="t-small">{h.links.map((l, n) => <span key={l.url}>{n ? ", " : ""}<a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></span>)}</p>}
-                <details>
-                  <summary className="t-small cursor-pointer">Edit</summary>
-                  <div className="mt-3 grid gap-3">
+                <EditPanel>
                     <OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact />
                     <OpButton op="hobby.delete" input={{ id: h.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${h.name}”?`} />
-                  </div>
-                </details>
+                  </EditPanel>
               </li>
             ))}
           </ul>

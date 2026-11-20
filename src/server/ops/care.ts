@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { routines, routineEvents, fastLedgerEvents, annualFastAdditionRules } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
@@ -27,11 +27,20 @@ export const ROUTINE_TEMPLATES = {
 export type TemplateKey = keyof typeof ROUTINE_TEMPLATES;
 
 export async function routineAnchor(ctx: Pick<Ctx, "tx">, r: RoutineRow): Promise<LocalDate | null> {
-  const types = r.anchor === "first_use" ? ["first_use", "skipped"] : ["completed", "skipped"];
+  // First-use routines (a toothbrush) keep counting from the last new one: skipping only silences them.
+  const types = r.anchor === "first_use" ? ["first_use"] : ["completed", "skipped"];
   const [e] = await ctx.tx.select().from(routineEvents)
     .where(and(eq(routineEvents.routineId, r.id), isNull(routineEvents.voidedAt), inArray(routineEvents.type, types)))
     .orderBy(desc(routineEvents.onDate), desc(routineEvents.createdAt)).limit(1);
   return e?.onDate ?? null;
+}
+
+/** First-use routines: skipped since the last new one, so it stops nagging and just keeps counting days. */
+export async function routineSkipped(ctx: Pick<Ctx, "tx">, r: RoutineRow, anchor: LocalDate | null): Promise<boolean> {
+  if (r.anchor !== "first_use" || !anchor) return false;
+  const [e] = await ctx.tx.select({ id: routineEvents.id }).from(routineEvents)
+    .where(and(eq(routineEvents.routineId, r.id), isNull(routineEvents.voidedAt), eq(routineEvents.type, "skipped"), gte(routineEvents.onDate, anchor))).limit(1);
+  return !!e;
 }
 
 export function routineDue(r: Pick<RoutineRow, "intervalValue" | "intervalUnit" | "snoozedUntil">, anchor: LocalDate | null): LocalDate | null {
@@ -62,7 +71,7 @@ export async function syncRoutine(ctx: Ctx, routineId: string) {
   if (!r) return;
   const anchor = await routineAnchor(ctx, r);
   const due = routineDue(r, anchor);
-  if (!anchor || !due || r.paused || !r.remindersEnabled) return cancelReminders(ctx.tx, ctx.ownerId, "routine", r.id);
+  if (!anchor || !due || r.paused || !r.remindersEnabled || await routineSkipped(ctx, r, anchor)) return cancelReminders(ctx.tx, ctx.ownerId, "routine", r.id);
   await syncReminders(ctx.tx, ctx.ownerId, "routine", r.id, routineReminders(r, anchor, due, ctx.tz), ctx.now);
 }
 

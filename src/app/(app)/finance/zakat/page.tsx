@@ -1,6 +1,6 @@
 import { pageOwner, zakatState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
 import { CURRENCIES, formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
@@ -41,13 +41,10 @@ export default async function ZakatPage() {
                   <span className="text-ink-2">{fmtDate(p.paidOn)}</span>
                 </div>
                 {p.notes && <p className="t-small text-ink-2">{p.notes}</p>}
-                <details>
-                  <summary className="t-small cursor-pointer">Edit</summary>
-                  <div className="mt-2 grid gap-3">
+                <EditPanel>
                     <OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact />
                     <OpButton op="zakat.payment.delete" input={{ id: p.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this payment record?" />
-                  </div>
-                </details>
+                  </EditPanel>
               </li>
             ))}
           </ul>

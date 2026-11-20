@@ -1,6 +1,6 @@
 import { pageOwner, projectsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
 import { fmtDate } from "@/lib/format";
 
 const COLS = [{ key: "backlog", label: "Backlog" }, { key: "in_progress", label: "In progress" }, { key: "done", label: "Done" }] as const;
@@ -100,13 +100,10 @@ function TaskRow({ t, today, project, fields, board }: { t: T; today: string; pr
           <p className="t-meta" style={over ? { color: "var(--danger)" } : undefined}>{[project, t.dueOn && `due ${fmtDate(t.dueOn)}${t.dueTime ? ` ${t.dueTime}` : ""}`, t.priority === "high" && "high priority", !board && t.status === "in_progress" && "in progress"].filter(Boolean).join(", ")}</p>
         </div>
       </div>
-      <details className="pl-12">
-        <summary className="t-meta cursor-pointer">Edit</summary>
-        <div className="mt-2 grid gap-3">
+      <EditPanel>
           <OpForm op="task.update" fields={fields} fixed={{ id: t.id, checklist: t.checklist }} initial={t} submitLabel="Save task" compact />
           <OpButton op="task.delete" input={{ id: t.id }} label="Delete task" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this task?" />
-        </div>
-      </details>
+        </EditPanel>
     </li>
   );
 }

@@ -22,15 +22,20 @@ const charityInput = z.object({
 
 export const charityCreate = defineOp({
   name: "charity.create", module: "charity", label: "Log charity", aiAllowed: true,
-  schema: charityInput, draftable: ["amount", "recipient", "paidOn"],
-  summarize: (i) => `${i.status === "planned" ? "Plan" : "Log"} donation of ${i.amount} ${i.currency} to ${i.recipient}${i.cause ? ` for ${i.cause}` : ""} on ${dmy(i.paidOn)}`,
+  // repeatMonths: also add the same donation on the same day of each of the next N months, within the same year.
+  schema: charityInput.extend({ repeatMonths: z.number().int().min(0).max(11).default(0) }), draftable: ["amount", "recipient", "paidOn"],
+  summarize: (i) => `${i.status === "planned" ? "Plan" : "Log"} donation of ${i.amount} ${i.currency} to ${i.recipient}${i.cause ? ` for ${i.cause}` : ""} on ${dmy(i.paidOn)}${i.repeatMonths ? `, and for the next ${i.repeatMonths} month${i.repeatMonths === 1 ? "" : "s"}` : ""}`,
   async run(ctx, i) {
-    const [row] = await ctx.tx.insert(charityPayments).values({
-      ownerId: ctx.ownerId, paidOn: i.paidOn, recipient: i.recipient, cause: i.cause,
+    const year = i.paidOn.slice(0, 4);
+    const dates = [i.paidOn, ...Array.from({ length: i.repeatMonths }, (_, k) => addMonths(i.paidOn, k + 1))].filter((d) => d.slice(0, 4) === year);
+    const recurring = i.recurring || dates.length > 1;
+    const rows = await ctx.tx.insert(charityPayments).values(dates.map((paidOn) => ({
+      ownerId: ctx.ownerId, paidOn, recipient: i.recipient, cause: i.cause,
       amountMinor: toMinor(i.amount, i.currency), currency: i.currency, status: i.status,
-      recurring: i.recurring, notes: i.notes, source: ctx.source,
-    }).returning({ id: charityPayments.id });
-    const msg = `${i.status === "planned" ? "Planned" : "Donated"} ${i.amount} ${i.currency} — ${i.recipient}`;
+      recurring, notes: i.notes, source: ctx.source,
+    }))).returning({ id: charityPayments.id });
+    const row = rows[0];
+    const msg = `${i.status === "planned" ? "Planned" : "Donated"} ${i.amount} ${i.currency} — ${i.recipient}${rows.length > 1 ? `, plus ${rows.length - 1} more month${rows.length === 2 ? "" : "s"}` : ""}`;
     await audit(ctx, "charity", "created", "charity_payment", row.id, msg);
     return { id: row.id, message: msg };
   },

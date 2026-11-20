@@ -1,6 +1,6 @@
 import { pageOwner, periodState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
 import { SYMPTOMS } from "@/server/ops/period";
 import { addDays, addMonths, daysBetween, dmy, isoWeekday } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
@@ -131,13 +131,10 @@ export default async function PeriodPage() {
                   <span className="t-small text-ink-2">{c.length ? `${c.length} days` : ""}{c.cycleLength ? `${c.length ? ", " : ""}cycle ${c.cycleLength} days` : ""}</span>
                 </div>
                 {(c.symptoms.length > 0 || c.notes) && <p className="t-small text-ink-2">{[c.symptoms.join(", "), c.notes].filter(Boolean).join(". ")}</p>}
-                <details>
-                  <summary className="t-small cursor-pointer">Correct or delete</summary>
-                  <div className="mt-3 grid gap-3">
+                <EditPanel label="Correct or delete">
                     <OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact />
                     <OpButton op="period.delete" input={{ id: c.id }} label="Delete entry" className="btn btn-sm btn-ghost justify-self-start" confirmText="Delete this period entry?" />
-                  </div>
-                </details>
+                  </EditPanel>
               </li>
             ))}
           </ul>
