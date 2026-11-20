@@ -57,7 +57,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
         </Reveal>
       </div>
       {rows.length === 0 ? <Empty>No applications yet. Add each program you&apos;re considering; you can track several programs at the same university.</Empty>
-        : view === "list" ? <ul className="grid gap-3">{rows.map((r) => <li key={r.app.id}><Card r={r} /></li>)}</ul>
+        : view === "list" ? <ul className="entry-grid">{rows.map((r) => <li key={r.app.id}><Card r={r} /></li>)}</ul>
         : (
           <div className="grid gap-4 md:grid-cols-4">
             {BOARD.map((col) => {

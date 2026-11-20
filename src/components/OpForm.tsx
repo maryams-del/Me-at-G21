@@ -301,9 +301,9 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     if (!toggle) return null;
     const others = remFields.filter(visible);
     return (
-      <div key="__reminders" className="grid gap-4">
+      <div key="__reminders" className="flex flex-col gap-4">
         {reminderSwitch("reminders")}
-        <div className={remOn ? "grid gap-4 preview-enter" : "hidden"}>
+        <div className={remOn ? "flex flex-col gap-4 preview-enter" : "hidden"}>
           {others.map((f) => renderField(f, true))}
         </div>
       </div>
@@ -441,7 +441,7 @@ export function Reveal({ label, children, open: initialOpen = false, buttonClass
       ) : (
         <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
       )}
-      {open && <div id={id} className={`mt-2 panel p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+      {open && <div id={id} className={`mt-2 panel form-panel p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );
 }
@@ -455,8 +455,14 @@ export function EditPanel({ children, label = "Edit", buttonClass = "btn btn-sm 
   const id = useId();
   return (
     <div className={open ? "col-span-full basis-full w-full min-w-0" : "min-w-0"}>
-      <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
-      {open && <div id={id} className="mt-3 panel p-4 grid gap-3 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+      {label === "Edit" ? (
+        <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={open ? "Close editing" : "Edit"} title={open ? "Close" : "Edit"} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+          <Icon name={open ? "close" : "edit"} size={17} />
+        </button>
+      ) : (
+        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+      )}
+      {open && <div id={id} className="mt-3 panel form-panel p-4 grid gap-3 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );
 }

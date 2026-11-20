@@ -56,11 +56,11 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
         <PeopleManager people={people} />
       </div>
       {active.length === 0 && filtering ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="entry-grid">
           {active.map(({ item: it, daysLeft, renewals }) => {
             const kindLabel = KINDS.find((k) => k.value === it.kind)?.label;
             return (
-              <EntryCard key={it.id} title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
+              <EntryCard key={it.id} icon="idcard" countLabel="Expires" title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
                 count={countdown(daysLeft, "expiry")} countSub={fmtDate(it.expiresOn)}
                 reminder={reminderLine({ enabled: it.remindersEnabled, date: it.expiresOn, offsets: it.reminderOffsetsDays, time: it.reminderTime, today: s.today })}
                 action={

@@ -48,12 +48,12 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
 
       <Section title="All subscriptions">
         {s.rows.length === 0 ? <Empty>No subscriptions yet. Add streaming, cloud storage, phone plans, gym memberships, anything that charges you on a schedule.</Empty> : (
-          <ul className="grid gap-3 md:grid-cols-2">
+          <ul className="entry-grid">
             {s.rows.map(({ sub: x, next, daysLeft, monthlyMinor }) => {
               const active = x.status === "active";
               const how = x.cadence === "custom" ? `Every ${x.intervalValue} ${x.intervalUnit}s` : CADENCE[x.cadence];
               return (
-                <EntryCard key={x.id} title={x.name} dim={!active}
+                <EntryCard key={x.id} icon="card" countLabel="Next charge" title={x.name} dim={!active}
                   badge={!active ? <span className="chip chip-fill">cancelled {x.cancelledOn ? fmtDate(x.cancelledOn) : ""}</span> : undefined}
                   subtitle={[`${formatMoney(x.amountMinor, x.currency)} · ${how}`, x.cadence !== "monthly" ? `≈ ${formatMoney(monthlyMinor, x.currency)}/month` : null, x.category, x.renewal === "manual" ? "renews manually" : null].filter(Boolean).join(" · ")}
                   count={active ? countdown(daysLeft, "charge") : null} countSub={active && next ? fmtDate(next) : undefined}
