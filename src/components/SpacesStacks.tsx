@@ -1,11 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { api, ApiError, toast } from "./api";
+import { frequent } from "@/lib/visits";
 
-export type StackCard = { key: string; href: string; label: string; glyph: GlyphKind; d: string; stat?: string };
+const PIN_DEFAULTS = ["/admin/documents", "/finance/charity", "/quran"];
+
+export type StackCard = { key: string; href: string; label: string; glyph: GlyphKind; d: string; stat?: string; needs?: boolean };
 export type StackGroup = { title: string; tint: string; custom: boolean; cards: StackCard[] };
 
 const LONG_PRESS_MS = 600;
@@ -28,6 +31,11 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
   const [saving, setSaving] = useState(false);
   const [cardDrag, setCardDrag] = useState<{ key: string; dy: number } | null>(null);
   const [sorting, setSorting] = useState(false);
+  // Pinned: the three spaces opened most on this device, topped up with sensible defaults.
+  const [pinHrefs, setPinHrefs] = useState(PIN_DEFAULTS);
+  useEffect(() => setPinHrefs([...new Set([...frequent().map((f) => f.href), ...PIN_DEFAULTS])]), []);
+  const allCards = groups.flatMap((g) => g.cards);
+  const pinned = pinHrefs.map((h) => allCards.find((c) => c.href === h)).filter((c): c is StackCard => !!c).slice(0, 3);
 
   const press = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
   const cd = useRef<{ gi: number; idx: number; startY: number } | null>(null);
@@ -105,14 +113,30 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
         )}
         {!reorder && addSlot}
       </div>
-      {!reorder && !query && <p className="t-meta mt-2">Press and hold a space to reorder.</p>}
+      {!reorder && !query && <p className="t-meta mt-2">A dot means something there needs you. Press and hold a space to reorder.</p>}
+      {!reorder && !query && pinned.length > 0 && (
+        <section aria-labelledby="pin-h" className="mt-7">
+          <h2 id="pin-h" className="t-label mb-3">Pinned</h2>
+          <ul className="pins">
+            {pinned.map((c) => (
+              <li key={c.key}>
+                <Link href={c.href} className="pin-card">
+                  <span className="ic"><Glyph kind={c.glyph} size={18} color="currentColor" accent="currentColor" /></span>
+                  <span className="mt-auto font-semibold text-[14px] leading-snug">{c.label}</span>
+                  {c.stat && <span className="pin-stat">{c.stat}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {query && <p className="t-meta mt-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
       <div className={reorder ? "grid gap-x-8 md:grid-cols-2 items-start" : ""}>
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
         return (
-          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-8 min-w-0">
+          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7 min-w-0">
             <button type="button" className="flex items-center gap-2 mb-4 bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
               onClick={() => setSorting(true)} aria-label={`${g.title}. Rearrange sections`}>
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.tint }} aria-hidden />
@@ -148,8 +172,8 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
                       onPointerDown={startPress} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={cancelPress}
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { if (press.current.fired) { e.preventDefault(); press.current.fired = false; } }}>
-                      <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" /></span>
-                      <span>{c.label}</span>
+                      <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" />{c.needs && <span className="need-dot" />}</span>
+                      <span>{c.label}{c.needs && <span className="sr-only"> (needs you)</span>}</span>
                     </Link>
                   </li>
                 ))}
