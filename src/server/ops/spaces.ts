@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
-import { customSpaces, customSpaceItems } from "@/db/schema";
+import { customSpaces, customSpaceItems, users } from "@/db/schema";
 import { defineOp, zId, zOptText, zText } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
 import { NEW_SECTION, SPACE_GLYPHS } from "@/lib/spaces";
@@ -102,5 +102,21 @@ export const spaceItemDelete = defineOp({
     await ctx.tx.delete(customSpaceItems).where(eq(customSpaceItems.id, i.id));
     await audit(ctx, "spaces", "deleted", "space_item", i.id, `Removed “${it.text}” from ${s.name}`);
     return { id: i.id, message: "Removed" };
+  },
+});
+
+/** The owner's order for the Spaces page: sections top to bottom, and cards within each section. */
+export const spacesOrder = defineOp({
+  name: "spaces.order", module: "spaces", label: "Reorder spaces", aiAllowed: false,
+  schema: z.object({
+    sections: z.array(z.string().trim().min(1).max(60)).max(60),
+    cards: z.record(z.string().max(60), z.array(z.string().max(200)).max(100)),
+  }),
+  summarize: () => "Reorder spaces",
+  async run(ctx, i) {
+    const [u] = await ctx.tx.select({ settings: users.settings }).from(users).where(eq(users.id, ctx.ownerId));
+    await ctx.tx.update(users).set({ settings: { ...(u?.settings ?? {}), spacesOrder: i }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+    await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, "Reordered spaces");
+    return { id: null, message: "Order saved" };
   },
 });

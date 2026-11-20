@@ -8,3 +8,6 @@ test-results
 playwright-report
 .next-e2e
 .next-build
+
+# local blob storage (dev/test uploads)
+.data/

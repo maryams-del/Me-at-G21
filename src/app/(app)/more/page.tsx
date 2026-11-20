@@ -1,18 +1,38 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/ui";
-import { Glyph, type GlyphKind } from "@/components/Glyph";
-import { pageOwner, inboxCount, customSpacesState } from "@/server/queries";
+import { type GlyphKind } from "@/components/Glyph";
+import { pageOwner, inboxCount, customSpacesState, dashboardState } from "@/server/queries";
 import { OpForm, Reveal } from "@/components/OpForm";
-import { isSpaceGlyph } from "@/lib/spaces";
+import { isSpaceGlyph, spacesOrderOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
+import { formatMoney } from "@/lib/money";
+import { relDays } from "@/lib/format";
+import { dmy } from "@/lib/time";
+import { SpacesStacks, type StackGroup } from "@/components/SpacesStacks";
 import { spaceFields } from "../spaces/fields";
 
-type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string };
+type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string; stat?: string };
 
 /** Spaces: every section of the app in one place (the "Spaces" menu item on phone and web). */
 export default async function Spaces() {
   const o = await pageOwner();
   const n = await inboxCount(o.id);
   const mine = await customSpacesState(o);
+  const s = await dashboardState(o);
+  const money = (rows: { sum: number | string; cur: string }[]) => rows.length ? rows.map((c) => formatMoney(Number(c.sum), c.cur)).join(" + ") : null;
+  const owedToMe = s.debts.filter((d) => d.debt.status === "open" && d.debt.direction === "lent");
+  const subTotals = Object.entries(s.subscriptions.totals);
+  const nextRoutine = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
+  const stat: Record<string, string | undefined> = {
+    "/finance/charity": money(s.charityMonth) ? `${money(s.charityMonth)} this month` : undefined,
+    "/finance/savings": s.savings.length ? `${s.savings.length} goal${s.savings.length === 1 ? "" : "s"} · ${Math.round(s.savings.reduce((a, g) => a + g.pct, 0) / s.savings.length)}%` : undefined,
+    "/finance/debts": owedToMe.length ? `${owedToMe.length} owe${owedToMe.length === 1 ? "s" : ""} you` : undefined,
+    "/finance/subscriptions": subTotals.length ? `${subTotals.map(([c, t]) => formatMoney(t.monthly, c)).join(" + ")} a month` : undefined,
+    "/care/routines": nextRoutine ? `${nextRoutine.routine.name} ${nextRoutine.overdue ? "overdue" : `due ${relDays(nextRoutine.daysLeft)}`}` : undefined,
+    "/faith/fasts": s.fasts.hasInitial || s.fasts.ledger.length ? `${s.fasts.balance} left` : undefined,
+    "/education/applications": s.appDeadlines.length ? `${s.appDeadlines.length} deadline${s.appDeadlines.length === 1 ? "" : "s"} soon` : undefined,
+    "/projects": s.tasksDueSoon.length ? `${s.tasksDueSoon.length} due this week` : undefined,
+    "/admin/expiries": s.expiring[0] ? `${s.expiring[0].label} · ${dmy(s.expiring[0].expiresOn)}` : undefined,
+    "/inbox": n ? `${n} waiting` : undefined,
+  };
   const groups: { title: string; items: Item[] }[] = [
     { title: "Money", items: [
       { href: "/finance/charity", label: "Charity", glyph: "charity", d: "Donations, monthly and yearly totals" },
@@ -49,40 +69,28 @@ export default async function Spaces() {
   // The owner's own spaces: under a built-in group, or in sections they made up.
   for (const c of mine) {
     const item: Item = { href: `/spaces/${c.space.id}`, label: c.space.name, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : "projects",
-      d: c.space.description ?? (c.open || c.done ? `${c.open} to do · ${c.done} done` : "Your own space"), note: c.open ? `${c.open}` : undefined };
+      d: c.space.description ?? "Your own space", stat: c.open ? `${c.open} to do` : c.done ? "All done" : undefined };
     const g = groups.find((x) => x.title === c.space.section);
     if (g) g.items.push(item); else groups.push({ title: c.space.section, items: [item] });
   }
   const sections = [...new Set(mine.map((c) => c.space.section))];
+  const order = spacesOrderOf(o.settings);
+  const builtIn = new Set(Object.keys(SECTION_TINT));
+  const stacked: StackGroup[] = bySavedOrder(groups, (g) => g.title, order.sections).map((g) => ({
+    title: g.title,
+    tint: SECTION_TINT[g.title] ?? CUSTOM_TINT,
+    custom: !builtIn.has(g.title),
+    cards: bySavedOrder(g.items, (i) => i.href, order.cards[g.title]).map((i) => ({ key: i.href, href: i.href, label: i.label, glyph: i.glyph, d: i.d, stat: i.stat ?? stat[i.href] })),
+  }));
   return (
     <>
-      <PageHeader title="Spaces" intro="Every part of Me @ G21 in one place. Add your own spaces under any section, or start a new section." />
-      <div className="mb-8">
+      <PageHeader title="Spaces" intro="Everything, grouped. Put the most relevant sections and spaces on top." />
+      <div className="mb-6">
         <Reveal label="+ Add a space" buttonClass="btn btn-accent">
           <OpForm op="space.create" fields={spaceFields(sections)} initial={{ section: "You", glyph: "projects" }} submitLabel="Add space" />
         </Reveal>
       </div>
-      <div className="grid gap-8">
-        {groups.map((g) => (
-          <section key={g.title} aria-labelledby={`sp-${g.title}`}>
-            <h2 id={`sp-${g.title}`} className="t-label mb-3">{g.title}</h2>
-            <ul className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-              {g.items.map((i) => (
-                <li key={i.href}>
-                  <Link href={i.href} className="tile h-full" style={{ minHeight: "7.5rem" }}>
-                    <span className="flex items-start justify-between gap-2">
-                      <Glyph kind={i.glyph} size={28} accent="var(--mustard)" />
-                      {i.note && <span className="chip chip-mustard">{i.note}</span>}
-                    </span>
-                    <p className="t-h3 mt-3">{i.label}</p>
-                    <p className="t-small text-ink-2 mt-0.5">{i.d}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+      <SpacesStacks groups={stacked} />
     </>
   );
 }
