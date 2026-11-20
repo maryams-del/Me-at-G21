@@ -11,13 +11,13 @@ export type StackGroup = { title: string; tint: string; custom: boolean; cards: 
 const CARD_H = 112, OPEN_STEP = 122, CLOSED_STEP = 48;
 
 /**
- * Spaces as wallet stacks: each section is a stack of tinted glass cards. Tap a stack to fan it out.
+ * Spaces as wallet stacks: every section starts stacked; tap a stack to fan it out.
  * Search filters across every section; "Reorder" moves sections and cards up or down and saves the order.
  */
 export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
   const router = useRouter();
   const [groups, setGroups] = useState(initial);
-  const [open, setOpen] = useState<Record<string, boolean>>(() => (initial[0] ? { [initial[0].title]: true } : {}));
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,7 +67,7 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
           </button>
         )}
       </div>
-      {reorder && <p className="t-meta mb-2">Move sections and spaces up or down, then save. The top section opens first.</p>}
+      {reorder && <p className="t-meta mb-2">Move sections and spaces up or down, then save.</p>}
       {query && <p className="t-meta mb-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
       <div className="grid gap-x-6 md:grid-cols-2 items-start">
