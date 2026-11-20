@@ -294,3 +294,23 @@ export const documentReminders = defineOp({
     return { id: d.id, message: i.remindersEnabled ? "Reminders on" : "Reminders off" };
   },
 });
+
+/** Files on an expiry card: makes sure the entry has a document to hold them (created on first upload). */
+export const expiryAttach = defineOp({
+  name: "expiry.attach", module: "expiries", label: "Add files to an expiry", aiAllowed: false,
+  schema: z.object({ id: zId }),
+  summarize: () => "Prepare files for this entry",
+  async run(ctx, i) {
+    const [it] = await ctx.tx.select().from(expiryItems).where(and(eq(expiryItems.id, i.id), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt)));
+    if (!it) throw new UserError("Item not found");
+    if (it.documentId) {
+      const [d] = await ctx.tx.select({ id: documents.id }).from(documents).where(and(eq(documents.id, it.documentId), eq(documents.ownerId, ctx.ownerId), isNull(documents.deletedAt)));
+      if (d) return { id: d.id, message: "Ready" };
+    }
+    const kind = (DOC_KINDS as readonly string[]).includes(it.kind) ? (it.kind as (typeof DOC_KINDS)[number]) : "other";
+    const [d] = await ctx.tx.insert(documents).values({ ownerId: ctx.ownerId, title: it.label, personId: it.personId, kind, expiresOn: it.expiresOn }).returning({ id: documents.id });
+    await ctx.tx.update(expiryItems).set({ documentId: d.id, updatedAt: ctx.now }).where(eq(expiryItems.id, it.id));
+    await audit(ctx, "documents", "created", "document", d.id, `Created “${it.label}” to hold files for its expiry`);
+    return { id: d.id, message: "Ready" };
+  },
+});

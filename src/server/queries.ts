@@ -207,7 +207,10 @@ export async function expiriesState(o: Owner, f: { kind?: string; sort?: string;
   const renewals = items.length ? await db().select().from(t.renewalEvents).where(inArray(t.renewalEvents.itemId, items.map((i) => i.id))).orderBy(desc(t.renewalEvents.renewedOn)) : [];
   const docs = await db().select({ id: t.documents.id, title: t.documents.title }).from(t.documents).where(and(eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)));
   const today = todayLocal(o.timezone);
-  return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id) })), docs, today };
+  const docIds = items.map((i) => i.documentId).filter((x): x is string => !!x);
+  const files = docIds.length ? await db().select({ id: t.documentFiles.id, documentId: t.documentFiles.documentId, filename: t.documentFiles.filename, contentType: t.documentFiles.contentType, version: t.documentFiles.version })
+    .from(t.documentFiles).where(and(inArray(t.documentFiles.documentId, docIds), isNull(t.documentFiles.deletedAt))).orderBy(asc(t.documentFiles.version)) : [];
+  return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id), files: files.filter((f) => f.documentId === i.documentId) })), docs, today };
 }
 
 export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; reminders?: string } = {}) {

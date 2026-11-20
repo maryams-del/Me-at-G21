@@ -6,6 +6,7 @@ import { EntryCard } from "@/components/EntryCard";
 import { countdown, reminderLine } from "@/lib/countdown";
 import { fmtDate } from "@/lib/format";
 import { FilterPanel } from "@/components/FilterPanel";
+import { AttachedFiles } from "../documents/DocClient";
 
 const KINDS = [{ value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "license", label: "Driving licence" }, { value: "bank_card", label: "Bank card" }, { value: "membership", label: "Membership" }, { value: "custom", label: "Other" }];
 
@@ -24,7 +25,6 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
     { name: "label", label: "What is it?", required: true, placeholder: "Passport" },
     { name: "kind", label: "Type", type: "select", required: true, options: KINDS },
     { name: "expiresOn", label: "Expiry date", type: "date", required: true },
-    { name: "documentId", label: "Linked document", type: "select", nullable: true, options: s.docs.map((d) => ({ value: d.id, label: d.title })) },
     { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true, help: "Default 90, 30, 7" },
     { name: "reminderTime", label: "Reminder time", type: "time", required: true },
     { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
@@ -57,7 +57,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
       </div>
       {active.length === 0 && filtering ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
         <ul className="entry-grid">
-          {active.map(({ item: it, daysLeft, renewals }) => {
+          {active.map(({ item: it, daysLeft, renewals, files }) => {
             const kindLabel = KINDS.find((k) => k.value === it.kind)?.label;
             return (
               <EntryCard key={it.id} icon="idcard" countLabel="Expires" title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
@@ -70,8 +70,11 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
                   </Reveal>
                 }
                 edit={
-                  <OpForm op="expiry.update" fixed={{ id: it.id, personId: it.personId, issuer: it.issuer }} initial={it} submitLabel="Save changes" compact fields={fields}
+                  <div className="grid gap-4">
+                  <AttachedFiles files={files} documentId={it.documentId} attach={{ op: "expiry.attach", input: { id: it.id } }} />
+                  <OpForm op="expiry.update" fixed={{ id: it.id, personId: it.personId, issuer: it.issuer, documentId: it.documentId }} initial={it} submitLabel="Save changes" compact fields={fields}
                     deleteAction={{ op: "expiry.delete", input: { id: it.id }, confirm: `Delete “${it.label}”? Its reminders will be cancelled.` }} />
+                  </div>
                 }>
                 {renewals.length > 0 && <p className="t-meta">Renewal history: {renewals.map((r) => `${fmtDate(r.renewedOn)} (was ${fmtDate(r.previousExpiresOn)}, now ${fmtDate(r.newExpiresOn)})`).join("; ")}</p>}
               </EntryCard>

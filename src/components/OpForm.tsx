@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useId, useState } from "react";
+import { createContext, useContext, useEffect, useId, useState } from "react";
 
 export const RevealCtx = createContext<{ close: () => void } | null>(null);
 /** True inside an EntryCard, which already shows the big countdown. */
@@ -426,22 +426,53 @@ export function Reveal({ label, children, open: initialOpen = false, buttonClass
   const id = useId();
   const isAdd = ADD_LABEL.test(label);
   const text = label.replace(/^\+\s*/, "");
+  const close = () => setOpen(false);
+  useEffect(() => {
+    if (!open || !iconOnly) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", esc);
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prev; };
+  }, [open, iconOnly]);
+  const header = (
+    <div className="flex items-center justify-between gap-3 mb-3">
+      <p className="t-h3 min-w-0 truncate">{text}</p>
+      <button type="button" className="icon-ghost shrink-0" style={{ margin: 0 }} aria-label="Close" title="Close" onClick={close}><Icon name="close" size={18} /></button>
+    </div>
+  );
+
+  // The round + opens the form in a sheet over the page, so nothing on the page moves.
+  if (iconOnly) return (
+    <>
+      <button type="button" className="plus-btn" aria-label={text} title={text} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <PlusIcon size={22} />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={text}>
+          <div className="absolute inset-0" style={{ background: "rgba(20,24,16,.5)" }} onClick={close} />
+          <div id={id} className="panel form-panel p-4 w-full max-w-xl preview-enter"
+            style={{ position: "relative", maxHeight: "88vh", overflowY: "auto", marginBottom: "env(safe-area-inset-bottom)" }}>
+            {header}
+            <RevealCtx.Provider value={{ close }}>{children}</RevealCtx.Provider>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // Inline: the button gives way to the panel, which has its own × in the top-right corner.
   return (
-    <div className={iconOnly ? "contents" : open ? "basis-full w-full min-w-0" : undefined}>
-      {iconOnly ? (
-        <button type="button" className="plus-btn" aria-label={open ? "Close" : text} title={text} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-          <PlusIcon size={22} />
-        </button>
-      ) : icon ? (
-        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><Icon name={open ? "close" : icon} size={15} />{open ? "Close" : label}</button>
+    <div className={open ? "basis-full w-full min-w-0" : undefined}>
+      {!open && (icon ? (
+        <button type="button" className={buttonClass} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}><Icon name={icon} size={15} />{label}</button>
       ) : isAdd ? (
-        <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-          <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{open ? "Close" : text}
+        <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}>
+          <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{text}
         </button>
       ) : (
-        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
-      )}
-      {open && <div id={id} className={`mt-2 panel form-panel p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+        <button type="button" className={buttonClass} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}>{label}</button>
+      ))}
+      {open && <div id={id} className="panel form-panel p-4 preview-enter">{header}<RevealCtx.Provider value={{ close }}>{children}</RevealCtx.Provider></div>}
     </div>
   );
 }

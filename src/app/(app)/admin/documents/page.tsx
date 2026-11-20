@@ -64,17 +64,17 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       {rows.length === 0 ? (filtered ? <Empty>No documents match{kind ? ` type “${KINDS.find((k) => k.value === kind)?.label}”` : ""}{q ? ` “${q}”` : ""}.</Empty> : <Empty>No documents yet. Add your passport, national ID, transcripts, certificates or CV versions.</Empty>) : (
         <ul className="grid gap-4 md:grid-cols-2">
           {rows.map(({ doc: d, files, reminders: rem }) => {
-            const latest = files[0];
             return (
             <li key={d.id} className="panel p-4 grid gap-2 content-start">
               <div className="flex justify-between items-baseline gap-3">
                 <h2 className="t-h3 min-w-0 truncate">{d.title}</h2>
                 <p className="t-small text-ink-2 shrink-0">{d.expiresOn ? `Expires ${fmtDate(d.expiresOn)}` : d.issuedOn ? `Issued ${fmtDate(d.issuedOn)}` : ""}</p>
               </div>
-              {latest
-                ? <a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0" href={`/api/documents/file/${latest.id}?view=1`} target="_blank" rel="noopener">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>
-                    <span className="truncate">{latest.filename}</span></a>
+              {files.length
+                ? <ul className="grid gap-1">{files.map((f) => (
+                    <li key={f.id}><a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0 max-w-full" href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>
+                      <span className="truncate">{f.filename}</span></a></li>))}</ul>
                 : <p className="t-meta">No file attached</p>}
               <EditPanel label="Edit details" buttonClass="btn btn-sm">
                 <div className="grid gap-4">
@@ -82,9 +82,9 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                     <h3 className="t-small font-semibold mb-1">Files</h3>
                     {files.length ? (
                       <ul className="list">
-                        {files.map((f, i) => (
+                        {files.map((f) => (
                           <li key={f.id} className="py-2 grid gap-1">
-                            <span className="t-small break-words">{f.filename} <span className="t-meta">v{f.version}{i === 0 ? " (latest)" : ""}, {kb(f.sizeBytes)}, {fmtDateTime(f.createdAt, o.timezone)}</span></span>
+                            <span className="t-small break-words">{f.filename} <span className="t-meta">{kb(f.sizeBytes)}, {fmtDateTime(f.createdAt, o.timezone)}</span></span>
                             <span className="flex flex-wrap gap-1">
                               <ShareFile fileId={f.id} filename={f.filename} contentType={f.contentType} />
                               <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener">View</a>
