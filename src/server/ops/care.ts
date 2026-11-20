@@ -13,8 +13,8 @@ type Unit = "day" | "week" | "month";
 
 /** Ready-made settings people can start from; every field stays editable. */
 export const ROUTINE_TEMPLATES = {
-  waxing: { name: "Waxing", kind: "waxing", anchor: "completed", intervalValue: 30, intervalUnit: "day", graceDays: 10, reminderOffsetsDays: [-3, 0, 5, 8, 10], sensitive: true,
-    blurb: "Next around day 30, at the latest by day 40" },
+  waxing: { name: "Waxing", kind: "waxing", anchor: "completed", intervalValue: 30, intervalUnit: "day", graceDays: null, reminderOffsetsDays: [-3, 0], sensitive: true,
+    blurb: "Every 30 days" },
   dental: { name: "Dental scaling", kind: "dental", anchor: "completed", intervalValue: 6, intervalUnit: "month", graceDays: null, reminderOffsetsDays: [-14, -1, 0], sensitive: false,
     blurb: "Every 6 calendar months" },
   toothbrush: { name: "Replace toothbrush", kind: "toothbrush", anchor: "first_use", intervalValue: 3, intervalUnit: "month", graceDays: null, reminderOffsetsDays: [-14, 0], sensitive: false,
@@ -49,21 +49,21 @@ export function routineDue(r: Pick<RoutineRow, "intervalValue" | "intervalUnit" 
   return r.snoozedUntil && r.snoozedUntil > due ? r.snoozedUntil : due;
 }
 
-/** Pure: reminders for a routine whose next due date is `due`. Exported for tests. */
-export function routineReminders(r: Pick<RoutineRow, "id" | "name" | "reminderOffsetsDays" | "reminderTime" | "graceDays" | "sensitive">, anchor: LocalDate, due: LocalDate, tz: string): DesiredReminder[] {
-  const cycle = daysBetween(anchor, due);
-  return [...new Set(r.reminderOffsetsDays)].sort((a, b) => a - b).map((off) => {
-    const day = cycle + off;
-    const last = r.graceDays !== null && r.graceDays !== undefined && off === r.graceDays;
-    return {
-      dedupeKey: `routine:${r.id}:${due}:o${off}`,
-      fireAt: localToInstant(addDays(due, off), r.reminderTime, tz),
-      title: off < 0 ? `${r.name}: due in ${-off} day${off === -1 ? "" : "s"}` : off === 0 ? `${r.name}: due today` : last ? `${r.name}: last day (day ${day})` : `${r.name}: ${off} day${off === 1 ? "" : "s"} past due`,
-      publicBody: r.graceDays ? `Day ${day} since last time. Latest by day ${cycle + r.graceDays}` : off > 0 ? "Mark it done when you can" : "Open the app to mark it done",
-      sensitive: r.sensitive,
-      link: "/care/routines",
-    };
-  });
+/**
+ * Pure: reminders for a routine whose next due date is `due`. Exported for tests.
+ * The owner's own reminders (before / on the due day), then exactly one "overdue" nudge the day after.
+ */
+export function routineReminders(r: Pick<RoutineRow, "id" | "name" | "reminderOffsetsDays" | "reminderTime" | "sensitive">, anchor: LocalDate, due: LocalDate, tz: string): DesiredReminder[] {
+  void anchor;
+  const offs = [...new Set([...r.reminderOffsetsDays.filter((o) => o <= 0), 1])].sort((a, b) => a - b);
+  return offs.map((off) => ({
+    dedupeKey: `routine:${r.id}:${due}:o${off}`,
+    fireAt: localToInstant(addDays(due, off), r.reminderTime, tz),
+    title: off < 0 ? `${r.name}: due in ${-off} day${off === -1 ? "" : "s"}` : off === 0 ? `${r.name}: due today` : `${r.name}: overdue`,
+    publicBody: off > 0 ? "Log it, or skip this time" : "Open the app to log it",
+    sensitive: r.sensitive,
+    link: "/care/routines",
+  }));
 }
 
 export async function syncRoutine(ctx: Ctx, routineId: string) {

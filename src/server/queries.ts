@@ -41,7 +41,7 @@ export async function routinesState(o: Owner) {
     const due = skipped ? null : routineDue(r, anchor);
     const events = await db().select().from(t.routineEvents).where(eq(t.routineEvents.routineId, r.id)).orderBy(desc(t.routineEvents.onDate), desc(t.routineEvents.createdAt)).limit(12);
     const lastPurchase = events.find((e) => e.type === "purchased" && !e.voidedAt)?.onDate ?? null;
-    const latest = due && r.graceDays ? addDays(due, r.graceDays) : due;
+    const latest = due;
     const daysSince = anchor ? daysBetween(anchor, today) : null;
     const overdue = !r.paused && !!latest && today > latest;
     return { routine: r, anchor, due, latest, daysSince, cycleDays: anchor && latest ? daysBetween(anchor, latest) : null, daysLeft: due ? daysBetween(today, due) : null, overdue, skipped, events, lastPurchase };

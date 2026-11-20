@@ -2,7 +2,7 @@ import { pageOwner, routinesState } from "@/server/queries";
 import { PageHeader, Empty, Section } from "@/components/ui";
 import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { ROUTINE_TEMPLATES, type TemplateKey } from "@/server/ops/care";
-import { todayLocal, dmy } from "@/lib/time";
+import { todayLocal } from "@/lib/time";
 import { fmtDate, relDays } from "@/lib/format";
 
 const routineFields: FieldDef[] = [
@@ -10,17 +10,15 @@ const routineFields: FieldDef[] = [
   { name: "anchor", label: "Count from", type: "select", required: true, options: [{ value: "completed", label: "The last time I did it" }, { value: "first_use", label: "The day I started using a new one (e.g. a toothbrush)" }] },
   { name: "intervalValue", label: "Every", type: "int", required: true },
   { name: "intervalUnit", label: "Unit", type: "select", required: true, options: [{ value: "day", label: "days" }, { value: "week", label: "weeks" }, { value: "month", label: "calendar months" }] },
-  { name: "graceDays", label: "Must be done within this many days after it's due", type: "int", nullable: true, help: "Optional. Waxing: due day 30, latest day 40 → 10." },
-  { name: "beforeDays", sendAs: "reminderOffsetsDays", label: "Remind me this many days before it's due", type: "intlist", negative: true, includeZero: true, help: "e.g. 3, 1. You're always reminded on the due day." },
-  { name: "afterDays", sendAs: "reminderOffsetsDays", label: "Then nudge me this many days after the due day", type: "intlist", help: "Optional, e.g. 5, 8, 10" },
+  { name: "beforeDays", sendAs: "reminderOffsetsDays", label: "Remind me this many days before it's due", type: "intlist", negative: true, includeZero: true, help: "e.g. 3, 1. You're also reminded on the due day, and once the day after if it's overdue." },
   { name: "reminderTime", label: "Reminder time", type: "time", required: true },
   { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
   { name: "sensitive", label: "Private: lock-screen notifications just say “Personal reminder”", type: "checkbox", wide: true },
   { name: "notes", label: "Note", nullable: true, wide: true },
 ];
-const splitOffsets = (xs: number[]) => ({ beforeDays: xs.filter((x) => x < 0).map((x) => -x), afterDays: xs.filter((x) => x > 0) });
-const schedule = (r: { intervalValue: number; intervalUnit: string; anchor: string; graceDays: number | null }) =>
-  `Every ${r.intervalValue} ${r.intervalUnit === "month" ? "calendar month" : r.intervalUnit}${r.intervalValue > 1 ? "s" : ""}${r.anchor === "first_use" ? " after first use" : ""}${r.graceDays ? `, at the latest ${r.graceDays} days later` : ""}`;
+const splitOffsets = (xs: number[]) => ({ beforeDays: xs.filter((x) => x < 0).map((x) => -x) });
+const schedule = (r: { intervalValue: number; intervalUnit: string; anchor: string }) =>
+  `Every ${r.intervalValue} ${r.intervalUnit === "month" ? "calendar month" : r.intervalUnit}${r.intervalValue > 1 ? "s" : ""}${r.anchor === "first_use" ? " after starting a new one" : ""}`;
 
 export default async function RoutinesPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
   const sp = await searchParams;
@@ -50,44 +48,31 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
       {rows.length === 0 && <Empty>No routines yet. Use quick add above, or create your own.</Empty>}
 
       <ul className="grid gap-4 md:grid-cols-2">
-        {rows.map(({ routine: r, anchor, due, latest, daysSince, cycleDays, daysLeft, overdue, skipped, events }) => {
+        {rows.map(({ routine: r, anchor, due, daysSince, daysLeft, overdue, skipped, events }) => {
           const isFirstUse = r.anchor === "first_use";
-          const pct = r.graceDays && cycleDays && daysSince !== null ? Math.min(100, (daysSince / cycleDays) * 100) : null;
-          const dueMark = r.graceDays && cycleDays ? ((cycleDays - r.graceDays) / cycleDays) * 100 : null;
           return (
             <li key={r.id} className="panel p-4 grid gap-3 content-start" style={overdue ? { boxShadow: "inset 6px 0 0 var(--rust)" } : undefined}>
               <div className="flex justify-between gap-3">
                 <div>
-                  <h2 className="t-h3">{r.name} {r.paused && <span className="chip chip-fill">paused</span>} {r.sensitive && <span className="chip chip-fill">private</span>}</h2>
+                  <h2 className="t-h3">{r.name} {r.sensitive && <span className="chip chip-fill">private</span>}</h2>
                   <p className="t-meta">{schedule(r)}</p>
                 </div>
                 <div className="text-right">
-                  {r.graceDays && daysSince !== null ? (
-                    <><p className="t-h2">Day {daysSince}</p><p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>of {cycleDays}{overdue ? ", past the limit" : ""}</p></>
-                  ) : (
-                    <><p className="t-h2">{due ? fmtDate(due) : skipped && daysSince !== null ? `Day ${daysSince}` : "—"}</p>
-                      <p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>{due ? (overdue ? `${-(daysLeft ?? 0)} days overdue` : `due ${relDays(daysLeft)}`) : skipped ? "Skipped, still counting" : isFirstUse ? "Log a new one to start" : "Mark done to start"}</p></>
-                  )}
+                  <p className="t-h2">{due ? fmtDate(due) : skipped && daysSince !== null ? `Day ${daysSince}` : "—"}</p>
+                  <p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>{due ? (overdue ? `${-(daysLeft ?? 0)} day${daysLeft === -1 ? "" : "s"} overdue` : `due ${relDays(daysLeft)}`) : skipped ? "Skipped, still counting" : isFirstUse ? "Log a new one to start" : "Log it to start"}</p>
                 </div>
               </div>
-              {pct !== null && (
-                <div className="grid gap-1">
-                  <div className="bar relative" aria-hidden><i style={{ width: `${pct}%`, background: overdue ? "var(--rust)" : "var(--ink)" }} />
-                    {dueMark !== null && <span className="absolute top-0 bottom-0" style={{ left: `${dueMark}%`, width: 2, background: "var(--mustard)" }} />}
-                  </div>
-                  <p className="t-meta">Last {fmtDate(anchor)}. Recommended {fmtDate(due)}, latest {fmtDate(latest)}.</p>
-                </div>
-              )}
+              {!isFirstUse && anchor && <p className="t-small text-ink-2">Last done: {fmtDate(anchor)}{daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}</p>}
               {isFirstUse && <p className="t-small text-ink-2">Started: {anchor ? `${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}` : "not recorded"}</p>}
               <div className="flex flex-wrap gap-2">
                 {isFirstUse
                   ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label="Started a new one today" className="btn btn-sm btn-primary" />
-                  : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done today" className="btn btn-sm btn-primary" confirmText={r.graceDays ? `Log ${r.name.toLowerCase()} done today (${dmy(today)})? The next one is counted from today.` : undefined} />}
+                  : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done today" className="btn btn-sm btn-primary" />}
                 <Reveal label="Custom date" buttonClass="btn btn-sm">
                   <OpForm op="routine.log" fixed={{ routineId: r.id, type: isFirstUse ? "first_use" : "completed" }} initial={{ onDate: today }} submitLabel="Save entry" compact fields={[
                     { name: "onDate", label: isFirstUse ? "Started a new one on" : "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
                 </Reveal>
-                {(isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" className="btn btn-sm btn-ghost"
+                {r.kind !== "waxing" && (isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" className="btn btn-sm btn-ghost"
                   confirmText={isFirstUse ? "Skip this time? It keeps counting days since the last new one and stops reminding you. Log a new one when you change it." : "Skip this cycle? The next due date will count from today."} />}
               </div>
               <EditPanel label="History & settings">
@@ -98,7 +83,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
                       {!e.voidedAt && <OpButton op="routine.void" input={{ eventId: e.id }} label="Remove" className="btn btn-sm btn-ghost" confirmText="Remove this entry? The schedule will be recalculated." />}
                     </li>))}</ul>}
                   <Section title="Settings">
-                    <OpForm op="routine.update" fields={[...routineFields, { name: "paused", label: "Paused", type: "checkbox" }]} fixed={{ id: r.id, kind: r.kind }} initial={{ ...r, ...splitOffsets(r.reminderOffsetsDays) }} submitLabel="Save settings" compact />
+                    <OpForm op="routine.update" fields={routineFields} fixed={{ id: r.id, kind: r.kind }} initial={{ ...r, ...splitOffsets(r.reminderOffsetsDays) }} submitLabel="Save settings" compact />
                   </Section>
                   <OpButton op="routine.delete" input={{ id: r.id }} label="Delete routine" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${r.name}” and its history?`} />
                 </div>
