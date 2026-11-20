@@ -73,7 +73,7 @@ export default async function Dashboard() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] lg:gap-8 items-start">
       <div className="grid gap-5 min-w-0">
-        <h1 className="t-display">{greet}</h1>
+        <h1 className="t-display">{greet}{o.displayName ? `, ${o.displayName}` : ""}</h1>
 
         {s.overdue.length > 0 && (
           <section aria-labelledby="overdue-h" className="panel p-4" style={{ boxShadow: "inset 0 0 0 1.5px var(--rust), var(--glass-shadow)" }}>

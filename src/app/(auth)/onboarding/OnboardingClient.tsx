@@ -27,8 +27,22 @@ function EmailStep({ onDone, initialEmail }: { onDone: () => void; initialEmail:
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  if (verified) return (
+    <form className="grid gap-4" onSubmit={async (e) => {
+      e.preventDefault(); if (!name.trim()) return; setBusy(true); setError(null);
+      try { await api("/api/auth/enroll-profile", { displayName: name.trim() }); onDone(); }
+      catch (err) { setError(msg(err, "Couldn't save your name.")); } finally { setBusy(false); }
+    }}>
+      <p className="t-small">Email verified.</p>
+      <label className="field"><span className="label">What&apos;s your name?</span>
+        <input className="input" autoFocus autoComplete="given-name" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <button className="btn btn-primary" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Continue"}</button>
+      <Err e={error} />
+    </form>
+  );
   return (
     <div className="grid gap-4">
       <p className="text-ink-2 prose-w">This email is used once to confirm it&apos;s you, and later for security alerts. It is never your everyday sign-in.</p>
@@ -45,13 +59,11 @@ function EmailStep({ onDone, initialEmail }: { onDone: () => void; initialEmail:
           e.preventDefault(); setBusy(true); setError(null);
           try {
             await api("/api/auth/enroll-verify", { email, code });
-            if (name.trim()) await api("/api/auth/enroll-profile", { displayName: name });
-            onDone();
+            setVerified(true);
           } catch (err) { setError(msg(err, "Couldn't verify the code.")); } finally { setBusy(false); }
         }}>
           <p className="t-small">If <strong>{email}</strong> is the owner address, a 6-digit code is on its way. It expires in 10 minutes.</p>
           <label className="field"><span className="label">Verification code</span><input className="input" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} /></label>
-          <label className="field"><span className="label">What should the dashboard call you? <span className="t-meta">(optional)</span></span><input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} /></label>
           <button className="btn btn-primary" disabled={busy || code.length !== 6}>{busy ? "Checking…" : "Verify"}</button>
           <button type="button" className="btn btn-ghost btn-sm justify-start" onClick={() => { setSent(false); setCode(""); }}>Use a different email</button>
         </form>
