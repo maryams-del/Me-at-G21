@@ -3,6 +3,7 @@ import { PeopleManager, personLabel, personOptions } from "../People";
 import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { fmtDate, relDays } from "@/lib/format";
+import { FilterPanel } from "@/components/FilterPanel";
 
 const KINDS = [{ value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "license", label: "Driving licence" }, { value: "bank_card", label: "Bank card" }, { value: "membership", label: "Membership" }, { value: "custom", label: "Other" }];
 
@@ -37,17 +38,19 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
           <OpForm op="expiry.create" fields={fields} initial={{ kind: "passport", reminderOffsetsDays: [-90, -30, -7], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Start tracking" />
         </Reveal>
         <PeopleManager people={people} />
+        <FilterPanel active={!!(kind || person || sort === "latest")}>
+          <form className="panel p-3 flex flex-wrap gap-3 items-end" aria-label="Filter and sort">
+          <label className="field"><span className="label">Type</span>
+            <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
+          <label className="field"><span className="label">Belongs to</span>
+            <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
+          <label className="field"><span className="label">Sort</span>
+            <select name="sort" defaultValue={sort} className="select"><option value="soonest">Closest expiry first</option><option value="latest">Farthest expiry first</option></select></label>
+          <button className="btn">Apply</button>
+          {(kind || person || sort === "latest") && <a href="/admin/expiries" className="btn btn-ghost">Clear</a>}
+        </form>
+        </FilterPanel>
       </div>
-      <form className="panel p-3 mb-6 flex flex-wrap gap-3 items-end" aria-label="Filter and sort">
-        <label className="field"><span className="label">Type</span>
-          <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
-        <label className="field"><span className="label">Belongs to</span>
-          <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-        <label className="field"><span className="label">Sort</span>
-          <select name="sort" defaultValue={sort} className="select"><option value="soonest">Closest expiry first</option><option value="latest">Farthest expiry first</option></select></label>
-        <button className="btn">Apply</button>
-        {(kind || person || sort === "latest") && <a href="/admin/expiries" className="btn btn-ghost">Clear</a>}
-      </form>
       {active.length === 0 && (kind || person) ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
         <ul className="grid gap-3">
           {active.map(({ item: it, daysLeft, renewals }) => {

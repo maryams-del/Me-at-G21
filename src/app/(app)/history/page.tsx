@@ -2,6 +2,7 @@ import { pageOwner, historyState } from "@/server/queries";
 import { PageHeader, Empty } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
 import { SearchBox } from "./SearchBox";
+import { FilterPanel } from "@/components/FilterPanel";
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; from?: string; to?: string }> }) {
   const sp = await searchParams;
@@ -11,7 +12,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader glyph="history" title="History & search" />
       <SearchBox />
-      <form className="panel p-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end mb-6" role="search" aria-label="Filter history">
+      <FilterPanel active={!!(sp.q || sp.category || sp.from || sp.to)} className="mb-6">
+        <form className="panel p-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end" role="search" aria-label="Filter history">
         <label className="field"><span className="label">Keywords</span><input name="q" defaultValue={sp.q} className="input" /></label>
         <label className="field"><span className="label">Category</span>
           <select name="category" defaultValue={sp.category ?? ""} className="select"><option value="">All</option>{s.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
@@ -19,6 +21,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         <label className="field"><span className="label">To</span><input type="date" name="to" defaultValue={sp.to} className="input" /></label>
         <button className="btn">Filter</button>
       </form>
+      </FilterPanel>
       {s.rows.length === 0 ? <Empty>No matching activity.</Empty> : (
         <ul className="list panel px-4">
           {s.rows.map((r) => (
