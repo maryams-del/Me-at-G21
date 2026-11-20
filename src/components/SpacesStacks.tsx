@@ -21,7 +21,7 @@ function Grip() {
  * Search filters across every section. Press and hold any space to start reordering: drag the three-line
  * grips to move sections and spaces, then tap Done to save the order.
  */
-export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
+export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[]; addSlot?: React.ReactNode }) {
   const router = useRouter();
   const k = useSizes().stackCards;
   const CARD_H = Math.round(112 * k), OPEN_STEP = Math.round(122 * k), CLOSED_STEP = Math.round(48 * k);
@@ -111,13 +111,14 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
             <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
         ) : (
-          <label className="glass flex items-center gap-2 rounded-full pl-4 pr-2 py-1 flex-1 min-w-[200px]">
+          <label className="glass flex items-center gap-2 rounded-full pl-4 pr-2 py-1 flex-1 min-w-0 basis-[10rem]">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="opacity-70 shrink-0"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4 4" /></svg>
             <span className="sr-only">Search spaces</span>
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search spaces"
               className="flex-1 min-w-0 bg-transparent border-0 outline-none py-2 text-[15px]" style={{ color: "inherit", font: "inherit" }} />
           </label>
         )}
+        {!reorder && addSlot}
       </div>
       {query && <p className="t-meta mb-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 

@@ -32,7 +32,7 @@ export function openCapture(detail: { text?: string; voice?: boolean } = {}) {
   window.dispatchEvent(new CustomEvent("ld-capture", { detail }));
 }
 
-export function AppShell({ children, inboxCount, dateLine, hijriLine }: { children: React.ReactNode; name: string; inboxCount: number; dateLine: string; hijriLine: string }) {
+export function AppShell({ children, inboxCount, dateLine }: { children: React.ReactNode; name: string; inboxCount: number; dateLine: string }) {
   const path = usePathname();
   const [capture, setCapture] = useState<{ open: boolean; key: number; text: string; voice: boolean }>({ open: false, key: 0, text: "", voice: false });
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: string }[]>([]);
@@ -74,12 +74,9 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
       <a href="#main" className="skip-link btn btn-primary">Skip to content</a>
       <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
         <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4 md:pt-6">
-          <Link href="/" className="min-w-0 no-underline pb-1">
-            <span className="flex items-center gap-2 md:gap-3">
-              <LogoMark className="w-[40px] h-[40px] md:w-[52px] md:h-[52px] shrink-0" />
-              <span className="logo block text-[31px] md:text-[40px]">Me @ G21</span>
-            </span>
-            <span className="block mt-2.5 text-[12px] md:text-[13px] font-semibold leading-snug text-ink-3">{dateLine}<br className="md:hidden" /><span className="hidden md:inline"> · </span>{hijriLine}</span>
+          <Link href="/" className="min-w-0 no-underline pb-1" aria-label="Me @ G21, home">
+            <LogoMark className="w-[44px] h-[44px] md:w-[56px] md:h-[56px] shrink-0" />
+            <span className="block mt-2 text-[12px] md:text-[13px] font-semibold leading-snug text-ink-3">{dateLine}</span>
           </Link>
           <nav aria-label="Main" className="hidden md:flex top-nav glass rounded-full items-center gap-1 p-[5px] order-none">
             {top.map((it) => (

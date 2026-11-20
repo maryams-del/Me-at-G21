@@ -10,7 +10,7 @@ export function AiBar() {
       onSubmit={(e) => { e.preventDefault(); openCapture({ text: text.trim() }); setText(""); }}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mustard)" strokeWidth="1.9" aria-hidden><path d={SPARKLE} /></svg>
       <label htmlFor="ai-bar" className="sr-only">Ask AI</label>
-      <input id="ai-bar" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask AI: add, find, go to, or do anything…" autoComplete="off"
+      <input id="ai-bar" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask AI" autoComplete="off"
         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[15px]" style={{ color: "inherit", font: "inherit" }} />
       <button type="button" aria-label="Speak" onClick={() => openCapture({ text: text.trim(), voice: true })}
         className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--btn-primary-bg)", color: "var(--btn-primary-ink)" }}>

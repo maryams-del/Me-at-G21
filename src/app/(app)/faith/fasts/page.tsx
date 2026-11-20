@@ -2,7 +2,7 @@ import { dmy } from "@/lib/time";
 import { pageOwner, fastsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
-import { todayLocal, formatHijri } from "./helpers";
+import { todayLocal } from "./helpers";
 import { fmtDate } from "@/lib/format";
 
 const TYPE_LABEL: Record<string, string> = { initial: "Opening balance", annual_addition: "Annual addition", adjustment: "Adjustment", completed: "Fast completed" };
@@ -52,7 +52,7 @@ export default async function FastsPage() {
             {s.ledger.map((e) => (
               <li key={e.id} className="py-2.5 grid grid-cols-[1fr_auto_auto] items-center gap-3 t-small" style={{ opacity: e.voidedAt ? 0.5 : 1 }}>
                 <span style={{ textDecoration: e.voidedAt ? "line-through" : undefined }}>
-                  <span className="font-medium">{TYPE_LABEL[e.type]}</span> {fmtDate(e.onDate)} <span className="text-ink-3">({formatHijri(e.onDate)})</span>
+                  <span className="font-medium">{TYPE_LABEL[e.type]}</span> {fmtDate(e.onDate)}
                   {e.reason && <span className="block text-ink-2">{e.reason}</span>}
                 </span>
                 <span className="t-num text-lg">{e.delta > 0 ? `+${e.delta}` : e.delta}</span>

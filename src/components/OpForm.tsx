@@ -266,21 +266,25 @@ export function PlusIcon({ size = 18 }: { size?: number }) {
 }
 
 /** Disclosure wrapper for “add” forms so tracker pages stay calm. */
-export function Reveal({ label, children, open: initialOpen = false, buttonClass = "btn" }: { label: string; children: React.ReactNode; open?: boolean; buttonClass?: string }) {
+export function Reveal({ label, children, open: initialOpen = false, buttonClass = "btn", iconOnly = false }: { label: string; children: React.ReactNode; open?: boolean; buttonClass?: string; iconOnly?: boolean }) {
   const [open, setOpen] = useState(initialOpen);
   const id = useId();
   const isAdd = ADD_LABEL.test(label);
   const text = label.replace(/^\+\s*/, "");
   return (
-    <div className={open ? "basis-full w-full min-w-0" : undefined}>
-      {isAdd ? (
+    <div className={iconOnly ? "contents" : open ? "basis-full w-full min-w-0" : undefined}>
+      {iconOnly ? (
+        <button type="button" className="plus-btn" aria-label={open ? "Close" : text} title={text} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+          <PlusIcon size={22} />
+        </button>
+      ) : isAdd ? (
         <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
           <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{open ? "Close" : text}
         </button>
       ) : (
         <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
       )}
-      {open && <div id={id} className="mt-4 panel p-4 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+      {open && <div id={id} className={`mt-2 panel p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { pageOwner, historyState } from "@/server/queries";
-import { PageHeader, Empty } from "@/components/ui";
+import { PageHeader, Empty, SearchPill } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
 import { SearchBox } from "./SearchBox";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -12,16 +12,19 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader glyph="history" title="History & search" />
       <SearchBox />
-      <FilterPanel active={!!(sp.q || sp.category || sp.from || sp.to)} className="mb-6">
-        <form className="panel p-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end" role="search" aria-label="Filter history">
-        <label className="field"><span className="label">Keywords</span><input name="q" defaultValue={sp.q} className="input" /></label>
-        <label className="field"><span className="label">Category</span>
-          <select name="category" defaultValue={sp.category ?? ""} className="select"><option value="">All</option>{s.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-        <label className="field"><span className="label">From</span><input type="date" name="from" defaultValue={sp.from} className="input" /></label>
-        <label className="field"><span className="label">To</span><input type="date" name="to" defaultValue={sp.to} className="input" /></label>
-        <button className="btn">Filter</button>
-      </form>
-      </FilterPanel>
+      <div className="toolbar mb-6 mt-3">
+        <SearchPill q={sp.q} placeholder="Search history" keep={{ category: sp.category, from: sp.from, to: sp.to }} />
+        <FilterPanel active={!!(sp.category || sp.from || sp.to)}>
+          <form className="panel p-4 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] items-end" aria-label="Filter history">
+            {sp.q && <input type="hidden" name="q" value={sp.q} />}
+            <label className="field"><span className="label">Category</span>
+              <select name="category" defaultValue={sp.category ?? ""} className="select"><option value="">All</option>{s.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+            <label className="field"><span className="label">From</span><input type="date" name="from" defaultValue={sp.from} className="input" /></label>
+            <label className="field"><span className="label">To</span><input type="date" name="to" defaultValue={sp.to} className="input" /></label>
+            <button className="btn">Apply</button>
+          </form>
+        </FilterPanel>
+      </div>
       {s.rows.length === 0 ? <Empty>No matching activity.</Empty> : (
         <ul className="list panel px-4">
           {s.rows.map((r) => (
