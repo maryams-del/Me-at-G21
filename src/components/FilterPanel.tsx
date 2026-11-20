@@ -15,7 +15,7 @@ export function FilterPanel({ active = false, children, className = "" }: { acti
         <FilterIcon size={19} />
         {active && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: "var(--mustard)" }} aria-label="Filters applied" />}
       </button>
-      {open && <div id={id} className="basis-full w-full min-w-0 order-last mt-1 preview-enter">{children}</div>}
+      {open && <div id={id} className="filter-body basis-full w-full min-w-0 order-last mt-1 preview-enter">{children}</div>}
     </div>
   );
 }
