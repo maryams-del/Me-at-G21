@@ -1,8 +1,10 @@
 import { pageOwner, expiriesState, remindersFor, peopleList } from "@/server/queries";
 import { PeopleManager } from "../People";
 import { PageHeader, Section, Empty, ReminderList, SearchPill } from "@/components/ui";
-import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
-import { fmtDate, relDays } from "@/lib/format";
+import { OpForm, Reveal, type FieldDef } from "@/components/OpForm";
+import { EntryCard } from "@/components/EntryCard";
+import { countdown, reminderLine } from "@/lib/countdown";
+import { fmtDate } from "@/lib/format";
 import { FilterPanel } from "@/components/FilterPanel";
 
 const KINDS = [{ value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "license", label: "Driving licence" }, { value: "bank_card", label: "Bank card" }, { value: "membership", label: "Membership" }, { value: "custom", label: "Other" }];
@@ -54,33 +56,25 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
         <PeopleManager people={people} />
       </div>
       {active.length === 0 && filtering ? <Empty>No tracked items of this type.</Empty> : active.length === 0 ? <Empty>Nothing tracked yet. Add your passport, ID or licence, or say “my passport expires on 3 March 2029” in Capture.</Empty> : (
-        <ul className="grid gap-3">
+        <ul className="grid gap-3 md:grid-cols-2">
           {active.map(({ item: it, daysLeft, renewals }) => {
-            const tone = daysLeft < 0 ? "rust" : daysLeft <= 30 ? "rust" : daysLeft <= 90 ? "mustard" : "";
+            const kindLabel = KINDS.find((k) => k.value === it.kind)?.label;
             return (
-              <li key={it.id} className="panel p-4 grid gap-3" style={tone ? { boxShadow: `inset 6px 0 0 var(--${tone})` } : undefined}>
-                <div className="flex flex-wrap justify-between gap-3">
-                  <div>
-                    <h2 className="t-h3">{it.label} {KINDS.find((k) => k.value === it.kind)?.label !== it.label && <span className="t-meta font-normal">{KINDS.find((k) => k.value === it.kind)?.label}</span>}</h2>
-                    <p className="t-small text-ink-2">Reminders {it.remindersEnabled ? it.reminderOffsetsDays.map((d) => `${-d}d`).join(", ") + " before" : "off"}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="t-h2">{fmtDate(it.expiresOn)}</p>
-                    <p className="t-small" style={{ color: daysLeft < 0 ? "var(--danger)" : "var(--ink-2)" }}>{daysLeft < 0 ? `expired ${relDays(daysLeft)}` : `expires ${relDays(daysLeft)}`}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Reveal label="Record renewal" buttonClass="btn btn-sm btn-primary">
+              <EntryCard key={it.id} title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
+                count={countdown(daysLeft, "expiry")} countSub={fmtDate(it.expiresOn)}
+                reminder={reminderLine({ enabled: it.remindersEnabled, date: it.expiresOn, offsets: it.reminderOffsetsDays, time: it.reminderTime, today: s.today })}
+                action={
+                  <Reveal label="Renewed" icon="renew" buttonClass="pill-action">
                     <OpForm op="expiry.renew" fixed={{ itemId: it.id }} initial={{ renewedOn: s.today }} submitLabel="Save renewal" fields={[
                       { name: "renewedOn", label: "Renewed on", type: "date", required: true }, { name: "newExpiresOn", label: "New expiry date", type: "date", required: true }, { name: "notes", label: "Note", nullable: true, wide: true }]} />
                   </Reveal>
-                  <OpButton op="expiry.delete" input={{ id: it.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Stop tracking ${it.label}? Its reminders will be cancelled.`} />
-                  <EditPanel>
-                    <OpForm op="expiry.update" fixed={{ id: it.id, personId: it.personId, issuer: it.issuer }} initial={it} submitLabel="Save changes" compact fields={[...fields, { name: "status", label: "Status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "archived", label: "Archived (no reminders)" }] }]} />
-                  </EditPanel>
-                </div>
+                }
+                edit={
+                  <OpForm op="expiry.update" fixed={{ id: it.id, personId: it.personId, issuer: it.issuer }} initial={it} submitLabel="Save changes" compact fields={fields}
+                    deleteAction={{ op: "expiry.delete", input: { id: it.id }, confirm: `Delete “${it.label}”? Its reminders will be cancelled.` }} />
+                }>
                 {renewals.length > 0 && <p className="t-meta">Renewal history: {renewals.map((r) => `${fmtDate(r.renewedOn)} (was ${fmtDate(r.previousExpiresOn)}, now ${fmtDate(r.newExpiresOn)})`).join("; ")}</p>}
-              </li>
+              </EntryCard>
             );
           })}
         </ul>

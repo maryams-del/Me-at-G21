@@ -80,10 +80,10 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
                       </div>
                       <div className="col-span-2 flex flex-wrap gap-2 items-start">
                         {r.status === "planned" && <OpButton op="charity.update" className="btn btn-sm" label="Mark paid" input={{ ...r, id: r.id, amount: fromMinor(r.amountMinor, r.currency), status: "completed", paidOn: today, cause: r.cause, notes: r.notes }} confirmText={`Mark as paid today (${dmy(today)})?`} />}
-                        <OpButton op="charity.delete" input={{ id: r.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText="Delete this donation? It will be removed from totals." />
                         <EditPanel>
                           <OpForm op="charity.update" fields={charityFields(o.defaultCurrency, suggest)} fixed={{ id: r.id, recurring: r.recurring }} submitLabel="Save changes" compact
-                            initial={{ ...r, amount: fromMinor(r.amountMinor, r.currency) }} />
+                            initial={{ ...r, amount: fromMinor(r.amountMinor, r.currency) }} 
+                      deleteAction={{ op: "charity.delete", input: { id: r.id }, confirm: "Delete this donation? It will be removed from totals.", label: "Delete" }} />
                         </EditPanel>
                       </div>
                     </li>

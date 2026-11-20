@@ -7,6 +7,8 @@ import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, Reveal } from "@/components/OpForm";
 import { applicationFields, STATUS_LABEL } from "../fields";
 import { fmtDateTime } from "@/lib/format";
+import { countdown } from "@/lib/countdown";
+import { Icon } from "@/components/icons";
 
 const BOARD = [
   { label: "Researching", statuses: ["researching"] }, { label: "Preparing", statuses: ["preparing"] },
@@ -22,19 +24,23 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
   const Card = ({ r }: { r: (typeof rows)[number] }) => {
     const a = r.app;
-    const tone = r.overdue ? "var(--rust)" : r.window !== null && r.window <= 7 ? "var(--rust)" : r.window !== null ? "var(--mustard)" : null;
+    const cd = a.deadlineAt && r.open ? countdown(r.daysLeft, "deadline") : null;
     return (
-      <Link href={`/education/applications/${a.id}`} className="panel p-4 grid gap-1 no-underline hover:bg-[color-mix(in_srgb,var(--surface)_85%,var(--mustard))]" style={tone ? { boxShadow: `inset 6px 0 0 ${tone}` } : undefined}>
-        <span className="flex flex-wrap justify-between gap-2">
-          <span className="t-h3">{a.university}</span>
-          <span className="chip chip-fill">{STATUS_LABEL[a.status]}</span>
+      <Link href={`/education/applications/${a.id}`} className="entry no-underline" style={{ textDecoration: "none" }}>
+        <span className="entry-head">
+          <span className="min-w-0 flex-1 grid gap-0.5">
+            <span className="entry-title">{a.university}</span>
+            <span className="entry-sub">{a.program}{a.intake ? ` · ${a.intake}` : ""}{a.country ? ` · ${a.country}` : ""}</span>
+          </span>
+          <span className="chip chip-fill shrink-0">{STATUS_LABEL[a.status]}</span>
         </span>
-        <span className="t-small text-ink-2">{a.program}{a.intake ? `, ${a.intake}` : ""}{a.country ? `, ${a.country}` : ""}</span>
-        <span className="t-small">
-          {a.deadlineAt ? <>Deadline {fmtDateTime(a.deadlineAt, o.timezone)} your time{r.open && r.daysLeft !== null ? <strong>{r.overdue ? " (passed)" : r.daysLeft === 0 ? " (today)" : ` (${r.daysLeft} day${r.daysLeft === 1 ? "" : "s"} left)`}</strong> : null}</> : <span className="text-ink-3">No deadline set</span>}
-          {a.deadlineAt && !a.deadlineVerified && <span className="chip chip-mustard ml-2">not verified</span>}
+        <span className="entry-row">
+          {cd ? (
+            <span className={`entry-count ${cd.tone}`}><span className="n">{cd.n}</span><span className="grid"><span className="u">{cd.unit}</span><span className="s">{fmtDateTime(a.deadlineAt as Date, o.timezone)} your time</span></span></span>
+          ) : <span className="t-small text-ink-3">{a.deadlineAt ? `Deadline ${fmtDateTime(a.deadlineAt, o.timezone)}` : "No deadline set"}</span>}
+          {a.deadlineAt && !a.deadlineVerified && <span className="chip chip-mustard">not verified</span>}
         </span>
-        {r.reqTotal > 0 && <span className="t-meta">Requirements {r.reqDone}/{r.reqTotal}</span>}
+        {r.reqTotal > 0 && <span className="entry-foot"><Icon name="check" size={13} />Requirements {r.reqDone}/{r.reqTotal}</span>}
       </Link>
     );
   };

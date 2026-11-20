@@ -31,7 +31,7 @@ export function applicationFields(docs: { id: string; title: string }[], forEdit
     ...(forEdit ? [] : [{ name: "requirementsText", sendAs: "requirements", lines: true, label: "Requirements checklist (one per line)", type: "textarea", placeholder: "Transcript\nIELTS 7.0\n2 recommendation letters\nStatement of purpose" } as FieldDef]),
     ...(forEdit ? [] : [{ name: "documentIds", asArray: true, label: "Linked document", type: "select", options: docs.map((d) => ({ value: d.id, label: d.title })), help: "More can be linked on the detail page." } as FieldDef]),
     { name: "linksText", label: "Links (one per line, optionally “Label | https://…”)", type: "textarea", wide: true, nullable: true, placeholder: "Program page | https://…\nScholarship | https://…" },
-    { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true, help: "Default 30, 14, 7, 1" },
+    { name: "reminderOffsetsDays", label: "Remind me this many days before", type: "intlist", negative: true, presets: [60, 30, 14, 7, 3, 1], maxDays: 120, maxCount: 8 },
     { name: "remindersEnabled", label: "Deadline reminders on", type: "checkbox" },
     { name: "notes", label: "Notes", type: "textarea", nullable: true },
   ];

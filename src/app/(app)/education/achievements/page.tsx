@@ -96,8 +96,8 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
                 )}
                 <EditPanel>
                     <OpForm op="achievement.update" fields={fields} fixed={{ id: a.id }} compact submitLabel="Save"
-                      initial={{ ...a, skillsText: a.skills.join(", "), tagsText: a.tags.join(", "), linksText: linksText(a.links) }} />
-                    <OpButton op="achievement.delete" input={{ id: a.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${a.title}”?`} />
+                      initial={{ ...a, skillsText: a.skills.join(", "), tagsText: a.tags.join(", "), linksText: linksText(a.links) }} 
+                      deleteAction={{ op: "achievement.delete", input: { id: a.id }, confirm: `Delete “${a.title}”?`, label: "Delete" }} />
                   </EditPanel>
               </li>
             ))}
@@ -124,8 +124,8 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
                 {h.notes && <p className="t-small text-ink-2">{h.notes}</p>}
                 {h.links.length > 0 && <p className="t-small">{h.links.map((l, n) => <span key={l.url}>{n ? ", " : ""}<a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></span>)}</p>}
                 <EditPanel>
-                    <OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact />
-                    <OpButton op="hobby.delete" input={{ id: h.id }} label="Delete" className="btn btn-sm btn-ghost justify-self-start" confirmText={`Delete “${h.name}”?`} />
+                    <OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact 
+                      deleteAction={{ op: "hobby.delete", input: { id: h.id }, confirm: `Delete “${h.name}”?`, label: "Delete" }} />
                   </EditPanel>
               </li>
             ))}

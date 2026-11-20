@@ -1,8 +1,10 @@
 import { pageOwner, subscriptionsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
+import { EntryCard } from "@/components/EntryCard";
+import { countdown, relativeReminderLine } from "@/lib/countdown";
 import { CURRENCIES, formatMoney, fromMinor } from "@/lib/money";
-import { fmtDate, relDays } from "@/lib/format";
+import { fmtDate } from "@/lib/format";
 import { addDays } from "@/lib/time";
 
 const CADENCE: Record<string, string> = { monthly: "Monthly", yearly: "Yearly", weekly: "Weekly", custom: "Custom timing" };
@@ -16,7 +18,7 @@ const fields = (currency: string): FieldDef[] => [
   { name: "intervalValue", unitName: "intervalUnit", label: "Every", type: "interval", showIf: { field: "cadence", values: ["custom"] },
     options: [{ value: "day", label: "days" }, { value: "week", label: "weeks" }, { value: "month", label: "calendar months" }] },
   { name: "renewal", label: "Renews", type: "select", required: true, options: [{ value: "auto", label: "Automatically" }, { value: "manual", label: "Only if I renew it" }] },
-  { name: "beforeDays", sendAs: "reminderOffsetsDays", label: "Remind me this many days before each charge", type: "intlist", negative: true, includeZero: true, help: "e.g. 3. You are also reminded on the day." },
+  { name: "beforeDays", sendAs: "reminderOffsetsDays", label: "Remind me this many days before each charge", type: "intlist", negative: true, includeZero: true, presets: [14, 7, 3, 2, 1], maxDays: 60, maxCount: 6 },
   { name: "reminderTime", label: "Reminder time", type: "time", required: true },
   { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
   { name: "notes", label: "Notes", type: "textarea", nullable: true },
@@ -46,33 +48,28 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
 
       <Section title="All subscriptions">
         {s.rows.length === 0 ? <Empty>No subscriptions yet. Add streaming, cloud storage, phone plans, gym memberships, anything that charges you on a schedule.</Empty> : (
-          <ul className="grid gap-4 md:grid-cols-2">
-            {s.rows.map(({ sub: x, next, daysLeft, monthlyMinor }) => (
-              <li key={x.id} className="panel p-4 grid gap-2 content-start" style={{ opacity: x.status === "cancelled" ? 0.7 : 1, boxShadow: daysLeft !== null && daysLeft <= 3 ? "inset 6px 0 0 var(--mustard)" : undefined }}>
-                <div className="flex justify-between gap-3">
-                  <div>
-                    <h2 className="t-h3">{x.name} {x.status === "cancelled" && <span className="chip chip-fill">cancelled {x.cancelledOn ? fmtDate(x.cancelledOn) : ""}</span>}</h2>
-                    <p className="t-meta">{[x.category, x.cadence === "custom" ? `Every ${x.intervalValue} ${x.intervalUnit}s` : CADENCE[x.cadence], x.renewal === "manual" ? "renews manually" : null].filter(Boolean).join(", ")}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="t-h3">{formatMoney(x.amountMinor, x.currency)}</p>
-                    {x.cadence !== "monthly" && <p className="t-meta">≈ {formatMoney(monthlyMinor, x.currency)}/month</p>}
-                  </div>
-                </div>
-                {next && <p className="t-small">Next charge {fmtDate(next)} ({relDays(daysLeft)})</p>}
-                {x.notes && <p className="t-small text-ink-2">{x.notes}</p>}
-                <div className="flex flex-wrap gap-2">
-                  {x.status === "active"
-                    ? <OpButton op="subscription.cancel" input={{ id: x.id, cancelledOn: s.today }} label="I cancelled it" className="btn btn-sm" confirmText={`Record that you cancelled ${x.name} today? This doesn't cancel it with the provider.`} />
-                    : <OpButton op="subscription.reactivate" input={{ id: x.id, nextBillingDate: s.today }} label="Reactivate (charged today)" className="btn btn-sm" />}
-                  <OpButton op="subscription.delete" input={{ id: x.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Delete ${x.name}? Its reminders stop.`} />
-                  <EditPanel>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {s.rows.map(({ sub: x, next, daysLeft, monthlyMinor }) => {
+              const active = x.status === "active";
+              const how = x.cadence === "custom" ? `Every ${x.intervalValue} ${x.intervalUnit}s` : CADENCE[x.cadence];
+              return (
+                <EntryCard key={x.id} title={x.name} dim={!active}
+                  badge={!active ? <span className="chip chip-fill">cancelled {x.cancelledOn ? fmtDate(x.cancelledOn) : ""}</span> : undefined}
+                  subtitle={[`${formatMoney(x.amountMinor, x.currency)} · ${how}`, x.cadence !== "monthly" ? `≈ ${formatMoney(monthlyMinor, x.currency)}/month` : null, x.category, x.renewal === "manual" ? "renews manually" : null].filter(Boolean).join(" · ")}
+                  count={active ? countdown(daysLeft, "charge") : null} countSub={active && next ? fmtDate(next) : undefined}
+                  reminder={active ? relativeReminderLine({ enabled: x.remindersEnabled, offsets: x.reminderOffsetsDays, time: x.reminderTime }) : null}
+                  action={active
+                    ? <OpButton op="subscription.cancel" input={{ id: x.id, cancelledOn: s.today }} label="Cancelled" icon="stop" className="pill-action" confirmText={`Record that you cancelled ${x.name} today? This doesn't cancel it with the provider.`} />
+                    : <OpButton op="subscription.reactivate" input={{ id: x.id, nextBillingDate: s.today }} label="Reactivate" icon="play" className="pill-action" confirmText={`Reactivate ${x.name}? The next charge is counted from today.`} />}
+                  edit={
                     <OpForm op="subscription.update" fields={f} fixed={{ id: x.id, trialEndsOn: null, trialOffsetsDays: [] }} compact submitLabel="Save changes"
-                      initial={{ ...x, amount: fromMinor(x.amountMinor, x.currency), nextBillingDate: next ?? x.anchorDate, beforeDays: x.reminderOffsetsDays.map((n) => -n).filter(Boolean) }} />
-                  </EditPanel>
-                </div>
-              </li>
-            ))}
+                      initial={{ ...x, amount: fromMinor(x.amountMinor, x.currency), nextBillingDate: next ?? x.anchorDate, beforeDays: x.reminderOffsetsDays.map((n) => -n).filter(Boolean) }}
+                      deleteAction={{ op: "subscription.delete", input: { id: x.id }, confirm: `Delete “${x.name}”? Its reminders stop.` }} />
+                  }>
+                  {x.notes && <p className="t-small text-ink-2">{x.notes}</p>}
+                </EntryCard>
+              );
+            })}
           </ul>
         )}
       </Section>
