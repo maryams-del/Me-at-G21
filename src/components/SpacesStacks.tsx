@@ -70,12 +70,13 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
       {reorder && <p className="t-meta mb-2">Move sections and spaces up or down, then save. The top section opens first.</p>}
       {query && <p className="t-meta mb-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
+      <div className="grid gap-x-6 md:grid-cols-2 items-start">
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
         const fanned = reorder || !!query || !!open[g.title];
         const step = fanned ? OPEN_STEP : CLOSED_STEP;
         return (
-          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7">
+          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7 min-w-0">
             <div className="flex items-center gap-2.5 mb-3">
               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: g.tint, boxShadow: `0 0 12px ${g.tint}` }} aria-hidden />
               <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
@@ -121,6 +122,7 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
           </section>
         );
       })}
+      </div>
     </div>
   );
 }
