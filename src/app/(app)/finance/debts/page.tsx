@@ -69,12 +69,12 @@ const editFields: FieldDef[] = [
 
 function DebtList({ rows, today }: { rows: Awaited<ReturnType<typeof debtsState>>; today: string }) {
   return (
-    <ul className="grid gap-3 md:grid-cols-2">
+    <ul className="entry-grid">
       {rows.map(({ debt: d, outstanding, pays, overdue }) => {
         const isOpen = d.status === "open";
         const left = isOpen && d.dueDate ? daysBetween(today, d.dueDate) : null;
         return (
-          <EntryCard key={d.id} title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
+          <EntryCard key={d.id} icon="cash" countLabel="Due" title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
             badge={!isOpen ? <span className="chip chip-pine">settled</span> : undefined}
             subtitle={`${formatMoney(outstanding, d.currency)} outstanding · ${d.direction === "lent" ? "lent" : "borrowed"} ${formatMoney(d.originalMinor, d.currency)} on ${fmtDate(d.onDate)}`}
             count={countdown(left, "due")} countSub={left !== null ? fmtDate(d.dueDate) : undefined}

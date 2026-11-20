@@ -2,20 +2,24 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { RevealCtx, InEntryCardCtx } from "./OpForm";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import type { Countdown } from "@/lib/countdown";
 
 /**
  * The list card used across the app: name and type top-left, a pencil (Edit) top-right,
  * the big "x days till…" number with one small action pill beside it, and the reminder line underneath.
- * Edit opens the entry's form inside the card; Delete lives in that form, behind a confirmation.
+ * Edit turns the card into the edit view: icon, name and close, the countdown panel, then the entry's
+ * form (tabs, Save, and Delete behind a confirmation).
  */
-export function EntryCard({ title, subtitle, badge, count, countSub, action, reminder, edit, href, dim, children }: {
+export function EntryCard({ title, subtitle, badge, icon = "calendar", count, countSub, countLabel = "Due", action, reminder, edit, href, dim, children }: {
   title: string;
   subtitle?: React.ReactNode;
   badge?: React.ReactNode;
+  icon?: IconName;
   count?: Countdown | null;
   countSub?: React.ReactNode;
+  /** Small label over the date in the edit view's countdown panel, e.g. "Expires". */
+  countLabel?: string;
   action?: React.ReactNode;
   reminder?: string | null;
   edit?: React.ReactNode;
@@ -25,6 +29,34 @@ export function EntryCard({ title, subtitle, badge, count, countSub, action, rem
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
+
+  if (open && edit) {
+    const short = count ? count.unit.replace(/ till .*$/, "") : "";
+    return (
+      <li className="entry editing" id={id}>
+        <div className="flex items-center gap-3">
+          <span className="entry-ico" aria-hidden><Icon name={icon} size={22} strokeWidth={1.8} /></span>
+          <div className="min-w-0 flex-1 grid gap-0.5">
+            <h2 className="entry-title">{title}{badge}</h2>
+            {subtitle && <p className="entry-sub">{subtitle}</p>}
+          </div>
+          <button type="button" className="icon-ghost" style={{ margin: "-4px -8px 0 0" }} aria-label={`Close editing ${title}`} title="Close" aria-expanded onClick={() => setOpen(false)}>
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+        {count && (
+          <div className="due-well">
+            <div className="grid gap-0.5"><span className="t-label">{countLabel}</span><span className="font-semibold">{countSub}</span></div>
+            <div className={`entry-count ${count.tone === "calm" ? "soon" : count.tone}`}><span className="n">{count.n}</span><span className="u">{short}</span></div>
+          </div>
+        )}
+        <InEntryCardCtx.Provider value={true}>
+          <RevealCtx.Provider value={{ close: () => setOpen(false) }}>{edit}</RevealCtx.Provider>
+        </InEntryCardCtx.Provider>
+      </li>
+    );
+  }
+
   return (
     <li className="entry" style={dim ? { opacity: 0.72 } : undefined}>
       <div className="entry-head">
@@ -33,8 +65,8 @@ export function EntryCard({ title, subtitle, badge, count, countSub, action, rem
           {subtitle && <p className="entry-sub">{subtitle}</p>}
         </div>
         {edit && (
-          <button type="button" className="icon-ghost" aria-label={open ? `Close editing ${title}` : `Edit ${title}`} title={open ? "Close" : "Edit"} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-            <Icon name={open ? "close" : "edit"} size={17} />
+          <button type="button" className="icon-ghost" aria-label={`Edit ${title}`} title="Edit" aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}>
+            <Icon name="edit" size={17} />
           </button>
         )}
       </div>
@@ -51,11 +83,6 @@ export function EntryCard({ title, subtitle, badge, count, countSub, action, rem
       )}
       {children}
       {reminder && <p className="entry-foot"><Icon name="bell" size={13} />{reminder}</p>}
-      {open && edit && (
-        <div id={id} className="entry-edit preview-enter">
-          <InEntryCardCtx.Provider value={true}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{edit}</RevealCtx.Provider></InEntryCardCtx.Provider>
-        </div>
-      )}
     </li>
   );
 }

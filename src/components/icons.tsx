@@ -12,6 +12,11 @@ const PATHS = {
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
   skip: "M5 5v14l9-7zM18 5v14",
   plus: "M12 5v14M5 12h14",
+  idcard: "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 9a2 2 0 1 0 0 4a2 2 0 1 0 0-4M6.5 16c.6-1.3 1.5-2 2.5-2s1.9.7 2.5 2M14 10h4M14 13.5h3",
+  card: "M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM3 10h18M7 15h3",
+  repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
+  doc: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6",
+  cap: "M22 10L12 5 2 10l10 5 10-5zM6 12v5c3 2 9 2 12 0v-5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -49,7 +49,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
 
       {rows.length === 0 && <Empty>No routines yet. Use quick add above, or create your own.</Empty>}
 
-      <ul className="grid gap-3 md:grid-cols-2">
+      <ul className="entry-grid">
         {rows.map(({ routine: r, anchor, due, daysSince, daysLeft, overdue, skipped, events }) => {
           const isFirstUse = r.anchor === "first_use";
           const count = due ? countdown(daysLeft ?? null, "due")
@@ -57,7 +57,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
           const last = !isFirstUse && anchor ? `Last done ${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}`
             : isFirstUse ? `Started ${anchor ? `${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}` : "not recorded"}` : null;
           return (
-            <EntryCard key={r.id} title={r.name} badge={r.sensitive ? <span className="chip chip-fill">private</span> : undefined}
+            <EntryCard key={r.id} icon="repeat" countLabel="Due" title={r.name} badge={r.sensitive ? <span className="chip chip-fill">private</span> : undefined}
               subtitle={schedule(r)} count={count}
               countSub={due ? fmtDate(due) : skipped ? "Skipped, still counting" : undefined}
               reminder={relativeReminderLine({ enabled: r.remindersEnabled, offsets: r.reminderOffsetsDays, time: r.reminderTime })}
