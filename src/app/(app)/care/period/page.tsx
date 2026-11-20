@@ -78,7 +78,7 @@ export default async function PeriodPage() {
             <>
               <div>
                 <p className="t-small text-ink-2">Current period</p>
-                <p className="t-num text-[2.6rem] leading-tight">Day {s.openDay}</p>
+                <p className="t-num text-[2rem] md:text-[2.6rem] leading-tight">Day {s.openDay}</p>
                 <p className="t-small text-ink-2">Started {fmtDate(open.startDate)}{open.startTime ? ` at ${open.startTime}` : ""}</p>
               </div>
               <OpButton op="period.end" input={{ endDate: today }} label="Period ended today" className="btn btn-primary justify-self-start" />

@@ -1,37 +1,28 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { api, ApiError, toast } from "./api";
-import { useSizes } from "@/lib/sizes";
 
 export type StackCard = { key: string; href: string; label: string; glyph: GlyphKind; d: string; stat?: string };
 export type StackGroup = { title: string; tint: string; custom: boolean; cards: StackCard[] };
 
 const LONG_PRESS_MS = 600;
-const OPEN_KEY = "g21-stacks-open";
 
 function Grip() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M5 8h14M5 12h14M5 16h14" /></svg>;
 }
 
 /**
- * Spaces as wallet stacks: every section starts stacked; tap a stack to fan it out.
- * Search filters across every section. Press and hold any space to start reordering: drag the three-line
- * grips to move sections and spaces, then tap Done to save the order.
+ * Spaces as quiet icon tiles, grouped by section. Search filters across every section.
+ * Press and hold any space to reorder: the sections turn into lists with three-line grips to drag,
+ * then tap Done to save. Tap a section heading to rearrange the sections themselves.
  */
 export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[]; addSlot?: React.ReactNode }) {
   const router = useRouter();
-  const k = useSizes().stackCards;
-  const CARD_H = Math.round(112 * k), OPEN_STEP = Math.round(122 * k), CLOSED_STEP = Math.round(48 * k);
+  const STEP = 60, ROW_H = 52;
   const [groups, setGroups] = useState(initial);
-  // Which stacks are fanned out survives going to a space and coming back (Back / swipe).
-  const [open, setOpenState] = useState<Record<string, boolean>>({});
-  useEffect(() => { try { setOpenState(JSON.parse(sessionStorage.getItem(OPEN_KEY) || "{}")); } catch { /* private mode */ } }, []);
-  const setOpen = (f: (o: Record<string, boolean>) => Record<string, boolean>) => setOpenState((o) => {
-    const n = f(o); try { sessionStorage.setItem(OPEN_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n;
-  });
   const [q, setQ] = useState("");
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,17 +49,11 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
     if (reorder) return;
     cancelPress();
     press.current = { x: e.clientX, y: e.clientY, fired: false };
-    press.current.t = setTimeout(() => {
-      press.current.fired = true;
-      setQ(""); setReorder(true);
-      navigator.vibrate?.(12);
-    }, LONG_PRESS_MS);
+    press.current.t = setTimeout(() => { press.current.fired = true; setQ(""); setReorder(true); navigator.vibrate?.(12); }, LONG_PRESS_MS);
   };
-  const movePress = (e: React.PointerEvent) => {
-    if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress();
-  };
+  const movePress = (e: React.PointerEvent) => { if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress(); };
 
-  // ---- Drag a card by its grip (within its section) ----
+  // ---- Drag a space by its grip (within its section) ----
   const cardDown = (e: React.PointerEvent, gi: number, ci: number, key: string) => {
     e.preventDefault(); e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -78,11 +63,11 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
   const cardMove = (e: React.PointerEvent) => {
     const d = cd.current; if (!d) return;
     const n = groups[d.gi].cards.length;
-    const target = Math.max(0, Math.min(n - 1, Math.round(d.idx + (e.clientY - d.startY) / OPEN_STEP)));
+    const target = Math.max(0, Math.min(n - 1, Math.round(d.idx + (e.clientY - d.startY) / STEP)));
     if (target !== d.idx) {
       const from = d.idx;
       setGroups((gs) => gs.map((g, i) => (i === d.gi ? { ...g, cards: moveTo(g.cards, from, target) } : g)));
-      d.startY += (target - from) * OPEN_STEP; d.idx = target;
+      d.startY += (target - from) * STEP; d.idx = target;
       navigator.vibrate?.(6);
     }
     setCardDrag((c) => (c ? { ...c, dy: e.clientY - d.startY } : c));
@@ -102,17 +87,17 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
   }
 
   return (
-    <div className={reorder ? "reordering" : undefined}>
-      <div className="flex flex-wrap items-center gap-2 mb-2">
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
         {reorder ? (
           <>
-            <span className="t-small font-bold flex-1">Reordering</span>
+            <span className="t-small font-semibold flex-1">Drag the grips to reorder</span>
             <button type="button" className="btn" onClick={() => { setGroups(initial); setReorder(false); }} disabled={saving}>Cancel</button>
             <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
         ) : (
-          <label className="glass flex items-center gap-2 rounded-full pl-4 pr-2 py-1 flex-1 min-w-0 basis-[10rem]">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="opacity-70 shrink-0"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4 4" /></svg>
+          <label className="flex items-center gap-2 rounded-full pl-4 pr-2 py-0.5 flex-1 min-w-0 basis-[10rem]" style={{ boxShadow: "inset 0 0 0 1px var(--hair)", background: "var(--field-bg)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="opacity-60 shrink-0"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4 4" /></svg>
             <span className="sr-only">Search spaces</span>
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search spaces"
               className="flex-1 min-w-0 bg-transparent border-0 outline-none py-2 text-[15px]" style={{ color: "inherit", font: "inherit" }} />
@@ -120,77 +105,56 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
         )}
         {!reorder && addSlot}
       </div>
-      {!reorder && !query && Object.values(open).some(Boolean) && (
-        <div className="flex justify-end">
-          <button type="button" className="btn btn-sm icon-btn" onClick={() => setOpen(() => ({}))}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M7 4l5 5 5-5M7 20l5-5 5 5" /></svg>
-            Collapse all
-          </button>
-        </div>
-      )}
-      {query && <p className="t-meta mb-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
+      {!reorder && !query && <p className="t-meta mt-2">Press and hold a space to reorder.</p>}
+      {query && <p className="t-meta mt-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
-      <div className="grid gap-x-6 md:grid-cols-2 items-start">
+      <div className={reorder ? "grid gap-x-8 md:grid-cols-2 items-start" : ""}>
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
-        const fanned = reorder || !!query || !!open[g.title];
-        const step = fanned ? OPEN_STEP : CLOSED_STEP;
         return (
-          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7 min-w-0 relative">
-            <div className="flex items-center gap-2.5 mb-3">
-              <button type="button" className="flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
-                onClick={() => setSorting(true)} aria-label={`Rearrange sections (${g.title})`}>
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: g.tint, boxShadow: `0 0 12px ${g.tint}` }} aria-hidden />
-                <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
-                <span className="t-meta">{g.cards.length}</span>
-                <span className="opacity-60" aria-hidden><Grip /></span>
-              </button>
-              {!reorder && !query && g.cards.length > 1 && (
-                <button type="button" className="ml-auto t-small font-bold underline-offset-4 hover:underline" aria-expanded={fanned}
-                  onClick={() => setOpen((o) => ({ ...o, [g.title]: !o[g.title] }))}>{fanned ? "Stack" : "Fan out"}</button>
-              )}
-            </div>
-            <div className="relative" style={{ height: (g.cards.length - 1) * step + CARD_H, transition: "height .45s cubic-bezier(.3,1.3,.5,1)" }}>
-              {g.cards.map((c, ci) => {
-                const dragging = cardDrag?.key === c.key;
-                return (
-                <div key={c.key} className={`absolute left-0 right-0 ${dragging ? "dragging" : ""}`}
-                  style={{ top: ci * step + (dragging ? cardDrag.dy : 0), height: CARD_H, zIndex: dragging ? 50 : ci + 1, transition: dragging ? "none" : "top .45s cubic-bezier(.3,1.3,.5,1)" }}>
-                  <Link href={c.href} className="tile no-callout flex flex-col h-full" style={{ ["--card-tint" as string]: g.tint, minHeight: 0, padding: "14px 16px" }}
-                    draggable={false}
-                    onPointerDown={startPress} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={cancelPress}
-                    onContextMenu={(e) => e.preventDefault()}
-                    onClick={(e) => {
-                      if (press.current.fired) { e.preventDefault(); press.current.fired = false; return; }
-                      if (reorder) { e.preventDefault(); return; }
-                      if (!fanned) { e.preventDefault(); setOpen((o) => ({ ...o, [g.title]: true })); }
-                    }}
-                    onFocus={() => { if (!fanned && !reorder) setOpen((o) => ({ ...o, [g.title]: true })); }}
-                    tabIndex={reorder ? -1 : undefined}>
-                    <span className="flex items-center gap-2.5">
-                      <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[10px] shrink-0"
-                        style={{ background: `radial-gradient(circle at 35% 28%, #FFF8EC, ${g.tint})`, ["--paper" as string]: "#FFF8EC", boxShadow: "inset 0 1px 1px rgba(255,255,255,.7)" }}>
-                        <Glyph kind={c.glyph} size={18} color="#26331F" accent="#8A4A12" />
-                      </span>
-                      <span className="font-bold text-[15px] truncate">{c.label}</span>
-                      {!reorder && <span className="ml-auto t-meta shrink-0">Open →</span>}
-                    </span>
-                    {c.stat && <span className="mt-auto pt-2 text-[14px] font-semibold leading-snug text-ink-2 line-clamp-2 break-words">{c.stat}</span>}
-                  </Link>
-                  {reorder && (
-                    <button type="button" className="grip absolute right-2.5 top-2 z-10" aria-label={`Drag to move ${c.label}`}
-                      onPointerDown={(e) => cardDown(e, gi, ci, c.key)} onPointerMove={cardMove} onPointerUp={cardUp} onPointerCancel={cardUp}
-                      onKeyDown={(e) => {
-                        const to = e.key === "ArrowUp" ? ci - 1 : e.key === "ArrowDown" ? ci + 1 : -1;
-                        if (to >= 0 && to < g.cards.length) { e.preventDefault(); setGroups((gs) => gs.map((x, i) => (i === gi ? { ...x, cards: moveTo(x.cards, ci, to) } : x))); }
-                      }}>
-                      <Grip />
-                    </button>
-                  )}
-                </div>
-                );
-              })}
-            </div>
+          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-8 min-w-0">
+            <button type="button" className="flex items-center gap-2 mb-4 bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
+              onClick={() => setSorting(true)} aria-label={`${g.title}. Rearrange sections`}>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.tint }} aria-hidden />
+              <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
+            </button>
+            {reorder ? (
+              <div className="relative no-callout" style={{ height: g.cards.length * STEP - (STEP - ROW_H) }}>
+                {g.cards.map((c, ci) => {
+                  const dragging = cardDrag?.key === c.key;
+                  return (
+                    <div key={c.key} className="space-row absolute left-0 right-0"
+                      style={{ top: ci * STEP + (dragging ? cardDrag.dy : 0), height: ROW_H, zIndex: dragging ? 20 : 1,
+                        transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.4)" : undefined }}>
+                      <span className="ic"><Glyph kind={c.glyph} size={17} color="currentColor" accent="currentColor" /></span>
+                      <span className="flex-1 truncate text-[14px] font-semibold">{c.label}</span>
+                      <button type="button" className="grip" aria-label={`Drag to move ${c.label}`}
+                        onPointerDown={(e) => cardDown(e, gi, ci, c.key)} onPointerMove={cardMove} onPointerUp={cardUp} onPointerCancel={cardUp}
+                        onKeyDown={(e) => {
+                          const to = e.key === "ArrowUp" ? ci - 1 : e.key === "ArrowDown" ? ci + 1 : -1;
+                          if (to >= 0 && to < g.cards.length) { e.preventDefault(); setGroups((gs) => gs.map((x, i) => (i === gi ? { ...x, cards: moveTo(x.cards, ci, to) } : x))); }
+                        }}>
+                        <Grip />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <ul className="space-grid">
+                {g.cards.map((c) => (
+                  <li key={c.key} className="min-w-0">
+                    <Link href={c.href} className="sp-tile no-callout" draggable={false} title={c.stat ? `${c.label} · ${c.stat}` : c.label}
+                      onPointerDown={startPress} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={cancelPress}
+                      onContextMenu={(e) => e.preventDefault()}
+                      onClick={(e) => { if (press.current.fired) { e.preventDefault(); press.current.fired = false; } }}>
+                      <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" /></span>
+                      <span>{c.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         );
       })}
@@ -225,7 +189,7 @@ function SectionSorter({ titles, tints, saving, onCancel, onSave }: { titles: st
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="dialog" aria-modal="true" aria-label="Rearrange sections">
-      <div className="absolute inset-0" style={{ background: "rgba(20,24,16,.45)" }} onClick={onCancel} />
+      <div className="absolute inset-0" style={{ background: "rgba(20,26,21,.45)" }} onClick={onCancel} />
       <div className="relative glass w-full max-w-md p-4 rounded-[28px] preview-enter" style={{ background: "color-mix(in srgb, var(--paper) 94%, transparent)", marginBottom: "env(safe-area-inset-bottom)" }}>
         <p className="t-h3 mb-3">Rearrange sections</p>
         <div className="relative no-callout" style={{ height: order.length * ROW }}>

@@ -26,6 +26,6 @@ export function bySavedOrder<T>(xs: T[], key: (x: T) => string, saved: string[] 
 }
 /** Section colours, shared by the Spaces page and other places that show a section. */
 export const SECTION_TINT: Record<string, string> = {
-  "Money": "#F0A94B", "Care": "#E8A08A", "Faith": "#8FB0D8", "Education & career": "#9DBE78", "Life admin": "#C9A86A", "You": "#A9A08E",
+  "Money": "#8FB59A", "Care": "#C9A48E", "Faith": "#9DB0C6", "Education & career": "#B9B27E", "Life admin": "#C8B48F", "You": "#A9A69A",
 };
-export const CUSTOM_TINT = "#B39DDB";
+export const CUSTOM_TINT = "#AFA6C2";

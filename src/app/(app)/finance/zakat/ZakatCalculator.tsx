@@ -99,7 +99,7 @@ export function ZakatCalculator({ today, currency: defCurrency }: { today: strin
         <p className="t-small text-ink-2">Estimate</p>
         {result.ok ? (
           <>
-            <p className="t-num text-[2.6rem] leading-tight">{formatMoney(result.r.zakatMinor, currency)}</p>
+            <p className="t-num text-[2rem] md:text-[2.6rem] leading-tight">{formatMoney(result.r.zakatMinor, currency)}</p>
             <ol className="grid gap-1.5 t-small list-decimal pl-5">{result.r.steps.map((s) => <li key={s}>{s}</li>)}</ol>
           </>
         ) : <p className="t-small">{result.error}</p>}

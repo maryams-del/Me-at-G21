@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
 import { BackButton, trackPath } from "./BackButton";
-import { DebugSizer } from "./DebugSizer";
+import { Splash } from "./Splash";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -32,7 +32,7 @@ export function openCapture(detail: { text?: string; voice?: boolean } = {}) {
   window.dispatchEvent(new CustomEvent("ld-capture", { detail }));
 }
 
-export function AppShell({ children, inboxCount, dateLine }: { children: React.ReactNode; name: string; inboxCount: number; dateLine: string }) {
+export function AppShell({ children, inboxCount }: { children: React.ReactNode; name: string; inboxCount: number; dateLine?: string }) {
   const path = usePathname();
   const [capture, setCapture] = useState<{ open: boolean; key: number; text: string; voice: boolean }>({ open: false, key: 0, text: "", voice: false });
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: string }[]>([]);
@@ -73,41 +73,37 @@ export function AppShell({ children, inboxCount, dateLine }: { children: React.R
     <div className="min-h-dvh">
       <a href="#main" className="skip-link btn btn-primary">Skip to content</a>
       <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
-        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4 md:pt-6">
-          <Link href="/" className="min-w-0 no-underline pb-1" aria-label="Me @ G21, home">
-            <LogoMark className="w-[44px] h-[44px] md:w-[56px] md:h-[56px] shrink-0" />
-            <span className="block mt-2 text-[12px] md:text-[13px] font-semibold leading-snug text-ink-3">{dateLine}</span>
+        <header className="flex items-end justify-between gap-x-6 pt-4 md:pt-6">
+          <Link href="/" className="no-underline pb-1.5 shrink-0" aria-label="Me @ G21, home" data-splash="logo">
+            <LogoMark className="w-[40px] h-[40px] md:w-[48px] md:h-[48px]" />
           </Link>
-          <nav aria-label="Main" className="hidden md:flex top-nav glass rounded-full items-center gap-1 p-[5px] order-none">
+          <nav aria-label="Main" className="hidden md:flex top-nav rounded-full items-center gap-1 p-[4px] mb-1">
             {top.map((it) => (
               <Link key={it.href} href={it.href} aria-current={current(it) ? "page" : undefined}>
-                {it.label}{!!it.badge && <span className="chip chip-mustard" style={{ padding: "0 .45rem" }}>{it.badge}</span>}
+                {it.label}{!!it.badge && <span className="chip chip-fill" style={{ padding: "0 .45rem" }}>{it.badge}</span>}
               </Link>
             ))}
-            <button type="button" onClick={() => openCapture()} className="btn-accent" style={{ background: "var(--accent-grad)", color: "#1E2418" }}>
+            <button type="button" onClick={() => openCapture()} style={{ color: "var(--accent-ink)" }}>
               <Icon d={SPARKLE} size={16} /> Ask AI
             </button>
           </nav>
           <ThemeToggle />
         </header>
-        <div className="wave-line mt-3" aria-hidden>
-          <svg width="2340" height="16" viewBox="0 0 2340 16"><path d={"M0 8 " + Array.from({ length: 24 }, (_, i) => (i === 0 ? "Q48.75 16 97.5 8" : `T${97.5 * (i + 1)} 8`)).join(" ")} fill="none" stroke="var(--slate)" strokeWidth="1.5" strokeLinecap="round" /></svg>
-        </div>
 
         <main id="main" className="pt-5 md:pt-8">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
-        <footer className="mt-16 pt-6 pb-36 md:pb-12 text-center rule-t">
-          <p className="logo text-[22px]">Me @ G21</p>
-          <p className="t-meta mt-1">A project by Project G21</p>
+        <footer className="mt-14 pt-4 pb-32 md:pb-10 rule-t flex items-center justify-between gap-4">
+          <p className="logo text-[16px] md:text-[18px]">Me @ G21</p>
+          <p className="t-meta text-right">A project by Project G21</p>
         </footer>
       </div>
 
       <nav aria-label="Main" className="md:hidden bottom-nav">
         {bottomLeft.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
-        <button type="button" onClick={() => openCapture()} aria-label="Ask AI" className="capture-orb"><Icon d={SPARKLE} size={24} /></button>
+        <button type="button" onClick={() => openCapture()} aria-label="Ask AI" className="nav-ai"><Icon d={SPARKLE} size={22} /></button>
         {bottomRight.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
       </nav>
 
-      <DebugSizer />
+      <Splash />
 
       <CaptureSheet key={capture.key} open={capture.open} initialText={capture.text} startVoice={capture.voice} onClose={() => setCapture((c) => ({ ...c, open: false }))} />
 
@@ -124,10 +120,9 @@ export function AppShell({ children, inboxCount, dateLine }: { children: React.R
 
 function MobileLink({ it, active }: { it: NavItem; active: boolean }) {
   return (
-    <Link href={it.href} aria-current={active ? "page" : undefined}>
-      <Icon d={ICONS[it.icon]} />
-      <span>{it.label}</span>
-      {!!it.badge && <span className="absolute top-1 right-[18%] min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-[18px] text-center" style={{ background: "var(--rust)", color: "#fff" }} aria-label={`${it.badge} need attention`}>{it.badge > 99 ? "99+" : it.badge}</span>}
+    <Link href={it.href} aria-current={active ? "page" : undefined} aria-label={it.label}>
+      <Icon d={ICONS[it.icon]} size={21} />
+      {!!it.badge && <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-[18px] text-center" style={{ background: "var(--rust)", color: "#fff" }} aria-label={`${it.badge} need attention`}>{it.badge > 99 ? "99+" : it.badge}</span>}
     </Link>
   );
 }

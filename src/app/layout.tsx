@@ -6,8 +6,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Me @ G21",
   description: "Private personal dashboard",
-  manifest: "/manifest.webmanifest?v=3",
-  icons: { shortcut: "/favicon-v3.ico", icon: [{ url: "/favicon-v3.svg", type: "image/svg+xml" }, { url: "/favicon-v3.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon-v3.png" },
+  manifest: "/manifest.webmanifest?v=4",
+  icons: { shortcut: "/favicon-v4.ico", icon: [{ url: "/favicon-v4.svg", type: "image/svg+xml" }, { url: "/favicon-v4.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon-v4.png" },
   appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
