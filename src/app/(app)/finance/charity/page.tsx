@@ -6,6 +6,7 @@ import { charityFields } from "@/components/fields";
 import { formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
+import { FilterPanel } from "@/components/FilterPanel";
 
 const monthName = (m: string, withYear = false) =>
   new Intl.DateTimeFormat("en-GB", { month: "long", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(m + "-01"));
@@ -50,15 +51,15 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
         </Section>
       )}
 
-      <Section title="History" aside={
-        <form className="flex gap-2" role="search">
-          <label className="sr-only" htmlFor="q">Search recipient or cause</label>
-          <input id="q" name="q" defaultValue={sp.q} className="input" style={{ minHeight: 36, width: "9rem" }} placeholder="Search" />
-          <label className="sr-only" htmlFor="year">Year</label>
-          <input id="year" name="year" defaultValue={s.year} className="input" style={{ minHeight: 36, width: "4.8rem" }} inputMode="numeric" />
-          <button className="btn btn-sm">Filter</button>
-        </form>
-      }>
+      <Section title="History">
+        <FilterPanel active={!!sp.q || s.year !== today.slice(0, 4)} className="mb-4">
+          <form className="panel p-3 flex flex-wrap gap-2 items-end" role="search">
+            <label className="field flex-1 min-w-[10rem]"><span className="label">Search</span><input name="q" defaultValue={sp.q} className="input" placeholder="Recipient or cause" /></label>
+            <label className="field w-[6rem]"><span className="label">Year</span><input name="year" defaultValue={s.year} className="input" inputMode="numeric" /></label>
+            <button className="btn">Apply</button>
+            {(sp.q || s.year !== today.slice(0, 4)) && <a href="/finance/charity" className="btn btn-ghost">Clear</a>}
+          </form>
+        </FilterPanel>
         {s.rows.length === 0 ? <Empty>No donations in {s.year}{sp.q ? ` matching “${sp.q}”` : ""}. Log one above, or say “I donated 100 SAR via Ehsan” in Capture.</Empty> : (
           <div className="grid gap-5">
             {[...byMonth].map(([m, rows]) => (

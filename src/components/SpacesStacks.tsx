@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { api, ApiError, toast } from "./api";
 import { useSizes } from "@/lib/sizes";
@@ -30,12 +30,10 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cardDrag, setCardDrag] = useState<{ key: string; dy: number } | null>(null);
-  const [secDrag, setSecDrag] = useState<string | null>(null);
+  const [sorting, setSorting] = useState(false);
 
   const press = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
   const cd = useRef<{ gi: number; idx: number; startY: number } | null>(null);
-  const sd = useRef<{ title: string; px: number; py: number; ox: number; oy: number; x: number; y: number } | null>(null);
-  const secEls = useRef<Record<string, HTMLElement | null>>({});
 
   const query = q.trim().toLowerCase();
   const shown = useMemo(() => {
@@ -85,46 +83,12 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
   };
   const cardUp = () => { cd.current = null; setCardDrag(null); };
 
-  // ---- Drag a whole section by the grip next to its title ----
-  const placeSection = () => {
-    const d = sd.current; if (!d) return;
-    const el = secEls.current[d.title]; if (!el) return;
-    el.style.transform = `translate(${d.x - d.px - (el.offsetLeft - d.ox)}px, ${d.y - d.py - (el.offsetTop - d.oy)}px)`;
-  };
-  useLayoutEffect(placeSection, [groups, secDrag, k]);
-  const secDown = (e: React.PointerEvent, title: string) => {
-    e.preventDefault(); e.stopPropagation();
-    const el = secEls.current[title]; if (!el) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    sd.current = { title, px: e.clientX, py: e.clientY, ox: el.offsetLeft, oy: el.offsetTop, x: e.clientX, y: e.clientY };
-    setSecDrag(title);
-  };
-  const secMove = (e: React.PointerEvent) => {
-    const d = sd.current; if (!d) return;
-    d.x = e.clientX; d.y = e.clientY;
-    const cur = groups.findIndex((g) => g.title === d.title);
-    for (let j = 0; j < groups.length; j++) {
-      if (j === cur) continue;
-      const el = secEls.current[groups[j].title]; if (!el) continue;
-      const r = el.getBoundingClientRect();
-      const inside = d.x >= r.left && d.x <= r.right && d.y >= r.top && d.y <= r.bottom;
-      const past = j > cur ? d.y > r.top + r.height / 2 : d.y < r.top + r.height / 2;
-      if (inside && past) { setGroups((gs) => moveTo(gs, cur, j)); navigator.vibrate?.(6); return; }
-    }
-    placeSection();
-  };
-  const secUp = () => {
-    const d = sd.current; if (!d) return;
-    const el = secEls.current[d.title]; if (el) el.style.transform = "";
-    sd.current = null; setSecDrag(null);
-  };
-
-  async function save() {
+  async function save(gs: StackGroup[] = groups) {
     setSaving(true);
     try {
-      await api("/api/ops/spaces.order", { sections: groups.map((g) => g.title), cards: Object.fromEntries(groups.map((g) => [g.title, g.cards.map((c) => c.key)])) });
+      await api("/api/ops/spaces.order", { sections: gs.map((g) => g.title), cards: Object.fromEntries(gs.map((g) => [g.title, g.cards.map((c) => c.key)])) });
       toast("Order saved");
-      setReorder(false);
+      setGroups(gs); setReorder(false); setSorting(false);
       router.refresh();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Couldn't save the order. Try again.", "error");
@@ -138,7 +102,7 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
           <>
             <span className="t-small font-bold flex-1">Reordering</span>
             <button type="button" className="btn" onClick={() => { setGroups(initial); setReorder(false); }} disabled={saving}>Cancel</button>
-            <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
+            <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
         ) : (
           <label className="glass flex items-center gap-2 rounded-full pl-4 pr-2 py-1 flex-1 min-w-[200px]">
@@ -154,23 +118,19 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
       <div className="grid gap-x-6 md:grid-cols-2 items-start">
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
-        const lifted = secDrag === g.title;
-        const fanned = (reorder && !secDrag) || !!query || (!reorder && !!open[g.title]);
+        const fanned = reorder || !!query || !!open[g.title];
         const step = fanned ? OPEN_STEP : CLOSED_STEP;
         return (
-          <section key={g.title} ref={(el) => { secEls.current[g.title] = el; }} aria-labelledby={`st-${gi}`}
-            className={`mt-7 min-w-0 relative ${lifted ? "dragging" : ""}`} style={{ zIndex: lifted ? 30 : undefined }}>
+          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7 min-w-0 relative">
             <div className="flex items-center gap-2.5 mb-3">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: g.tint, boxShadow: `0 0 12px ${g.tint}` }} aria-hidden />
-              <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
-              <span className="t-meta">{g.cards.length}</span>
-              {reorder ? (
-                <button type="button" className="grip ml-auto" aria-label={`Drag to move ${g.title}`}
-                  onPointerDown={(e) => secDown(e, g.title)} onPointerMove={secMove} onPointerUp={secUp} onPointerCancel={secUp}
-                  onKeyDown={(e) => { if (e.key === "ArrowUp" && gi > 0) setGroups((gs) => moveTo(gs, gi, gi - 1)); if (e.key === "ArrowDown" && gi < groups.length - 1) setGroups((gs) => moveTo(gs, gi, gi + 1)); }}>
-                  <Grip />
-                </button>
-              ) : !query && g.cards.length > 1 && (
+              <button type="button" className="flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
+                onClick={() => setSorting(true)} aria-label={`Rearrange sections (${g.title})`}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: g.tint, boxShadow: `0 0 12px ${g.tint}` }} aria-hidden />
+                <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
+                <span className="t-meta">{g.cards.length}</span>
+                <span className="opacity-60" aria-hidden><Grip /></span>
+              </button>
+              {!reorder && !query && g.cards.length > 1 && (
                 <button type="button" className="ml-auto t-small font-bold underline-offset-4 hover:underline" aria-expanded={fanned}
                   onClick={() => setOpen((o) => ({ ...o, [g.title]: !o[g.title] }))}>{fanned ? "Stack" : "Fan out"}</button>
               )}
@@ -219,6 +179,64 @@ export function SpacesStacks({ groups: initial }: { groups: StackGroup[] }) {
           </section>
         );
       })}
+      </div>
+      {sorting && <SectionSorter titles={groups.map((g) => g.title)} tints={Object.fromEntries(groups.map((g) => [g.title, g.tint]))} saving={saving}
+        onCancel={() => setSorting(false)}
+        onSave={(order) => save(order.map((t) => groups.find((g) => g.title === t)!))} />}
+    </div>
+  );
+}
+
+const ROW = 56;
+
+/** Just the section headings, to drag into a new order. */
+function SectionSorter({ titles, tints, saving, onCancel, onSave }: { titles: string[]; tints: Record<string, string>; saving: boolean; onCancel: () => void; onSave: (order: string[]) => void }) {
+  const [order, setOrder] = useState(titles);
+  const [drag, setDrag] = useState<{ title: string; dy: number } | null>(null);
+  const d = useRef<{ idx: number; startY: number } | null>(null);
+  const moveTo = (xs: string[], from: number, to: number) => { const c = xs.slice(); const [x] = c.splice(from, 1); c.splice(to, 0, x); return c; };
+
+  const down = (e: React.PointerEvent, i: number, title: string) => {
+    e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
+    d.current = { idx: i, startY: e.clientY }; setDrag({ title, dy: 0 });
+  };
+  const move = (e: React.PointerEvent) => {
+    const s = d.current; if (!s) return;
+    const target = Math.max(0, Math.min(order.length - 1, Math.round(s.idx + (e.clientY - s.startY) / ROW)));
+    if (target !== s.idx) { const from = s.idx; setOrder((o) => moveTo(o, from, target)); s.startY += (target - from) * ROW; s.idx = target; navigator.vibrate?.(6); }
+    setDrag((x) => (x ? { ...x, dy: e.clientY - s.startY } : x));
+  };
+  const up = () => { d.current = null; setDrag(null); };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="dialog" aria-modal="true" aria-label="Rearrange sections">
+      <div className="absolute inset-0" style={{ background: "rgba(20,24,16,.45)" }} onClick={onCancel} />
+      <div className="relative glass w-full max-w-md p-4 rounded-[28px] preview-enter" style={{ background: "color-mix(in srgb, var(--paper) 94%, transparent)", marginBottom: "env(safe-area-inset-bottom)" }}>
+        <p className="t-h3 mb-3">Rearrange sections</p>
+        <div className="relative no-callout" style={{ height: order.length * ROW }}>
+          {order.map((t, i) => {
+            const dragging = drag?.title === t;
+            return (
+              <div key={t} className="absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[16px] glass-light"
+                style={{ position: "absolute", top: i * ROW + (dragging ? drag.dy : 0), height: ROW - 8, zIndex: dragging ? 10 : 1, touchAction: "none", cursor: "grab",
+                  transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.45)" : undefined }}
+                onPointerDown={(e) => down(e, i, t)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+                tabIndex={0} aria-label={`${t}, position ${i + 1} of ${order.length}. Use arrow keys to move.`}
+                onKeyDown={(e) => {
+                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+                  if (to >= 0 && to < order.length) { e.preventDefault(); setOrder((o) => moveTo(o, i, to)); }
+                }}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: tints[t] }} aria-hidden />
+                <span className="font-bold flex-1 truncate">{t}</span>
+                <span className="opacity-70" aria-hidden><Grip /></span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <button type="button" className="btn" onClick={onCancel} disabled={saving}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => onSave(order)} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
+        </div>
       </div>
     </div>
   );

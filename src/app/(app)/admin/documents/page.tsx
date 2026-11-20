@@ -1,5 +1,6 @@
 import { pageOwner, documentsState, documentStorageBytes, peopleList } from "@/server/queries";
 import { PeopleManager, personLabel, personOptions } from "../People";
+import { FilterPanel } from "@/components/FilterPanel";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { fmtDate, fmtDateTime } from "@/lib/format";
@@ -40,23 +41,25 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
           <NewDocumentForm people={people} />
         </Reveal>
         <PeopleManager people={people} />
+        <FilterPanel active={!!(filtered || sp.sort)}>
+          <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter documents">
+          <label className="field"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. maryam passport" /></label>
+          <label className="field"><span className="label">Belongs to</span>
+            <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
+          <label className="field"><span className="label">Type</span>
+            <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
+          <label className="field"><span className="label">Sort</span>
+            <select name="sort" defaultValue={sp.sort ?? ""} className="select"><option value="">By type</option><option value="expiry">Expiring soonest</option><option value="recent">Recently updated</option></select></label>
+          <button className="btn">Apply</button>
+          {(filtered || sp.sort) && <a href="/admin/documents" className="btn btn-ghost">Clear</a>}
+        </form>
+        </FilterPanel>
       </div>
       <div className="mb-6 grid gap-1 max-w-md" aria-label="File storage used">
         <div className="flex justify-between t-small"><span>File storage</span><span>{kb(used)} of 1 GB free</span></div>
         <div className="bar" role="img" aria-label={`${pct.toFixed(1)}% used`}><i style={{ width: `${Math.max(pct, used ? 0.5 : 0)}%`, background: pct > 80 ? "var(--rust)" : "var(--ink)" }} /></div>
         {pct > 80 && <p className="t-small" style={{ color: "var(--danger)" }}>Nearly full. Delete old file versions you don&apos;t need; going over the free limit pauses file access for up to 30 days.</p>}
       </div>
-      <form className="panel p-3 mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter documents">
-        <label className="field"><span className="label">Search</span><input name="q" defaultValue={q} className="input" placeholder="e.g. maryam passport" /></label>
-        <label className="field"><span className="label">Belongs to</span>
-          <select name="person" defaultValue={person ?? ""} className="select"><option value="">Everyone</option><option value="me">Me</option>{personOptions(people).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-        <label className="field"><span className="label">Type</span>
-          <select name="kind" defaultValue={kind ?? ""} className="select"><option value="">All types</option>{KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
-        <label className="field"><span className="label">Sort</span>
-          <select name="sort" defaultValue={sp.sort ?? ""} className="select"><option value="">By type</option><option value="expiry">Expiring soonest</option><option value="recent">Recently updated</option></select></label>
-        <button className="btn">Apply</button>
-        {(filtered || sp.sort) && <a href="/admin/documents" className="btn btn-ghost">Clear</a>}
-      </form>
       {rows.length === 0 ? (filtered ? <Empty>No documents match{kind ? ` type “${KINDS.find((k) => k.value === kind)?.label}”` : ""}{q ? ` “${q}”` : ""}.</Empty> : <Empty>No documents yet. Add your passport, national ID, transcripts, certificates or CV versions.</Empty>) : (
         <ul className="grid gap-4 md:grid-cols-2">
           {rows.map(({ doc: d, files, tracked }) => (

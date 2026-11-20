@@ -1,6 +1,7 @@
 import { pageOwner, achievementsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
+import { FilterPanel } from "@/components/FilterPanel";
 import { ACHIEVEMENT_KINDS, ACHIEVEMENT_AREAS } from "@/db/schema";
 import { datesLabel } from "@/server/ops/career";
 import { fmtDate } from "@/lib/format";
@@ -56,7 +57,8 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
         <OpForm op="achievement.create" fields={fields} initial={{ kind: "accomplishment", area: "work" }} submitLabel="Save achievement" />
       </Reveal></div>
 
-      <form className="panel p-3 mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter achievements">
+      <FilterPanel active={filtered} className="mb-6">
+        <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto_auto] items-end" role="search" aria-label="Filter achievements">
         <label className="field"><span className="label">Search</span><input name="q" defaultValue={sp.q} className="input" placeholder="e.g. hackathon design" /></label>
         <label className="field"><span className="label">Type</span><select name="kind" defaultValue={sp.kind ?? ""} className="select"><option value="">All</option>{ACHIEVEMENT_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
         <label className="field"><span className="label">Area</span><select name="area" defaultValue={sp.area ?? ""} className="select"><option value="">All</option>{ACHIEVEMENT_AREAS.map((k) => <option key={k} value={k}>{AREA_LABEL[k]}</option>)}</select></label>
@@ -65,6 +67,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
         <button className="btn">Apply</button>
         {filtered && <a href="/education/achievements" className="btn btn-ghost">Clear</a>}
       </form>
+      </FilterPanel>
 
       <Section title={filtered ? `${rows.length} of ${d.total}` : "Achievements"}>
         {rows.length === 0 ? <Empty>{filtered ? "Nothing matches these filters." : "Nothing here yet. Add projects, awards, certifications, volunteering and results as they happen, so they're ready when you need them."}</Empty> : (

@@ -258,13 +258,28 @@ export function OpButton({ op, input, label, className = "btn", confirmText, suc
   );
 }
 
+/** Labels that add something new get the round "+" add button. */
+const ADD_LABEL = /^(\+\s*)?(add|log|new|track)\b/i;
+
+export function PlusIcon({ size = 18 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>;
+}
+
 /** Disclosure wrapper for “add” forms so tracker pages stay calm. */
 export function Reveal({ label, children, open: initialOpen = false, buttonClass = "btn" }: { label: string; children: React.ReactNode; open?: boolean; buttonClass?: string }) {
   const [open, setOpen] = useState(initialOpen);
   const id = useId();
+  const isAdd = ADD_LABEL.test(label);
+  const text = label.replace(/^\+\s*/, "");
   return (
     <div className={open ? "basis-full w-full min-w-0" : undefined}>
-      <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+      {isAdd ? (
+        <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+          <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{open ? "Close" : text}
+        </button>
+      ) : (
+        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+      )}
       {open && <div id={id} className="mt-4 panel p-4 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );

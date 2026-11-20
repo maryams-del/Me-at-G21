@@ -22,7 +22,7 @@ export function DebugSizer() {
     <div className="md:hidden">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Debug sizes"
         className="fixed z-[45] left-[14px] glass rounded-full px-3 h-9 inline-flex items-center gap-1.5 text-[12px] font-bold"
-        style={{ bottom: "calc(26px + 66px * var(--sz-nav, 1) + env(safe-area-inset-bottom))" }}>
+        style={{ position: "fixed", bottom: "calc(26px + 66px * var(--sz-nav, 1) + env(safe-area-inset-bottom))" }}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
           <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" />
         </svg>
@@ -31,7 +31,7 @@ export function DebugSizer() {
 
       {open && (
         <div role="dialog" aria-label="Debug sizes" className="fixed z-[55] left-[14px] right-[14px] glass p-4 rounded-[24px] preview-enter"
-          style={{ bottom: "calc(72px + 66px * var(--sz-nav, 1) + env(safe-area-inset-bottom))", background: "color-mix(in srgb, var(--paper) 92%, transparent)" }}>
+          style={{ position: "fixed", bottom: "calc(72px + 66px * var(--sz-nav, 1) + env(safe-area-inset-bottom))", background: "color-mix(in srgb, var(--paper) 92%, transparent)" }}>
           <div className="flex items-center justify-between mb-2">
             <p className="t-label">Sizes</p>
             <button type="button" className="t-small font-bold" onClick={() => setOpen(false)}>Close</button>
