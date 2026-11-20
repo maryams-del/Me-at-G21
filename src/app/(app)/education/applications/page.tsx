@@ -41,7 +41,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <PageHeader glyph="applications" title="Master's applications" intro="Deadlines are what you enter from the official site; the app never assumes one. Reminders stop once you mark an application submitted.">
+      <PageHeader glyph="applications" title="Master's applications">
         <a href="?view=list" className={`btn btn-sm ${view === "list" ? "btn-primary" : ""}`} aria-current={view === "list" ? "page" : undefined}>By deadline</a>
         <a href="?view=board" className={`btn btn-sm ${view === "board" ? "btn-primary" : ""}`} aria-current={view === "board" ? "page" : undefined}>Board</a>
       </PageHeader>

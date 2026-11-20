@@ -70,7 +70,7 @@ export default async function PeriodPage() {
 
   return (
     <>
-      <PageHeader glyph="period" title="Period log" intro="Private to you. This page is never sent to the AI, never appears in notifications, and stays off the Today page unless you turn it on below. Notes and symptoms are encrypted." />
+      <PageHeader glyph="period" title="Period log" />
 
       <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] mb-9">
         <div className="panel p-5 grid gap-4 content-start" style={{ boxShadow: open ? "inset 8px 0 0 var(--rust)" : undefined }}>

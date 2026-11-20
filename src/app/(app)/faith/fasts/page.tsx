@@ -14,7 +14,7 @@ export default async function FastsPage() {
   const hy = toHijri(today).year;
   return (
     <>
-      <PageHeader glyph="fasts" title="Make-up fasts" intro="Balance = opening balance + annual additions + adjustments − completed fasts. Every change is kept in the ledger.">
+      <PageHeader glyph="fasts" title="Make-up fasts">
         <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${dmy(today)})?`} />
       </PageHeader>
 
@@ -29,7 +29,6 @@ export default async function FastsPage() {
       {!s.hasInitial && (
         <div className="mb-8 panel p-4" style={{ background: "var(--tint-mustard)" }}>
           <h2 className="t-h3 mb-1">Set your opening balance</h2>
-          <p className="t-small text-ink-2 mb-3 prose-w">Enter how many make-up fasts you owe as of a date. The app never guesses this number.</p>
           <OpForm op="fasts.initial" initial={{ asOf: today }} submitLabel="Save opening balance" fields={[
             { name: "count", label: "Fasts owed", type: "int", required: true }, { name: "asOf", label: "As of", type: "date", required: true }, { name: "notes", label: "Note", nullable: true, wide: true }]} />
         </div>

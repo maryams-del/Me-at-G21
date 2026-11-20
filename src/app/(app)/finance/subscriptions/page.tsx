@@ -37,7 +37,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
 
   return (
     <>
-      <PageHeader glyph="subscriptions" title="Subscriptions" intro="What you pay for regularly, what it costs per month, and what's coming up. Marking one cancelled only records it; cancel with the provider yourself." />
+      <PageHeader glyph="subscriptions" title="Subscriptions" />
 
       <div className="grid gap-3 sm:grid-cols-2 mb-6">
         <div className="tile mustard min-h-0"><p className="t-small">Per month (average)</p><p className="t-num text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.monthly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p><p className="t-small mt-1">{s.active.length} active</p></div>

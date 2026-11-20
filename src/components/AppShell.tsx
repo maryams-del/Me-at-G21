@@ -7,6 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
 import { BackButton, trackPath } from "./BackButton";
+import { DebugSizer } from "./DebugSizer";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -104,6 +105,8 @@ export function AppShell({ children, inboxCount, dateLine, hijriLine }: { childr
         <button type="button" onClick={() => openCapture()} aria-label="Ask AI" className="capture-orb"><Icon d={SPARKLE} size={24} /></button>
         {bottomRight.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
       </nav>
+
+      <DebugSizer />
 
       <CaptureSheet key={capture.key} open={capture.open} initialText={capture.text} startVoice={capture.voice} onClose={() => setCapture((c) => ({ ...c, open: false }))} />
 

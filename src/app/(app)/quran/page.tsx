@@ -28,7 +28,7 @@ export default async function QuranPage() {
 
   return (
     <>
-      <PageHeader glyph="quran" title="Quran class" intro="Class schedule and homework are separate: finishing this week's homework never touches next week's." />
+      <PageHeader glyph="quran" title="Quran class" />
 
       {!cls ? <Empty>No class set up.</Empty> : (
         <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] mb-8">

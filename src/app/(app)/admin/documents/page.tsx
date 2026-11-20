@@ -34,7 +34,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   const pct = Math.min(100, (used / LIMIT) * 100);
   return (
     <>
-      <PageHeader glyph="documents" title="Documents & IDs" intro="Files are encrypted before they're stored and only open after you sign in. ID numbers are stored separately and need Face ID / Touch ID to reveal. Nothing here is ever sent to the AI assistant." />
+      <PageHeader glyph="documents" title="Documents & IDs" />
       <div className="mb-8 flex flex-wrap gap-3 items-start">
         <Reveal label="Add a document" buttonClass="btn btn-primary" open={sp.add === "1"}>
           <NewDocumentForm people={people} />
