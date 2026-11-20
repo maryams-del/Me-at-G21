@@ -117,6 +117,7 @@ export const expiryUpdate = defineOp({
     const res = await ctx.tx.update(expiryItems).set({ ...rest, personId: rest.personId ?? null, documentId: rest.documentId ?? null, updatedAt: ctx.now })
       .where(and(eq(expiryItems.id, itemId), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt))).returning({ id: expiryItems.id });
     if (!res.length) throw new UserError("Item not found");
+    if (rest.documentId) await ctx.tx.update(documents).set({ expiresOn: rest.expiresOn, updatedAt: ctx.now }).where(and(eq(documents.id, rest.documentId), eq(documents.ownerId, ctx.ownerId)));
     await syncExpiry(ctx, itemId);
     await audit(ctx, "expiries", i.status === "archived" ? "archived" : "edited", "expiry_item", itemId, `Edited “${redactDigits(i.label)}”`);
     return { id: itemId, message: "Saved" };
@@ -134,6 +135,7 @@ export const expiryRenew = defineOp({
     if (i.renewedOn > todayLocal(ctx.tz, ctx.now)) throw new UserError("Renewal date can't be in the future", "renewedOn");
     await ctx.tx.insert(renewalEvents).values({ ownerId: ctx.ownerId, itemId: it.id, renewedOn: i.renewedOn, previousExpiresOn: it.expiresOn, newExpiresOn: i.newExpiresOn, notes: i.notes });
     await ctx.tx.update(expiryItems).set({ expiresOn: i.newExpiresOn, status: "active", updatedAt: ctx.now }).where(eq(expiryItems.id, it.id));
+    if (it.documentId) await ctx.tx.update(documents).set({ expiresOn: i.newExpiresOn, updatedAt: ctx.now }).where(and(eq(documents.id, it.documentId), eq(documents.ownerId, ctx.ownerId)));
     await syncExpiry(ctx, it.id);
     await audit(ctx, "expiries", "renewed", "expiry_item", it.id, `Renewed “${redactDigits(it.label)}” — new expiry ${dmy(i.newExpiresOn)}`);
     return { id: it.id, message: `Renewed until ${dmy(i.newExpiresOn)}` };
@@ -186,6 +188,8 @@ const docInput = z.object({
   idNumber: z.string().trim().max(64).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   notes: zOptText(), trackExpiry: z.boolean().default(false),
+  reminderOffsetsDays: z.array(z.number().int().min(-365).max(0)).max(8).optional(),
+  reminderTime: zTime.optional(),
 });
 
 export const documentCreate = defineOp({
@@ -200,7 +204,8 @@ export const documentCreate = defineOp({
     await setProtectedId(ctx, d.id, i.idNumber || undefined);
     if (i.trackExpiry && i.expiresOn) {
       const kind = (EXPIRY_KINDS as readonly string[]).includes(i.kind) ? (i.kind as (typeof EXPIRY_KINDS)[number]) : "custom";
-      const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: i.title, personId: i.personId ?? null, kind, expiresOn: i.expiresOn, issuer: i.issuer, documentId: d.id }).returning({ id: expiryItems.id });
+      const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: i.title, personId: i.personId ?? null, kind, expiresOn: i.expiresOn, issuer: i.issuer, documentId: d.id,
+        ...(i.reminderOffsetsDays?.length ? { reminderOffsetsDays: i.reminderOffsetsDays } : {}), ...(i.reminderTime ? { reminderTime: i.reminderTime } : {}) }).returning({ id: expiryItems.id });
       await syncExpiry(ctx, it.id);
     }
     await audit(ctx, "documents", "created", "document", d.id, `Added document “${i.title}”`);
@@ -210,13 +215,19 @@ export const documentCreate = defineOp({
 
 export const documentUpdate = defineOp({
   name: "document.update", module: "documents", label: "Edit document", aiAllowed: false,
-  schema: docInput.omit({ trackExpiry: true }).extend({ id: zId, clearId: z.boolean().default(false) }),
+  schema: docInput.omit({ trackExpiry: true, reminderOffsetsDays: true, reminderTime: true }).extend({ id: zId, clearId: z.boolean().default(false) }),
   summarize: (i) => `Update “${i.title}”`,
   async run(ctx, i) {
     await ownDocument(ctx, i.id);
     await ownPerson(ctx, i.personId);
     await ctx.tx.update(documents).set({ title: i.title, personId: i.personId ?? null, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes, updatedAt: ctx.now }).where(eq(documents.id, i.id));
     await setProtectedId(ctx, i.id, i.clearId ? null : i.idNumber || undefined);
+    // Keep the linked Expiries entry in step (name and date).
+    const linked = await ctx.tx.select({ id: expiryItems.id }).from(expiryItems).where(and(eq(expiryItems.documentId, i.id), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt)));
+    for (const it of linked) {
+      await ctx.tx.update(expiryItems).set({ label: i.title, ...(i.expiresOn ? { expiresOn: i.expiresOn } : {}), updatedAt: ctx.now }).where(eq(expiryItems.id, it.id));
+      await syncExpiry(ctx, it.id);
+    }
     await audit(ctx, "documents", "edited", "document", i.id, `Edited document “${i.title}”${i.idNumber || i.clearId ? " (ID number changed)" : ""}`);
     return { id: i.id, message: "Saved" };
   },
@@ -255,3 +266,31 @@ export async function nextFileVersion(ctx: Pick<Ctx, "tx">, documentId: string) 
   const [{ v }] = await ctx.tx.select({ v: max(documentFiles.version) }).from(documentFiles).where(eq(documentFiles.documentId, documentId));
   return (v ?? 0) + 1;
 }
+
+/** Reminders for a document's expiry, from the Documents page. Same entry as on Expiries, so both stay in sync. */
+export const documentReminders = defineOp({
+  name: "document.reminders", module: "documents", label: "Document reminders", aiAllowed: false,
+  schema: z.object({
+    documentId: zId, remindersEnabled: z.boolean().default(false),
+    reminderOffsetsDays: z.array(z.number().int().min(-365).max(0)).max(8).default([-90, -30, -7]),
+    reminderTime: zTime.default("09:00"),
+  }),
+  summarize: (i) => (i.remindersEnabled ? "Turn on expiry reminders" : "Turn off expiry reminders"),
+  async run(ctx, i) {
+    const d = await ownDocument(ctx, i.documentId);
+    const offs = i.reminderOffsetsDays.length ? i.reminderOffsetsDays : [-90, -30, -7];
+    const [it] = await ctx.tx.select().from(expiryItems).where(and(eq(expiryItems.documentId, d.id), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt))).limit(1);
+    let id = it?.id;
+    if (it) {
+      await ctx.tx.update(expiryItems).set({ remindersEnabled: i.remindersEnabled, reminderOffsetsDays: offs, reminderTime: i.reminderTime, updatedAt: ctx.now }).where(eq(expiryItems.id, it.id));
+    } else if (i.remindersEnabled) {
+      if (!d.expiresOn) throw new UserError("Add an expiry date first, then turn reminders on", "remindersEnabled");
+      const kind = (EXPIRY_KINDS as readonly string[]).includes(d.kind) ? (d.kind as (typeof EXPIRY_KINDS)[number]) : "custom";
+      [{ id }] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: d.title, personId: d.personId, kind, expiresOn: d.expiresOn, documentId: d.id,
+        reminderOffsetsDays: offs, reminderTime: i.reminderTime, remindersEnabled: true }).returning({ id: expiryItems.id });
+    }
+    if (id) await syncExpiry(ctx, id);
+    await audit(ctx, "documents", "edited", "document", d.id, `Reminders ${i.remindersEnabled ? "on" : "off"} for “${d.title}”`);
+    return { id: d.id, message: i.remindersEnabled ? "Reminders on" : "Reminders off" };
+  },
+});

@@ -25,12 +25,12 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
         <span className="chip chip-fill self-center">{STATUS_LABEL[a.status]}</span>
       </PageHeader>
 
-      <div className="grid gap-3 sm:grid-cols-3 mb-8">
-        <div className="tile slate min-h-0 sm:col-span-2">
+      <div className="money-tiles mb-8">
+        <div className="tile slate min-h-0">
           <p className="t-small">Deadline</p>
           {a.deadlineAt ? (
             <>
-              <p className="t-num text-[2.2rem] mt-2">{fmtDateTime(a.deadlineAt, o.timezone)}</p>
+              <p className="t-num text-[1.9rem] mt-2">{fmtDateTime(a.deadlineAt, o.timezone)}</p>
               <p className="t-small mt-1">Your time ({o.timezone}){theirTime ? `. University time: ${theirTime} (${a.deadlineTz})` : ""}</p>
               <p className="t-small mt-1">{a.deadlineVerified ? "Verified on the official site." : "Not verified yet. Check the official program page."}</p>
             </>

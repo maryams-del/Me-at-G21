@@ -18,11 +18,11 @@ export default async function FastsPage() {
         <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${dmy(today)})?`} />
       </PageHeader>
 
-      <div className="grid gap-3 sm:grid-cols-3 mb-8">
-        <div className="tile mustard sm:col-span-1 min-h-0"><p className="t-small">Remaining</p><p className="t-num text-[4rem] mt-1">{s.balance}</p></div>
-        <div className="tile sm:col-span-2 min-h-0">
+      <div className="money-tiles mb-8">
+        <div className="tile mustard min-h-0"><p className="t-small">Remaining</p><p className="t-num text-[3rem] mt-1">{s.balance}</p></div>
+        <div className="tile min-h-0">
           <p className="t-small text-ink-2">Completed by year</p>
-          {s.byYear.length ? <ul className="mt-2 flex flex-wrap gap-x-6 gap-y-1">{s.byYear.map(([y, n]) => <li key={y}><span className="t-num text-2xl">{n}</span> <span className="t-small text-ink-2">in {y}</span></li>)}</ul> : <p className="t-small mt-2 text-ink-2">None yet.</p>}
+          {s.byYear.length ? <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{s.byYear.map(([y, n]) => <li key={y}><span className="t-num text-2xl">{n}</span> <span className="t-small text-ink-2">in {y}</span></li>)}</ul> : <p className="t-small mt-2 text-ink-2">None yet.</p>}
         </div>
       </div>
 
