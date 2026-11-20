@@ -3,7 +3,7 @@ import { pageOwner, dashboardState, customSpacesState } from "@/server/queries";
 import { isSpaceGlyph } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { addDays, dmy, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
-import { relDays, fmtShort } from "@/lib/format";
+import { relDays } from "@/lib/format";
 import { NextSevenDays, type Day } from "@/components/home/NextSevenDays";
 import { AiBar } from "@/components/home/AiBar";
 import { SpacesWave, type Space } from "@/components/home/SpacesWave";
@@ -49,11 +49,6 @@ export default async function Dashboard() {
   for (const c of s.subscriptions.upcoming) add(c.date, `${c.name} renews · ${formatMoney(c.amountMinor, c.currency)}`, "/finance/subscriptions");
   for (const r of s.appDeadlines) if (r.app.deadlineAt) add(instantToLocal(r.app.deadlineAt, tz).date, `${r.app.university} deadline · ${hm(r.app.deadlineAt)}`, `/education/applications/${r.app.id}`);
 
-  const week = addDays(s.today, 6);
-  const later: { label: string; when: string; href: string }[] = [
-    ...s.appDeadlines.filter((r) => r.app.deadlineAt && instantToLocal(r.app.deadlineAt, tz).date > week).map((r) => ({ label: `${r.app.university}, ${r.app.program}`, when: `deadline ${fmtShort(instantToLocal(r.app.deadlineAt!, tz).date)}`, href: `/education/applications/${r.app.id}` })),
-    ...s.expiring.filter((e) => e.expiresOn > week).map((e) => ({ label: e.label, when: `expires ${fmtShort(e.expiresOn)}`, href: "/admin/expiries" })),
-  ].slice(0, 6);
   const nextRoutine = s.routines.filter((r) => r.due && !r.routine.paused).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))[0];
   const p = s.period;
   const periodStat = !p ? "" : p.open ? `Day ${p.openDay}` : p.estimate && p.settings.showEstimate ? `Next ${relDays(p.daysToEstimate)} (estimate)` : p.cycles[0] ? `Last started ${dmy(p.cycles[0].startDate)}` : "Nothing logged yet";
@@ -99,7 +94,7 @@ export default async function Dashboard() {
         {(s.pendingAi > 0 || s.drafts.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {s.pendingAi > 0 && <span className="chip chip-mustard">{s.pendingAi} capture preview{s.pendingAi === 1 ? "" : "s"} waiting for you</span>}
-            {s.drafts.length > 0 && <Link href="/inbox" className="chip chip-fill no-underline">{s.drafts.length} need{s.drafts.length === 1 ? "s" : ""} details →</Link>}
+            {s.drafts.length > 0 && <Link href="/inbox" className="chip chip-fill no-underline">{s.drafts.length} with missing information →</Link>}
           </div>
         )}
 
@@ -110,14 +105,6 @@ export default async function Dashboard() {
           </div>
         )}
 
-        {later.length > 0 && (
-          <section aria-labelledby="later-h" className="panel p-4">
-            <h2 id="later-h" className="t-h3 mb-1">Later on</h2>
-            <ul className="list">
-              {later.map((x, i) => <li key={i} className="py-2 flex justify-between gap-3 t-small"><Link href={x.href} className="hover:underline underline-offset-4">{x.label}</Link><span className="t-meta whitespace-nowrap">{x.when}</span></li>)}
-            </ul>
-          </section>
-        )}
 
       </div>
 

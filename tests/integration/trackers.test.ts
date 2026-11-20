@@ -106,7 +106,7 @@ describe("Test 4 — make-up fasts ledger", () => {
     await expect(op(at("2026-11-18"), "fasts.complete", { onDate: "2026-11-17" })).rejects.toThrow(/already recorded/);
   });
   it("no accidental negative balance", async () => {
-    await expect(op(at("2026-11-18"), "fasts.complete", { onDate: "2026-11-17" })).rejects.toThrow(/balance is already 0/);
+    await expect(op(at("2026-11-18"), "fasts.complete", { onDate: "2026-11-17" })).rejects.toThrow(/don't owe any fasts/);
     await expect(op(at("2026-11-18"), "fasts.adjust", { delta: -2, onDate: "2026-11-18", reason: "x" })).rejects.toThrow(/override/);
   });
   it("Hijri rule adds on the Umm al-Qura date only once that date has passed", async () => {

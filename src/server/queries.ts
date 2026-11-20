@@ -1,6 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, count, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, count, ne, lt } from "drizzle-orm";
 import { getDb } from "@/db";
 import * as t from "@/db/schema";
 import { getSession } from "./auth/core";
@@ -149,7 +149,7 @@ export async function dashboardState(o: Owner) {
   const overdue: { label: string; detail: string; href: string }[] = [];
   for (const r of overdueApps) overdue.push({ label: `${r.app.university} application`, detail: "Deadline passed and not marked submitted", href: `/education/applications/${r.app.id}` });
   for (const e of expiring) if (e.expiresOn < today) overdue.push({ label: e.label, detail: `Expired ${dmy(e.expiresOn)}`, href: "/admin/expiries" });
-  for (const r of routines) if (r.overdue) overdue.push({ label: r.routine.name, detail: r.routine.graceDays ? `Day ${r.daysSince}, past the day-${r.cycleDays} limit` : `${-(r.daysLeft ?? 0)} day${r.daysLeft === -1 ? "" : "s"} overdue`, href: "/care/routines" });
+  for (const r of routines) if (r.overdue) overdue.push({ label: r.routine.name, detail: `${-(r.daysLeft ?? 0)} day${r.daysLeft === -1 ? "" : "s"} overdue`, href: "/care/routines" });
   for (const tk of proj.tasks) if (tk.status !== "done" && tk.dueOn && tk.dueOn < today) overdue.push({ label: tk.title, detail: `Due ${dmy(tk.dueOn)}`, href: "/projects" });
   for (const d of debts) if (d.overdue) overdue.push({ label: d.debt.direction === "lent" ? `Collect from ${d.debt.counterparty}` : `Repay ${d.debt.counterparty}`, detail: `Was due ${dmy(d.debt.dueDate)}`, href: "/finance/debts" });
 
@@ -420,4 +420,36 @@ export async function customSpaceDetail(o: Owner, id: string) {
   if (!s) return null;
   const items = await db().select().from(t.customSpaceItems).where(eq(t.customSpaceItems.spaceId, s.id)).orderBy(asc(t.customSpaceItems.done), asc(t.customSpaceItems.createdAt));
   return { space: s, items };
+}
+
+/* ───── attention needed (the Inbox) ───── */
+
+export type AttentionItem = { key: string; kind: "missing" | "overdue" | "storage"; label: string; detail: string; href: string };
+const STORAGE_LIMIT = 1024 * 1024 * 1024; // Vercel Blob free allowance
+
+/** Everything that needs the owner's attention: captures missing details, anything past its date, storage running out. */
+export async function attentionItems(o: Owner): Promise<{ items: AttentionItem[]; drafts: (typeof t.captureDrafts.$inferSelect)[] }> {
+  const today = todayLocal(o.timezone);
+  const [drafts, rs, exp, dbs, tasks, apps, bytes] = await Promise.all([
+    db().select().from(t.captureDrafts).where(and(eq(t.captureDrafts.ownerId, o.id), eq(t.captureDrafts.status, "open"))).orderBy(desc(t.captureDrafts.createdAt)),
+    routinesState(o),
+    db().select().from(t.expiryItems).where(and(eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt), eq(t.expiryItems.status, "active"), lt(t.expiryItems.expiresOn, today))),
+    db().select().from(t.debts).where(and(eq(t.debts.ownerId, o.id), isNull(t.debts.deletedAt), eq(t.debts.status, "open"), lt(t.debts.dueDate, today))),
+    db().select().from(t.tasks).where(and(eq(t.tasks.ownerId, o.id), isNull(t.tasks.deletedAt), ne(t.tasks.status, "done"), lt(t.tasks.dueOn, today))),
+    applicationsState(o),
+    documentStorageBytes(o.id),
+  ]);
+  const items: AttentionItem[] = [];
+  for (const d of drafts) items.push({ key: `d${d.id}`, kind: "missing", label: `“${d.sourceText}” has missing information`, detail: `Missing: ${d.missingFields.join(", ")}`, href: "/inbox" });
+  for (const r of rs) if (r.overdue) items.push({ key: `r${r.routine.id}`, kind: "overdue", label: `${r.routine.name} is overdue`, detail: `Was due ${dmy(r.due!)}`, href: "/care/routines" });
+  for (const e of exp) items.push({ key: `e${e.id}`, kind: "overdue", label: `${e.label} has expired`, detail: `Expired ${dmy(e.expiresOn)}`, href: "/admin/expiries" });
+  for (const d of dbs) items.push({ key: `b${d.id}`, kind: "overdue", label: d.direction === "lent" ? `${d.counterparty} hasn't repaid you` : `Repayment to ${d.counterparty} is overdue`, detail: `Was due ${dmy(d.dueDate!)}`, href: "/finance/debts" });
+  for (const tk of tasks) items.push({ key: `t${tk.id}`, kind: "overdue", label: `${tk.title} is overdue`, detail: `Was due ${dmy(tk.dueOn!)}`, href: "/projects" });
+  for (const a of apps) if (a.overdue) items.push({ key: `a${a.app.id}`, kind: "overdue", label: `${a.app.university} application deadline has passed`, detail: "Not marked as submitted", href: `/education/applications/${a.app.id}` });
+  if (bytes > STORAGE_LIMIT * 0.8) items.push({ key: "storage", kind: "storage", label: "Document storage is running out", detail: `${Math.round((bytes / STORAGE_LIMIT) * 100)}% of 1 GB used`, href: "/admin/documents" });
+  return { items, drafts };
+}
+
+export async function attentionCount(o: Owner) {
+  return (await attentionItems(o)).items.length;
 }

@@ -1,7 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { captureDrafts, routines, savingsGoals, debts, expiryItems } from "@/db/schema";
-import { pageOwner } from "@/server/queries";
+import { routines, savingsGoals, debts, expiryItems } from "@/db/schema";
+import { pageOwner, attentionItems } from "@/server/queries";
+import Link from "next/link";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, type FieldDef } from "@/components/OpForm";
 import { charityFields, currencyField } from "@/components/fields";
@@ -11,7 +12,8 @@ import { fmtDateTime } from "@/lib/format";
 export default async function InboxPage() {
   const o = await pageOwner();
   const db = getDb();
-  const drafts = await db.select().from(captureDrafts).where(and(eq(captureDrafts.ownerId, o.id), eq(captureDrafts.status, "open"))).orderBy(desc(captureDrafts.createdAt));
+  const { items, drafts } = await attentionItems(o);
+  const notices = items.filter((x) => x.kind !== "missing");
   const [rs, gs, ds, es] = await Promise.all([
     db.select().from(routines).where(eq(routines.ownerId, o.id)),
     db.select().from(savingsGoals).where(and(eq(savingsGoals.ownerId, o.id), eq(savingsGoals.status, "active"))),
@@ -29,7 +31,7 @@ export default async function InboxPage() {
       case "fasts.complete": return [{ name: "onDate", label: "Date fasted", type: "date", required: true }];
       case "waxing.complete": case "dental.complete": return [{ name: "completedOn", label: "Date", type: "date", required: true }];
       case "routine.log": return [{ name: "routineId", label: "Routine", type: "select", required: true, options: rs.map((r) => ({ value: r.id, label: r.name })) },
-        { name: "type", label: "What happened", type: "select", required: true, options: [{ value: "completed", label: "Done" }, { value: "first_use", label: "First use" }, { value: "purchased", label: "Purchased" }, { value: "skipped", label: "Skipped" }] },
+        { name: "type", label: "What happened", type: "select", required: true, options: [{ value: "completed", label: "Done" }, { value: "first_use", label: "Started a new one" }] },
         { name: "onDate", label: "Date", type: "date", required: true }];
       case "savings.deposit": case "savings.withdraw": return [{ name: "goalId", label: "Goal", type: "select", required: true, options: gs.map((g) => ({ value: g.id, label: g.name })) },
         { name: "amount", label: "Amount", type: "amount", required: true }, { name: "onDate", label: "Date", type: "date", required: true }];
@@ -48,8 +50,22 @@ export default async function InboxPage() {
 
   return (
     <>
-      <PageHeader glyph="inbox" title="Needs details" />
-      {drafts.length === 0 ? <Empty>Nothing waiting. When a capture is missing something, choose “Fill details later” and it will appear here.</Empty> : (
+      <PageHeader glyph="inbox" title="Attention needed" />
+      {items.length === 0 && <Empty>All clear. Anything overdue, missing information or running out will show up here.</Empty>}
+      {notices.length > 0 && (
+        <ul className="list panel px-4 mb-6">
+          {notices.map((x) => (
+            <li key={x.key}>
+              <Link href={x.href} className="py-3 flex items-center gap-3 no-underline" style={{ color: "inherit" }}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: x.kind === "storage" ? "var(--mustard)" : "var(--rust)" }} aria-hidden />
+                <span className="min-w-0 flex-1"><span className="block font-semibold">{x.label}</span><span className="t-meta">{x.detail}</span></span>
+                <span className="t-meta shrink-0" aria-hidden>›</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {drafts.length > 0 && (
         <ul className="grid gap-4">
           {drafts.map((d) => {
             const fields = formFor(d.action);
@@ -58,12 +74,12 @@ export default async function InboxPage() {
             return (
               <li key={d.id} className="panel p-4 grid gap-3">
                 <div className="flex flex-wrap justify-between gap-2">
-                  <p className="t-h3">“{d.sourceText}”</p>
+                  <p className="t-h3">“{d.sourceText}” has missing information</p>
                   <p className="t-meta">{fmtDateTime(d.createdAt, o.timezone)}</p>
                 </div>
-                <p className="t-small"><span className="chip chip-mustard">Missing: {d.missingFields.join(", ")}</span> <span className="text-ink-2 ml-2">For: {d.targetModule}</span></p>
+                <p className="t-small"><span className="chip chip-mustard">Missing: {d.missingFields.join(", ")}</span></p>
                 {fields ? <OpForm op={d.action} endpoint="/api/drafts/resolve" nestKey="input" nestExtra={{ id: d.id }} nestBase={payload} fields={fields} initial={initial} submitLabel="Save entry" /> : <p className="t-small">Open the matching tracker to add this manually.</p>}
-                <OpButton op="draft.discard" input={{ id: d.id }} label="Discard draft" className="btn btn-sm btn-ghost justify-self-start" confirmText="Discard this draft?" />
+                <OpButton op="draft.discard" input={{ id: d.id }} label="Discard" className="btn btn-sm btn-ghost justify-self-start" confirmText="Discard this?" />
               </li>
             );
           })}

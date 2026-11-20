@@ -233,7 +233,7 @@ export const routineVoid = defineOp({
 export async function fastBalance(ctx: Pick<Ctx, "tx" | "ownerId">) {
   const [{ b }] = await ctx.tx.select({ b: sql<string>`coalesce(sum(${fastLedgerEvents.delta}),0)` })
     .from(fastLedgerEvents).where(and(eq(fastLedgerEvents.ownerId, ctx.ownerId), isNull(fastLedgerEvents.voidedAt)));
-  return Number(b);
+  return Math.max(0, Number(b)); // fasts owed never go below 0
 }
 
 export const fastComplete = defineOp({
@@ -243,14 +243,14 @@ export const fastComplete = defineOp({
   async run(ctx, i) {
     if (i.onDate > todayLocal(ctx.tz, ctx.now)) throw new UserError("Date can't be in the future", "onDate");
     const balance = await fastBalance(ctx);
-    if (balance <= 0 && !i.historicalCorrection) throw new UserError("Your balance is already 0. Set an opening balance or tick ‘historical correction’ to override.", "onDate");
+    if (balance <= 0) throw new UserError("You don't owe any fasts right now, so there's nothing to make up.", "onDate");
     const [dup] = await ctx.tx.select({ id: fastLedgerEvents.id }).from(fastLedgerEvents).where(and(
       eq(fastLedgerEvents.ownerId, ctx.ownerId), eq(fastLedgerEvents.type, "completed"),
       eq(fastLedgerEvents.onDate, i.onDate), isNull(fastLedgerEvents.voidedAt)));
-    if (dup && !i.historicalCorrection) throw new UserError(`A fast is already recorded on ${dmy(i.onDate)}`, "onDate");
+    if (dup) throw new UserError(`A fast is already recorded on ${dmy(i.onDate)}`, "onDate");
     const [e] = await ctx.tx.insert(fastLedgerEvents).values({
       ownerId: ctx.ownerId, type: "completed", delta: -1, onDate: i.onDate, reason: i.notes,
-      overrideNegative: balance <= 0, source: ctx.source,
+      overrideNegative: false, source: ctx.source,
     }).returning({ id: fastLedgerEvents.id });
     const msg = `Fast completed on ${dmy(i.onDate)} — ${balance - 1} remaining`;
     await audit(ctx, "fasts", "completed", "fast_ledger_event", e.id, msg);
@@ -278,8 +278,8 @@ export const fastAdjust = defineOp({
   summarize: (i) => `Adjust balance by ${i.delta > 0 ? "+" : ""}${i.delta}: ${i.reason}`,
   async run(ctx, i) {
     const balance = await fastBalance(ctx);
-    if (balance + i.delta < 0 && !i.overrideNegative) throw new UserError(`This would make the balance ${balance + i.delta}. Tick the override to confirm a historical correction.`, "delta");
-    const [e] = await ctx.tx.insert(fastLedgerEvents).values({ ownerId: ctx.ownerId, type: "adjustment", delta: i.delta, onDate: i.onDate, reason: i.reason, overrideNegative: i.overrideNegative }).returning({ id: fastLedgerEvents.id });
+    if (balance + i.delta < 0) throw new UserError(`You owe ${balance}, so you can remove at most ${balance}. Fasts owed can't go below 0.`, "delta");
+    const [e] = await ctx.tx.insert(fastLedgerEvents).values({ ownerId: ctx.ownerId, type: "adjustment", delta: i.delta, onDate: i.onDate, reason: i.reason, overrideNegative: false }).returning({ id: fastLedgerEvents.id });
     await audit(ctx, "fasts", "adjusted", "fast_ledger_event", e.id, `Adjusted by ${i.delta}: ${i.reason}`);
     return { id: e.id, message: "Adjustment recorded" };
   },
