@@ -115,7 +115,7 @@ describe("PRD 4.12 / Test 23 — documents and protected IDs", () => {
 });
 
 describe("Belongs to (family members)", () => {
-  it("assigns documents/expiries to a person, words reminders with their name, filters and searches by them", async () => {
+  it("assigns documents/expiries to a person, words reminders with their name, searches by them", async () => {
     const ali = await op(at("2026-11-18"), "person.create", { name: "Ali", relation: "child" });
     await op(at("2026-11-18"), "expiry.create", { label: "Passport", kind: "passport", personId: ali.id, expiresOn: "2027-06-30" });
     const rem = await getDb().select().from(reminders).where(eq(reminders.sourceType, "expiry"));
@@ -124,13 +124,12 @@ describe("Belongs to (family members)", () => {
     await op(at("2026-11-18"), "document.create", { title: "Passport", kind: "passport" });
     const { documentsState, expiriesState } = await import("@/server/queries");
     const me = { ...owner, displayName: "Maryam" };
-    expect((await documentsState(me, { person: ali.id! })).map((d) => d.doc.personId)).toEqual([ali.id]);
-    expect((await documentsState(me, { person: "me" })).every((d) => d.doc.personId === null)).toBe(true);
+    expect((await expiriesState(me, { reminders: "on" })).items).toHaveLength(1);
+    expect((await expiriesState(me, { reminders: "off" })).items).toHaveLength(0);
     const ranked = await documentsState(me, { q: "ali passport" });
     expect(ranked[0].doc.personId).toBe(ali.id);
     const mine = await documentsState(me, { q: "maryam passport" });
     expect(mine[0].doc.personId).toBeNull();
-    expect((await expiriesState(me, { person: ali.id! })).items).toHaveLength(1);
     // another owner can't attach their records to my family member
     const other = await makeOwner("other@example.com");
     await expect(op(at("2026-11-18"), "document.create", { title: "X", personId: ali.id }, () => other.id)).rejects.toThrow(/Person not found/);

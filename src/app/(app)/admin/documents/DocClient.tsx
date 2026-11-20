@@ -129,12 +129,13 @@ const DOC_KIND_OPTIONS = [
 /** New document with an optional file chosen up front: saves the details, then encrypts + uploads the file. */
 export type PersonOpt = { id: string; name: string; relation: string };
 
-export function NewDocumentForm({ onDone, people = [] }: { onDone?: () => void; people?: PersonOpt[] }) {
+export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [compress, setCompress] = useState(false);
+  const [remind, setRemind] = useState(false);
   const close = useRevealClose();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -146,9 +147,15 @@ export function NewDocumentForm({ onDone, people = [] }: { onDone?: () => void; 
     if (file && compress) ({ file: toSend, note } = await compressIfImage(file));
     if (toSend && toSend.size > 4 * 1024 * 1024) { setError(toSend.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress file to reduce size” to shrink a photo." : "Files must be 4 MB or smaller."); return; }
     const input: Record<string, unknown> = {
-      title: v("title"), personId: v("personId") || null, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
-      notes: v("notes") || null, trackExpiry: fd.get("trackExpiry") === "on",
+      title: v("title"), personId: null, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
+      notes: v("notes") || null, trackExpiry: remind,
     };
+    if (remind) {
+      if (!v("expiresOn")) { setError("Add an expiry date to get reminders."); return; }
+      const offs = v("remindDays").split(/[\s,]+/).filter(Boolean).map((n) => -Math.abs(Number(n))).filter((n) => Number.isFinite(n));
+      if (offs.length) input.reminderOffsetsDays = [...new Set(offs)];
+      if (v("reminderTime")) input.reminderTime = v("reminderTime");
+    }
     if (v("idNumber")) input.idNumber = v("idNumber");
     setBusy("Saving…");
     let docId: string | null = null;
@@ -174,8 +181,6 @@ export function NewDocumentForm({ onDone, people = [] }: { onDone?: () => void; 
     <form className="grid gap-4" onSubmit={submit} noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" /></label>
-        <label className="field"><span className="label">Belongs to</span>
-          <select className="select" name="personId" defaultValue=""><option value="">Me</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.relation})</option>)}</select></label>
         <label className="field"><span className="label">Type</span>
           <select className="select" name="kind" defaultValue="passport">{DOC_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
         <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" /></label>
@@ -196,7 +201,15 @@ export function NewDocumentForm({ onDone, people = [] }: { onDone?: () => void; 
           <label className="check t-small"><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size
             <span className="t-meta">(photos only; leave unticked to keep full quality)</span></label>
         </div>
-        <label className="check sm:col-span-2"><input type="checkbox" name="trackExpiry" defaultChecked />Remind me before it expires (adds it to Expiries)</label>
+        <div className="sm:col-span-2 rounded-[16px] p-3 grid gap-3" style={{ border: "1px solid var(--hair)", background: "color-mix(in srgb, var(--field-bg) 60%, transparent)" }}>
+          <label className="check"><input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} /><span className="font-semibold">Reminders on</span></label>
+          {remind && (
+            <div className="grid gap-4 sm:grid-cols-2 preview-enter">
+              <label className="field"><span className="label">Remind me this many days before</span><input className="input" name="remindDays" defaultValue="90, 30, 7" inputMode="numeric" /></label>
+              <label className="field"><span className="label">Reminder time</span><input className="input" type="time" name="reminderTime" defaultValue="09:00" /></label>
+            </div>
+          )}
+        </div>
         <label className="field sm:col-span-2"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" name="notes" /></label>
       </div>
       {error && <p role="alert" className="error">{error}</p>}
