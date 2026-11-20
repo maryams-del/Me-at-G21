@@ -5,6 +5,9 @@ const RevealCtx = createContext<{ close: () => void } | null>(null);
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "./api";
 
+/** Fields that only matter when reminders are on. */
+const REMINDER_FIELDS = new Set(["reminderOffsetsDays", "reminderTime", "reminderDayOfMonth", "reminderLeadMinutes", "overdueRepeatDays", "trialOffsetsDays"]);
+
 export type FieldDef = {
   name: string;
   label: string;
@@ -105,6 +108,11 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     return w;
   });
   const visible = (f: FieldDef) => !f.showIf || f.showIf.values.includes(watch[f.showIf.field] ?? "");
+  // "Reminders on" goes first in its own box; the reminder settings only appear while it's ticked
+  // (they stay in the form while hidden, so turning reminders off doesn't lose them).
+  const toggle = fields.find((f) => f.type === "checkbox" && f.name === "remindersEnabled");
+  const remFields = toggle ? fields.filter((f) => REMINDER_FIELDS.has(f.sendAs ?? f.name) || REMINDER_FIELDS.has(f.name)) : [];
+  const [remOn, setRemOn] = useState(() => !!toggle && Boolean(initial[toggle.name]));
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -134,9 +142,42 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
 
   return (
     <form onSubmit={submit} className={compact ? "grid gap-3" : "grid gap-4"} noValidate
-      onChange={(e) => { const t = e.target as unknown as HTMLInputElement; if (t.name && t.name in watch) setWatch((w) => ({ ...w, [t.name]: t.value })); }}>
+      onChange={(e) => {
+        const t = e.target as unknown as HTMLInputElement;
+        if (toggle && t.name === toggle.name) setRemOn(t.checked);
+        if (t.name && t.name in watch) setWatch((w) => ({ ...w, [t.name]: t.value }));
+      }}>
       <div className={fields.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-        {fields.filter(visible).map((f) => {
+        {fields.filter(visible).filter((f) => f !== toggle && !remFields.includes(f)).flatMap((f, i, arr) => {
+          // Put the reminders box where the first reminder field used to be (or at the end).
+          const firstRem = remFields.length ? fields.indexOf(remFields[0]) : toggle ? fields.indexOf(toggle) : -1;
+          const box = toggle && (fields.indexOf(f) > firstRem && (i === 0 || fields.indexOf(arr[i - 1]) < firstRem)) ? [reminderBox()] : [];
+          return [...box, renderField(f)];
+        })}
+        {toggle && fields.filter(visible).filter((f) => f !== toggle && !remFields.includes(f)).every((f) => fields.indexOf(f) < (remFields.length ? fields.indexOf(remFields[0]) : fields.indexOf(toggle))) && reminderBox()}
+      </div>
+      {error && <p role="alert" className="error">{error.message}</p>}
+      <div><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Saving…" : submitLabel}</button></div>
+    </form>
+  );
+
+  function reminderBox() {
+    if (!toggle) return null;
+    return (
+      <div key="__reminders" className="sm:col-span-2 rounded-[16px] p-3 grid gap-3" style={{ border: "1px solid var(--hair)", background: "color-mix(in srgb, var(--field-bg) 60%, transparent)" }}>
+        <label className="check">
+          <input type="checkbox" id={`${id}-${toggle.name}`} name={toggle.name} defaultChecked={Boolean(initial[toggle.name])} />
+          <span className="font-semibold">{toggle.label}</span>
+        </label>
+        <div className={remOn ? "grid gap-4 sm:grid-cols-2 preview-enter" : "hidden"}>
+          {remFields.map((f) => renderField(f))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderField(f: FieldDef) {
+          {
           const fid = `${id}-${f.name}`;
           const invalid = error?.field === f.name;
           const common = { id: fid, name: f.name, required: f.required, "aria-invalid": invalid || undefined, "aria-describedby": f.help ? `${fid}-h` : undefined };
@@ -190,12 +231,8 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               {f.help && <span id={`${fid}-h`} className="t-meta">{f.help}</span>}
             </label>
           );
-        })}
-      </div>
-      {error && <p role="alert" className="error">{error.message}</p>}
-      <div><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Saving…" : submitLabel}</button></div>
-    </form>
-  );
+          }
+  }
 }
 
 /** Close the surrounding <Reveal> panel, if any (for custom forms). */
