@@ -151,7 +151,6 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
   // (they stay in the form while hidden, so turning reminders off doesn't lose them).
   const toggle = fields.find((f) => f.type === "checkbox" && f.name === "remindersEnabled");
   const remFields = toggle ? fields.filter((f) => REMINDER_FIELDS.has(f.sendAs ?? f.name) || REMINDER_FIELDS.has(f.name)) : [];
-  const [remOn, setRemOn] = useState(() => !!toggle && Boolean(initial[toggle.name]));
   const [remSummary, setRemSummary] = useState("");
 
   // Reminders make Active/Archived redundant: keep whatever is stored, but don't ask.
@@ -162,6 +161,21 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     ? ([["details", "Details", detailFields], ["reminders", "Reminders", [toggle, ...remFields]], ["notes", "Notes", notesFields]] as const).filter(([, , fs]) => fs.length > 0)
     : [];
   const [tab, setTab] = useState<string>(tabs[0]?.[0] ?? "details");
+  // New entries start with reminders off; existing ones show what's saved.
+  const isNew = !("id" in fixed) && detailFields.length > 0;
+  const [remOn, setRemOn] = useState(() => !!toggle && !isNew && Boolean(initial[toggle.name]));
+  const hasTabs = tabs.length > 1;
+  // Turning reminders on moves you to the Reminders tab; turning them off sends you back to Details.
+  const flipReminders = (on: boolean) => { setRemOn(on); if (hasTabs) setTab(on ? "reminders" : "details"); };
+  const reminderSwitch = (where: string) => toggle && (
+    <div className="flex items-center justify-between gap-3 sm:col-span-2" key={`__switch-${where}`}>
+      <label htmlFor={`${id}-${toggle.name}-${where}`} className="grid gap-0.5 cursor-pointer">
+        <span className="font-semibold">Reminders</span>
+        <span className="t-meta">{remOn ? remSummary || "On" : "Off"}</span>
+      </label>
+      <input type="checkbox" role="switch" className="switch" id={`${id}-${toggle.name}-${where}`} checked={remOn} onChange={(e) => flipReminders(e.target.checked)} />
+    </div>
+  );
 
   // The date the reminders count back from (expiry, due date, deadline…), followed live as it's edited.
   const anchorField = fields.find((f) => f.type === "date" && f.name === fields.find((x) => x.anchorField)?.anchorField)
@@ -224,7 +238,6 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     <form onSubmit={submit} className={compact ? "grid gap-3" : "grid gap-4"} noValidate
       onChange={(e) => {
         const t = e.target as unknown as HTMLInputElement;
-        if (toggle && t.name === toggle.name) setRemOn(t.checked);
         if (anchorField && t.name === anchorField.name) setAnchor(t.value);
         if (t.name && t.name in watch) setWatch((w) => ({ ...w, [t.name]: t.value }));
       }}>
@@ -235,18 +248,22 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
         </div>
       )}
       {archiveField && <input type="hidden" name={archiveField.name} value={String(initial[archiveField.name] ?? "active")} />}
+      {toggle && remOn && <input type="hidden" name={toggle.name} value="on" />}
       {tabs.length > 1 && (
         <div className="seg-tabs" role="tablist" aria-label="Sections">
           {tabs.map(([key, label]) => (
-            <button key={key} type="button" role="tab" id={`${id}-tab-${key}`} aria-selected={tab === key} aria-controls={`${id}-panel-${key}`} onClick={() => setTab(key)}>{label}</button>
+            <button key={key} type="button" role="tab" id={`${id}-tab-${key}`} aria-selected={tab === key} aria-controls={`${id}-panel-${key}`}
+              disabled={key === "reminders" && !remOn} title={key === "reminders" && !remOn ? "Turn reminders on in Details" : undefined}
+              onClick={() => setTab(key)}>{label}</button>
           ))}
         </div>
       )}
       {tabs.length ? tabs.map(([key, , fs]) => (
         <div key={key} role={tabs.length > 1 ? "tabpanel" : undefined} id={`${id}-panel-${key}`} aria-labelledby={tabs.length > 1 ? `${id}-tab-${key}` : undefined} hidden={tabs.length > 1 && tab !== key}>
           {key === "reminders" ? reminderBox() : (
-            <div className={fs.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
+            <div className={fs.length > 1 || (key === "details" && hasTabs) ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
               {(fs as readonly FieldDef[]).filter(visible).map((f) => renderField(f))}
+              {key === "details" && hasTabs && <div className="sm:col-span-2 rule-t pt-4">{reminderSwitch("details")}</div>}
             </div>
           )}
         </div>
@@ -285,13 +302,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     const others = remFields.filter(visible);
     return (
       <div key="__reminders" className="grid gap-4">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`${id}-${toggle.name}`} className="grid gap-0.5 cursor-pointer">
-            <span className="font-semibold">Reminders</span>
-            <span className="t-meta">{remOn ? remSummary || "On" : "Off"}</span>
-          </label>
-          <input type="checkbox" role="switch" className="switch" id={`${id}-${toggle.name}`} name={toggle.name} defaultChecked={Boolean(initial[toggle.name])} />
-        </div>
+        {reminderSwitch("reminders")}
         <div className={remOn ? "grid gap-4 preview-enter" : "hidden"}>
           {others.map((f) => renderField(f, true))}
         </div>
