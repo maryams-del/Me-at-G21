@@ -226,8 +226,8 @@ export function Reveal({ label, children, open: initialOpen = false, buttonClass
   const [open, setOpen] = useState(initialOpen);
   const id = useId();
   return (
-    <div>
-      <button className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+    <div className={open ? "basis-full w-full min-w-0" : undefined}>
+      <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
       {open && <div id={id} className="mt-4 panel p-4 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
   );

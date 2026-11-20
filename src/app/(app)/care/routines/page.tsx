@@ -2,7 +2,7 @@ import { pageOwner, routinesState } from "@/server/queries";
 import { PageHeader, Empty, Section } from "@/components/ui";
 import { OpForm, OpButton, Reveal, EditPanel, type FieldDef } from "@/components/OpForm";
 import { ROUTINE_TEMPLATES, type TemplateKey } from "@/server/ops/care";
-import { todayLocal, addDays, dmy } from "@/lib/time";
+import { todayLocal, dmy } from "@/lib/time";
 import { fmtDate, relDays } from "@/lib/format";
 
 const routineFields: FieldDef[] = [
@@ -50,7 +50,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
       {rows.length === 0 && <Empty>No routines yet. Use quick add above, or create your own.</Empty>}
 
       <ul className="grid gap-4 md:grid-cols-2">
-        {rows.map(({ routine: r, anchor, due, latest, daysSince, cycleDays, daysLeft, overdue, events }) => {
+        {rows.map(({ routine: r, anchor, due, latest, daysSince, cycleDays, daysLeft, overdue, skipped, events }) => {
           const isFirstUse = r.anchor === "first_use";
           const pct = r.graceDays && cycleDays && daysSince !== null ? Math.min(100, (daysSince / cycleDays) * 100) : null;
           const dueMark = r.graceDays && cycleDays ? ((cycleDays - r.graceDays) / cycleDays) * 100 : null;
@@ -65,8 +65,8 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
                   {r.graceDays && daysSince !== null ? (
                     <><p className="t-h2">Day {daysSince}</p><p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>of {cycleDays}{overdue ? ", past the limit" : ""}</p></>
                   ) : (
-                    <><p className="t-h2">{due ? fmtDate(due) : "—"}</p>
-                      <p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>{due ? (overdue ? `${-(daysLeft ?? 0)} days overdue` : `due ${relDays(daysLeft)}`) : isFirstUse ? "Log first use to start" : "Mark done to start"}</p></>
+                    <><p className="t-h2">{due ? fmtDate(due) : skipped && daysSince !== null ? `Day ${daysSince}` : "—"}</p>
+                      <p className="t-small" style={{ color: overdue ? "var(--danger)" : "var(--ink-2)" }}>{due ? (overdue ? `${-(daysLeft ?? 0)} days overdue` : `due ${relDays(daysLeft)}`) : skipped ? "Skipped, still counting" : isFirstUse ? "Log a new one to start" : "Mark done to start"}</p></>
                   )}
                 </div>
               </div>
@@ -78,24 +78,23 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
                   <p className="t-meta">Last {fmtDate(anchor)}. Recommended {fmtDate(due)}, latest {fmtDate(latest)}.</p>
                 </div>
               )}
-              {isFirstUse && <p className="t-small text-ink-2">Started: {anchor ? fmtDate(anchor) : "not recorded"}</p>}
+              {isFirstUse && <p className="t-small text-ink-2">Started: {anchor ? `${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}` : "not recorded"}</p>}
               <div className="flex flex-wrap gap-2">
-                {isFirstUse ? (
-                  <>
-                    <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label="Started a new one today" className="btn btn-sm btn-primary" />
-                  </>
-                ) : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done today" className="btn btn-sm btn-primary" confirmText={r.graceDays ? `Log ${r.name.toLowerCase()} done today (${dmy(today)})? The next one is counted from today.` : undefined} />}
-                {due && <OpButton op="routine.snooze" input={{ routineId: r.id, until: addDays(due < today ? today : due, 1) }} label="Snooze 1 day" className="btn btn-sm" />}
-                {due && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" className="btn btn-sm btn-ghost" confirmText="Skip this cycle? The next due date will count from today." />}
+                {isFirstUse
+                  ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label="Started a new one today" className="btn btn-sm btn-primary" />
+                  : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done today" className="btn btn-sm btn-primary" confirmText={r.graceDays ? `Log ${r.name.toLowerCase()} done today (${dmy(today)})? The next one is counted from today.` : undefined} />}
+                <Reveal label="Custom date" buttonClass="btn btn-sm">
+                  <OpForm op="routine.log" fixed={{ routineId: r.id, type: isFirstUse ? "first_use" : "completed" }} initial={{ onDate: today }} submitLabel="Save entry" compact fields={[
+                    { name: "onDate", label: isFirstUse ? "Started a new one on" : "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
+                </Reveal>
+                {(isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" className="btn btn-sm btn-ghost"
+                  confirmText={isFirstUse ? "Skip this time? It keeps counting days since the last new one and stops reminding you. Log a new one when you change it." : "Skip this cycle? The next due date will count from today."} />}
               </div>
-              <EditPanel label="Log a past date, history and settings">
+              <EditPanel label="History & settings">
                 <div className="grid gap-4">
-                  <OpForm op="routine.log" fixed={{ routineId: r.id }} initial={{ onDate: today, type: isFirstUse ? "first_use" : "completed" }} submitLabel="Save entry" compact fields={[
-                    { name: "type", label: "What happened", type: "select", required: true, options: isFirstUse ? [{ value: "first_use", label: "Started a new one" }] : [{ value: "completed", label: "Done" }, { value: "skipped", label: "Skipped" }] },
-                    { name: "onDate", label: "Date", type: "date", required: true }, { name: "notes", label: "Note", nullable: true, wide: true }]} />
                   {events.length > 0 && <ul className="list">{events.map((e) => (
                     <li key={e.id} className="py-1.5 flex justify-between items-center t-small" style={{ opacity: e.voidedAt ? 0.5 : 1 }}>
-                      <span style={{ textDecoration: e.voidedAt ? "line-through" : undefined }}>{fmtDate(e.onDate)}: {e.type.replace("_", " ")}{e.notes ? `, ${e.notes}` : ""}</span>
+                      <span style={{ textDecoration: e.voidedAt ? "line-through" : undefined }}>{fmtDate(e.onDate)}: {e.type === "first_use" ? "started a new one" : e.type}{e.notes ? `, ${e.notes}` : ""}</span>
                       {!e.voidedAt && <OpButton op="routine.void" input={{ eventId: e.id }} label="Remove" className="btn btn-sm btn-ghost" confirmText="Remove this entry? The schedule will be recalculated." />}
                     </li>))}</ul>}
                   <Section title="Settings">
