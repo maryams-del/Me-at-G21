@@ -5,7 +5,7 @@ import { OpForm, Reveal } from "@/components/OpForm";
 import { isSpaceGlyph, spacesOrderOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { relDays } from "@/lib/format";
-import { dmy } from "@/lib/time";
+import { addDays, dmy } from "@/lib/time";
 import { SpacesStacks, type StackGroup } from "@/components/SpacesStacks";
 import { spaceFields } from "../spaces/fields";
 
@@ -32,6 +32,16 @@ export default async function Spaces() {
     "/projects": s.tasksDueSoon.length ? `${s.tasksDueSoon.length} due this week` : undefined,
     "/admin/expiries": s.expiring[0] ? `${s.expiring[0].label} · ${dmy(s.expiring[0].expiresOn)}` : undefined,
     "/inbox": n ? `${n} to look at` : undefined,
+  };
+  // A small dot on a space means something there needs the owner soon.
+  const in30 = addDays(s.today, 30);
+  const needs: Record<string, boolean> = {
+    "/admin/expiries": s.expiring.some((e) => e.expiresOn <= in30) || s.overdue.some((x) => x.href === "/admin/expiries"),
+    "/inbox": n > 0,
+    "/education/applications": s.appDeadlines.length > 0,
+    "/care/routines": !!nextRoutine && (nextRoutine.overdue || (nextRoutine.daysLeft ?? 99) <= 3),
+    "/projects": s.tasksDueSoon.length > 0,
+    "/finance/debts": s.debts.some((d) => d.overdue),
   };
   const groups: { title: string; items: Item[] }[] = [
     { title: "Money", items: [
@@ -80,7 +90,7 @@ export default async function Spaces() {
     title: g.title,
     tint: SECTION_TINT[g.title] ?? CUSTOM_TINT,
     custom: !builtIn.has(g.title),
-    cards: bySavedOrder(g.items, (i) => i.href, order.cards[g.title]).map((i) => ({ key: i.href, href: i.href, label: i.label, glyph: i.glyph, d: i.d, stat: i.stat ?? stat[i.href] })),
+    cards: bySavedOrder(g.items, (i) => i.href, order.cards[g.title]).map((i) => ({ key: i.href, href: i.href, label: i.label, glyph: i.glyph, d: i.d, stat: i.stat ?? stat[i.href], needs: !!needs[i.href] })),
   }));
   return (
     <>
