@@ -84,7 +84,7 @@ export default async function Spaces() {
   }));
   return (
     <>
-      <PageHeader title="Spaces" intro="Everything, grouped. Put the most relevant sections and spaces on top." />
+      <PageHeader title="Spaces" intro="Everything, grouped. Tap a stack to fan it out. Put the most relevant sections on top." />
       <div className="mb-6">
         <Reveal label="+ Add a space" buttonClass="btn btn-accent">
           <OpForm op="space.create" fields={spaceFields(sections)} initial={{ section: "You", glyph: "projects" }} submitLabel="Add space" />
