@@ -6,6 +6,7 @@ import { addDays, formatInstant, formatLocalDate, instantToLocal } from "@/lib/t
 import { WeekRings, type Day } from "@/components/home/WeekRings";
 import { AiBar } from "@/components/home/AiBar";
 import { FrequentlyVisited } from "@/components/home/FrequentlyVisited";
+import { HomeNoZoom } from "@/components/home/HomeNoZoom";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
 
 export default async function Dashboard() {
@@ -66,6 +67,7 @@ export default async function Dashboard() {
 
   return (
     <div className="grid gap-9 md:gap-12">
+      <HomeNoZoom />
       <h1 className="sr-only">Today</h1>
       <section aria-label="Ask AI" className="w-full max-w-[640px] mx-auto">
         <AiBar />
