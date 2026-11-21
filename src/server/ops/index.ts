@@ -15,6 +15,7 @@ import "./subscriptions";
 import "./zakat";
 import "./spaces";
 import "./trash";
+import "./accounts";
 
 export { getOp, allOps };
 

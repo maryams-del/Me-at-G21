@@ -4,7 +4,7 @@ import Link from "next/link";
 import { startAuthentication, browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { api, ApiError } from "@/components/api";
 
-export function LoginClient({ setupAvailable }: { setupAvailable: boolean }) {
+export function LoginClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -32,7 +32,8 @@ export function LoginClient({ setupAvailable }: { setupAvailable: boolean }) {
       <div className="rule-b" />
       <div className="grid gap-2 t-small">
         <Link href="/recover" className="underline underline-offset-4">Lost your phone or passkey?</Link>
-        {setupAvailable && <Link href="/onboarding" className="underline underline-offset-4">First time here? Set up your account</Link>}
+        <Link href="/onboarding" className="underline underline-offset-4">New here? Create your account</Link>
+        <span className="t-meta">You can create an account if the site owner has invited your email.</span>
       </div>
     </div>
   );
