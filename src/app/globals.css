@@ -511,8 +511,8 @@ html.splashing [data-splash] { visibility: hidden; }
 .pin-pop-item:hover, .pin-pop-item:focus-visible { background: var(--hair); }
 .row-pin { width: 36px; height: 36px; flex: none; border-radius: 12px; border: 0; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-3); background: transparent; }
 .row-pin.on { color: var(--accent-solid); background: color-mix(in srgb, var(--accent-solid) 14%, transparent); }
-.sp-tile.just-added .ic { animation: just-added 2.2s ease; }
-@keyframes just-added { 0%, 60% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-solid) 55%, transparent); transform: scale(1.06); } 100% { box-shadow: 0 0 0 0 transparent; transform: none; } }
+/* Highlight for a space you just added or tapped on Home: one flat colour, no darker outline */
+.sp-tile.just-added { border-radius: 18px; animation: one-glow 2.2s ease; }
 
 /* Fields side by side on one line (e.g. a space's name and icon) */
 .field-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; align-items: start; }
@@ -703,8 +703,13 @@ html.splashing [data-splash] { visibility: hidden; }
 .repaid-mark { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 11px; border-radius: 999px; font-size: .875rem; font-weight: 600;
   color: var(--accent-solid); background: color-mix(in srgb, var(--accent-solid) 13%, transparent); }
 /* A section opened from Home glows briefly */
-.section-flash { animation: section-flash 2.2s ease; border-radius: 22px; }
-@keyframes section-flash { 0%, 55% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent-solid) 14%, transparent); background: color-mix(in srgb, var(--accent-solid) 7%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; background: transparent; } }
+.section-flash { animation: one-glow 2.2s ease; border-radius: 22px; }
+/* The fill and the extra edge (box-shadow) are the exact same solid colour, so the glow reads as one even block. */
+@keyframes one-glow {
+  0%, 55% { background: var(--glow-flat); box-shadow: 0 0 0 10px var(--glow-flat); }
+  100% { background: transparent; box-shadow: 0 0 0 10px transparent; }
+}
+:root { --glow-flat: color-mix(in srgb, var(--accent-solid) 10%, var(--paper)); }
 
 /* ───────── Drifting glows (Light and Dark) ─────────
    Two sage glows (top-left, bottom) and a stone glow (right) move very slowly so the page never
