@@ -7,13 +7,13 @@ import { AuthFrame } from "../AuthFrame";
 const STEPS = ["email", "passkey", "totp", "recovery_codes"] as const;
 const LABELS = { email: "Verify email", passkey: "Passkey", totp: "Authenticator app", recovery_codes: "Recovery codes" };
 
-export function OnboardingClient({ step: initial, email: initialEmail }: { step: string; email: string }) {
+export function OnboardingClient({ step: initial, email: initialEmail, invite }: { step: string; email: string; invite?: string }) {
   const [step, setStep] = useState(initial === "complete" ? "email" : initial);
   const idx = Math.max(0, STEPS.indexOf(step as (typeof STEPS)[number]));
   const frame = (title: string, body: React.ReactNode) => (
     <AuthFrame title={title} step={{ n: idx + 1, of: 4, label: LABELS[STEPS[idx]] }}>{body}</AuthFrame>
   );
-  if (step === "email") return frame("Set up your private dashboard", <EmailStep onDone={() => setStep("passkey")} initialEmail={initialEmail} />);
+  if (step === "email") return frame("Set up your private dashboard", <EmailStep onDone={() => setStep("passkey")} initialEmail={initialEmail} invite={invite} />);
   if (step === "passkey") return frame("Create your passkey", <PasskeyStep onDone={() => setStep("totp")} />);
   if (step === "totp") return frame("Add an authenticator app", <TotpStep onDone={() => setStep("recovery_codes")} />);
   return frame("Save your recovery codes", <CodesStep />);
@@ -22,7 +22,7 @@ export function OnboardingClient({ step: initial, email: initialEmail }: { step:
 function Err({ e }: { e: string | null }) { return e ? <p role="alert" className="error">{e}</p> : null; }
 const msg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : (e as Error)?.name === "NotAllowedError" ? "The request was cancelled or timed out. Try again." : fallback);
 
-function EmailStep({ onDone, initialEmail }: { onDone: () => void; initialEmail: string }) {
+function EmailStep({ onDone, initialEmail, invite }: { onDone: () => void; initialEmail: string; invite?: string }) {
   const [email, setEmail] = useState(initialEmail);
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
@@ -30,13 +30,25 @@ function EmailStep({ onDone, initialEmail }: { onDone: () => void; initialEmail:
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(!!invite);
+  // Opened from an invite link: that link stands in for the email code.
+  const tried = useRef(false);
+  useEffect(() => {
+    if (!invite || tried.current) return;
+    tried.current = true;
+    api<{ email: string }>("/api/auth/invite-redeem", { invite })
+      .then((r) => { setEmail(r.email); setVerified(true); })
+      .catch((err) => setError(msg(err, "This invite link didn't work. Ask for a new one.")))
+      .finally(() => setInviting(false));
+  }, [invite]);
+  if (inviting) return <p className="t-small" role="status">Opening your invite…</p>;
   if (verified) return (
     <form className="grid gap-4" onSubmit={async (e) => {
       e.preventDefault(); if (!name.trim()) return; setBusy(true); setError(null);
       try { await api("/api/auth/enroll-profile", { displayName: name.trim() }); onDone(); }
       catch (err) { setError(msg(err, "Couldn't save your name.")); } finally { setBusy(false); }
     }}>
-      <p className="t-small">Email verified.</p>
+      <p className="t-small">{invite ? <>You&apos;re invited as <strong>{email}</strong>.</> : "Email verified."}</p>
       <label className="field"><span className="label">What&apos;s your name?</span>
         <input className="input" autoFocus autoComplete="given-name" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <button className="btn btn-primary" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Continue"}</button>
