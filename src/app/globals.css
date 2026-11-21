@@ -63,7 +63,7 @@
   /* Home: in Light the week sits on a deep sage panel, the spaces on the page */
   --wk-bg: linear-gradient(150deg, rgba(36,46,37,.94), rgba(28,35,29,.96)); --wk-pad: 22px 20px; --wk-shadow: 0 26px 44px -28px rgba(20,26,21,.7);
   --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
-  --sp-bg: transparent; --sp-pad: 0; --sp-shadow: none;
+  --sp-bg: transparent; --sp-pad: 22px 20px; --sp-shadow: none;
   --sp-ink: #1F2620; --sp-ink-3: #6A7168; --sp-hair: rgba(31,38,32,.1); --sp-acc: #4C7A5C; --sp-paper: #F2F0EA;
   --inv-bg: linear-gradient(150deg, rgba(36,46,37,.95), rgba(28,35,29,.97)); --inv-ink: #EEF1EA; --inv-mut: rgba(238,241,234,.62); --inv-acc: #A9C8B0;
   color-scheme: light;
@@ -93,7 +93,7 @@
       radial-gradient(55% 40% at 100% 35%, rgba(110,127,104,.35), transparent 70%),
       radial-gradient(60% 40% at 25% 100%, rgba(44,58,48,.7), transparent 72%);
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
-    --wk-bg: transparent; --wk-pad: 0; --wk-shadow: none;
+    --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
     --sp-bg: rgba(243,240,233,.93); --sp-pad: 22px 20px; --sp-shadow: 0 26px 44px -28px rgba(0,0,0,.65);
     --sp-ink: #1F2620; --sp-ink-3: #6A7168; --sp-hair: rgba(31,38,32,.1); --sp-acc: #4C7A5C; --sp-paper: #F3F0E9;
@@ -124,7 +124,7 @@
       radial-gradient(55% 40% at 100% 35%, rgba(110,127,104,.35), transparent 70%),
       radial-gradient(60% 40% at 25% 100%, rgba(44,58,48,.7), transparent 72%);
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
-    --wk-bg: transparent; --wk-pad: 0; --wk-shadow: none;
+    --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
     --sp-bg: rgba(243,240,233,.93); --sp-pad: 22px 20px; --sp-shadow: 0 26px 44px -28px rgba(0,0,0,.65);
     --sp-ink: #1F2620; --sp-ink-3: #6A7168; --sp-hair: rgba(31,38,32,.1); --sp-acc: #4C7A5C; --sp-paper: #F3F0E9;
