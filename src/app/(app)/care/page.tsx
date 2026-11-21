@@ -1,18 +1,10 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/ui";
-import { Glyph } from "@/components/Glyph";
+import { SpaceHub } from "@/components/SpaceHub";
 
-export default function CareIndex() {
+export default async function CareIndex({ searchParams }: { searchParams: Promise<{ from?: string }> }) {
+  const { from } = await searchParams;
   const items = [
-    { href: "/care/period", label: "Period log", glyph: "period" as const, d: "Private log, calendar and your own estimates" },
-    { href: "/care/routines", label: "Routines", glyph: "routines" as const, d: "Waxing, dental scaling, toothbrush, bedsheets, anything on a cycle" },
+    { href: "/care/period", label: "Period log", glyph: "period" as const },
+    { href: "/care/routines", label: "Routines", glyph: "routines" as const },
   ];
-  return (
-    <>
-      <PageHeader glyph="care" title="Personal care" />
-      <ul className="grid gap-3 grid-cols-2">
-        {items.map((i) => <li key={i.href}><Link href={i.href} className="tile min-h-0"><Glyph kind={i.glyph} size={30} accent="var(--rust)" /><p className="t-h3 mt-3">{i.label}</p></Link></li>)}
-      </ul>
-    </>
-  );
+  return <SpaceHub title="Personal care" glyph="care" items={items} fromHome={from === "home"} />;
 }

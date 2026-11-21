@@ -35,6 +35,8 @@ export function BackButton({ path }: { path: string }) {
   return (
     <button type="button" className="btn btn-sm mb-4" style={{ minHeight: 34, paddingInline: "0.8rem 1rem" }}
       onClick={() => {
+        // Opened from a Home tile: back goes Home.
+        if (new URLSearchParams(window.location.search).get("from") === "home") { router.push("/"); return; }
         // A space always goes back to Spaces, never to an earlier filtered/searched copy of itself.
         if (path.startsWith("/spaces/") || isBuiltinHref(path)) { router.push("/more"); return; }
         // Elsewhere: back to the last *different* page in this tab (search/filter changes on the same page don't count).
