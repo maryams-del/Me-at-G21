@@ -1,0 +1,39 @@
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { getDb, closeDb } from "@/db";
+import { users } from "@/db/schema";
+import { runOpInTx } from "@/server/ops";
+import { mayEnroll } from "@/server/auth/invites";
+import { invitedEmailsOf } from "@/lib/invites";
+import { resetDb, makeOwner, withCtx } from "../support/db";
+
+const now = new Date("2026-11-21T09:00:00Z");
+const op = (ownerId: string, name: string, input: unknown) =>
+  withCtx(ownerId, now, (ctx) => runOpInTx(ctx.tx, { ownerId: ctx.ownerId, tz: ctx.tz, source: "manual", now }, name, input));
+
+let owner: Awaited<ReturnType<typeof makeOwner>>;
+beforeEach(async () => { await resetDb(); owner = await makeOwner("owner@example.com"); });
+afterAll(async () => { await closeDb(); });
+
+describe("Accounts for other people (invite-only)", () => {
+  it("only the owner and invited emails may sign up; removing an invite stops it", async () => {
+    expect(await mayEnroll("owner@example.com")).toBe(true);
+    expect(await mayEnroll("friend@example.com")).toBe(false);
+
+    await op(owner.id, "invite.add", { email: "Friend@Example.com " });
+    expect(await mayEnroll("friend@example.com")).toBe(true);
+    expect(await mayEnroll("stranger@example.com")).toBe(false);
+    await expect(op(owner.id, "invite.add", { email: "friend@example.com" })).rejects.toThrow(/already invited/);
+    await expect(op(owner.id, "invite.add", { email: "owner@example.com" })).rejects.toThrow(/your own email/);
+
+    await op(owner.id, "invite.remove", { email: "friend@example.com" });
+    expect(await mayEnroll("friend@example.com")).toBe(false);
+  });
+
+  it("someone who isn't the owner can't invite anyone", async () => {
+    const friend = await makeOwner("friend@example.com");
+    await expect(op(friend.id, "invite.add", { email: "x@example.com" })).rejects.toThrow(/Only the site owner/);
+    const [o] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
+    expect(invitedEmailsOf(o.settings)).toEqual([]);
+  });
+});

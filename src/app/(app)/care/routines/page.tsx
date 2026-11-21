@@ -1,3 +1,4 @@
+import { routineTemplatesOffOf } from "@/lib/starter";
 import { pageOwner, routinesState } from "@/server/queries";
 import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
@@ -44,7 +45,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
   const today = todayLocal(o.timezone);
   const have = new Set(all.map((r) => r.routine.kind));
   // Waxing isn't offered as a quick-add; it's still available via a custom routine or Capture ("I waxed today").
-  const templates = (Object.keys(ROUTINE_TEMPLATES) as TemplateKey[]).filter((k) => k !== "waxing" && !have.has(k));
+  const templates = (Object.keys(ROUTINE_TEMPLATES) as TemplateKey[]).filter((k) => k !== "waxing" && !have.has(k) && !routineTemplatesOffOf(o.settings).includes(k));
 
   return (
     <>

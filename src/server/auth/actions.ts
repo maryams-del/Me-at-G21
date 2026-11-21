@@ -1,4 +1,5 @@
 import "server-only";
+import { starterSettings } from "@/lib/starter";
 import { z } from "zod";
 import { and, desc, eq, gt, lt, isNull, ne, sql, count } from "drizzle-orm";
 import {
@@ -21,6 +22,7 @@ import {
   rateLimit, requireUser, securityEvent, type SessionUser,
 } from "./core";
 import { seedDefaultsForOwner } from "../defaults";
+import { mayEnroll } from "./invites";
 
 const CHALLENGE_COOKIE = "ld_chal";
 const RP_NAME = "Me @ G21";
@@ -104,9 +106,9 @@ const emailSchema = z.object({ email: z.string().trim().toLowerCase().email().ma
 const enrollStart: Handler = async (body) => {
   const { email } = emailSchema.parse(body);
   if (!(await rateLimit(`enroll:${await ipKey()}`, 5, 3600))) throw new AuthError(429, "Too many attempts. Try again later.");
-  const [existing] = await getDb().select().from(users).limit(1);
-  // Single-owner app: only OWNER_EMAIL may enroll, and only while setup isn't finished.
-  if (email === env.ownerEmail && (!existing || (existing.email === email && existing.onboardingStep !== "complete"))) {
+  const [existing] = await getDb().select().from(users).where(eq(users.email, email));
+  // The owner (OWNER_EMAIL) and people the owner has invited may create an account, once each.
+  if ((await mayEnroll(email)) && (!existing || existing.onboardingStep !== "complete")) {
     await issueEmailCode(email, "enroll");
   }
   return GENERIC_SENT;
@@ -115,11 +117,13 @@ const enrollStart: Handler = async (body) => {
 const enrollVerify: Handler = async (body) => {
   const { email, code } = emailSchema.extend({ code: z.string().regex(/^\d{6}$/) }).parse(body);
   if (!(await rateLimit(`enroll-verify:${await ipKey()}`, 10, 3600))) throw new AuthError(429, "Too many attempts. Try again later.");
-  if (email !== env.ownerEmail || !(await consumeEmailCode(email, "enroll", code))) throw new AuthError(400, "That code is invalid or expired");
+  if (!(await mayEnroll(email)) || !(await consumeEmailCode(email, "enroll", code))) throw new AuthError(400, "That code is invalid or expired");
   let [u] = await getDb().select().from(users).where(eq(users.email, email));
   if (u?.onboardingStep === "complete") throw new AuthError(400, "This account is already set up. Sign in instead.");
   if (!u) {
-    [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey" }).returning();
+    // Invited people start with the basic spaces; the site owner gets everything.
+    const settings = email.trim().toLowerCase() === env.ownerEmail ? undefined : starterSettings();
+    [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey", ...(settings ? { settings } : {}) }).returning();
   } else {
     await getDb().update(users).set({ emailVerifiedAt: new Date(), onboardingStep: u.onboardingStep === "email" ? "passkey" : u.onboardingStep }).where(eq(users.id, u.id));
   }
