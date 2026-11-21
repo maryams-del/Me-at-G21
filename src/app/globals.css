@@ -717,3 +717,23 @@ html.splashing [data-splash] { visibility: hidden; }
    only once you scroll down to the footer. Each theme sets its own colours. */
 body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: clamp(200px, 38vh, 360px); z-index: -1; pointer-events: none;
   background: var(--page-hills) center bottom / 100% 100% no-repeat; }
+
+/* ───────── Phones: a space at a normal phone size ─────────
+   Smaller title and icon, a slimmer search bar and round buttons, and slightly tighter cards. */
+@media (max-width: 640px) {
+  .page-head { margin-bottom: 1.1rem; padding-bottom: .9rem; }
+  .page-head-row { gap: 10px; }
+  .page-head-row > svg:first-child { width: 26px; height: 26px; }
+  .page-head-title.t-h1 { font-size: calc(1.3rem * var(--sz-head, 1)); }
+  .page-head.has-ic .page-head-desc { padding-left: 36px; }
+  .t-h2 { font-size: calc(1.05rem * var(--sz-head, 1)); }
+  .plus-btn { width: 40px; height: 40px; }
+  .plus-btn svg { width: 18px; height: 18px; }
+  .search-pill { padding: .15rem .5rem .15rem .9rem; }
+  .search-pill input { padding: .45rem 0; font-size: 14px; }
+  .toolbar .btn.icon-btn, .toolbar .icon-toggle { width: 40px !important; height: 40px !important; }
+  .entry { padding: 14px 14px 12px; border-radius: 22px; gap: 10px; }
+  .entry-title { font-size: .95rem; }
+  .pill-action { min-height: 36px; font-size: .78rem; }
+  .icon-ghost { width: 40px; height: 40px; }
+}
