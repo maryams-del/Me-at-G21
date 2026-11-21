@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { pageOwner, documentDetail, peopleList } from "@/server/queries";
 import { personOptions, selfNameOf } from "@/lib/people";
+import { docKindOptions, docTypesOf } from "@/lib/docTypes";
 import { fmtDateTime } from "@/lib/format";
 import { DocEditor } from "./DocEditor";
 
@@ -16,6 +17,7 @@ export default async function DocumentEditPage({ params }: { params: Promise<{ i
   return (
     <DocEditor
       whose={whose}
+      kinds={docKindOptions(docTypesOf(o.settings))}
       doc={{ id: doc.id, title: doc.title, kind: doc.kind, issuer: doc.issuer, issuedOn: doc.issuedOn, expiresOn: doc.expiresOn, notes: doc.notes, idMasked: doc.idMasked, personId: doc.personId, tags: doc.tags }}
       files={d.files.map((f) => ({ id: f.id, version: f.version, filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, when: fmtDateTime(f.createdAt, o.timezone) }))}
       reminders={d.reminders ? { enabled: d.reminders.remindersEnabled, offsets: d.reminders.reminderOffsetsDays, time: d.reminders.reminderTime } : null}

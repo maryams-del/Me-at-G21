@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { and, eq, isNull, max } from "drizzle-orm";
+import { isBuiltinDocKind, docTypesOf } from "@/lib/docTypes";
 import { expiryItems, renewalEvents, documents, protectedIdFields, documentFiles, people, users } from "@/db/schema";
 import { defineOp, zDate, zId, zOptText, zText, zTime } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
@@ -24,6 +25,16 @@ async function labelFor(ctx: Pick<Ctx, "tx" | "ownerId">, label: string | undefi
   if (p) return p.name;
   const [u] = await ctx.tx.select({ name: users.displayName }).from(users).where(eq(users.id, ctx.ownerId));
   return u?.name?.trim() || "Me";
+}
+
+/** A type you named yourself ("Car licence") is kept so you can pick it again next time. */
+async function rememberDocType(ctx: Pick<Ctx, "tx" | "ownerId" | "now">, kind: string) {
+  if (isBuiltinDocKind(kind)) return;
+  const [u] = await ctx.tx.select({ settings: users.settings }).from(users).where(eq(users.id, ctx.ownerId));
+  const settings = (u?.settings ?? {}) as Record<string, unknown>;
+  const list = docTypesOf(settings);
+  if (list.some((t) => t.toLowerCase() === kind.toLowerCase())) return;
+  await ctx.tx.update(users).set({ settings: { ...settings, docTypes: [...list, kind] }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
 }
 
 export async function ownPerson(ctx: Pick<Ctx, "tx" | "ownerId">, personId: string | null | undefined) {
@@ -193,7 +204,7 @@ async function setProtectedId(ctx: Ctx, documentId: string, idNumber: string | n
 }
 
 const docInput = z.object({
-  title: zText(160), personId: zId.optional().nullable(), kind: z.enum(DOC_KINDS).default("other"), issuer: zOptText(200),
+  title: zText(160), personId: zId.optional().nullable(), kind: z.union([z.enum(DOC_KINDS), z.string().trim().min(1).max(60)]).default("other"), issuer: zOptText(200),
   issuedOn: zDate.optional().nullable(), expiresOn: zDate.optional().nullable(),
   /** Full ID number: encrypted server-side, never logged, never sent to AI. Omit to keep, "" to clear. */
   idNumber: z.string().trim().max(64).optional(),
@@ -213,6 +224,7 @@ export const documentCreate = defineOp({
       ownerId: ctx.ownerId, title: i.title, personId: i.personId ?? null, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes,
     }).returning({ id: documents.id });
     await setProtectedId(ctx, d.id, i.idNumber || undefined);
+    await rememberDocType(ctx, i.kind);
     if (i.trackExpiry && i.expiresOn) {
       const kind = (EXPIRY_KINDS as readonly string[]).includes(i.kind) ? (i.kind as (typeof EXPIRY_KINDS)[number]) : "custom";
       const [it] = await ctx.tx.insert(expiryItems).values({ ownerId: ctx.ownerId, label: i.title, personId: i.personId ?? null, kind, expiresOn: i.expiresOn, issuer: i.issuer, documentId: d.id,
@@ -233,6 +245,7 @@ export const documentUpdate = defineOp({
     await ownPerson(ctx, i.personId);
     await ctx.tx.update(documents).set({ title: i.title, personId: i.personId ?? null, kind: i.kind, issuer: i.issuer, issuedOn: i.issuedOn ?? null, expiresOn: i.expiresOn ?? null, tags: i.tags, notes: i.notes, updatedAt: ctx.now }).where(eq(documents.id, i.id));
     await setProtectedId(ctx, i.id, i.clearId ? null : i.idNumber || undefined);
+    await rememberDocType(ctx, i.kind);
     // Keep the linked Expiries entry in step (name and date).
     const linked = await ctx.tx.select({ id: expiryItems.id }).from(expiryItems).where(and(eq(expiryItems.documentId, i.id), eq(expiryItems.ownerId, ctx.ownerId), isNull(expiryItems.deletedAt)));
     for (const it of linked) {

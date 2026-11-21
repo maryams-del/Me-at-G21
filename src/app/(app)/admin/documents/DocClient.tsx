@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
 import { useRevealClose } from "@/components/OpForm";
 import { Dropdown } from "@/components/GlyphSelect";
+import { docKindOptions } from "@/lib/docTypes";
 import { CountdownRail, TimeWheel } from "@/components/ReminderPickers";
 import { Icon } from "@/components/icons";
 
@@ -125,16 +126,35 @@ export function ShareFile({ fileId, filename, contentType, iconOnly, className }
   );
 }
 
-export const DOC_KIND_OPTIONS = [
-  { value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "transcript", label: "Transcript" },
-  { value: "certificate", label: "Certificate" }, { value: "cv", label: "CV" }, { value: "application", label: "Application file" },
-  { value: "letter", label: "Official letter" }, { value: "other", label: "Other" },
-];
+export const DOC_KIND_OPTIONS = docKindOptions([]);
+
+/** Type picker: choosing "Other…" asks what it is (required); that name is saved as a type you can pick next time. */
+export function DocKindField({ kinds, initial, id }: { kinds: { value: string; label: string }[]; initial: string; id: string }) {
+  const opts = kinds.some((k) => k.value === initial) ? kinds : [...kinds.filter((k) => k.value !== "other"), { value: initial, label: initial }, { value: "other", label: "Other…" }];
+  const [sel, setSel] = useState(initial);
+  return (
+    <>
+      <div className="field" role="group"><span className="label">Type</span>
+        <Dropdown name="kind" value={sel} onChange={setSel} ariaLabel="Type" options={opts} /></div>
+      {sel === "other" && (
+        <label className="field"><span className="label">What type is it?</span>
+          <input id={id} className="input" name="customKind" required maxLength={60} placeholder="Car licence" autoCapitalize="words" onInput={titleCaseInput} autoFocus /></label>
+      )}
+    </>
+  );
+}
+/** The type to save: the typed name when "Other…" is picked. Returns null when that name is missing. */
+export function kindFrom(fd: FormData): string | null {
+  const k = String(fd.get("kind") ?? "").trim();
+  if (k !== "other") return k || "other";
+  const c = titleCase(String(fd.get("customKind") ?? "").trim());
+  return c || null;
+}
 
 /** New document with an optional file chosen up front: saves the details, then encrypts + uploads the file. */
 export type PersonOpt = { id: string; name: string; relation: string };
 
-export function NewDocumentForm({ onDone, whose }: { onDone?: () => void; whose: { value: string; label: string }[] }) {
+export function NewDocumentForm({ onDone, whose, kinds }: { onDone?: () => void; whose: { value: string; label: string }[]; kinds: { value: string; label: string }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,13 +177,15 @@ export function NewDocumentForm({ onDone, whose }: { onDone?: () => void; whose:
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
+    const kind = kindFrom(fd);
+    if (!kind) { setTab("details"); setError("Add what type of document it is."); return; }
     const personId = v("personId") || null;
     const title = whose.find((w) => w.value === (personId ?? ""))?.label ?? whose[0]?.label ?? "Me";
     let toSend = file, note: string | null = null;
     if (file && compress) ({ file: toSend, note } = await compressIfImage(file));
     if (toSend && toSend.size > 4 * 1024 * 1024) { setError(toSend.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress file to reduce size” to shrink a photo." : "Files must be 4 MB or smaller."); return; }
     const input: Record<string, unknown> = {
-      title, personId, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
+      title, personId, kind, issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
       notes: v("notes") || null, trackExpiry: remind,
     };
     if (remind) {
@@ -201,8 +223,7 @@ export function NewDocumentForm({ onDone, whose }: { onDone?: () => void; whose:
       </div>
       <div className="grid gap-4 sm:grid-cols-2" hidden={tab !== "details"}>
         <div className="field"><span className="label" id="doc-whose">Whose is it?</span><Dropdown name="personId" initial="" labelledBy="doc-whose" options={whose} /></div>
-        <div className="field" role="group"><span className="label">Type</span>
-          <Dropdown name="kind" initial="passport" ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
+        <DocKindField kinds={kinds} initial="passport" id="doc-new-kind" />
         <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" autoCapitalize="words" onInput={titleCaseInput} /></label>
         <label className="field"><span className="label">Issue date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="issuedOn" /></label>
         <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" value={expires} onChange={(e) => setExpires(e.target.value)} /></label>

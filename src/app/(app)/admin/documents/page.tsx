@@ -8,18 +8,17 @@ import { ItemRow } from "@/components/OpForm";
 import { fmtDate } from "@/lib/format";
 import { NewDocumentForm } from "./DocClient";
 import { personOptions, personName, selfNameOf } from "@/lib/people";
+import { docKindOptions, docTypesOf } from "@/lib/docTypes";
 
-const KINDS = [
-  { value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "transcript", label: "Transcript" },
-  { value: "certificate", label: "Certificate" }, { value: "cv", label: "CV" }, { value: "application", label: "Application file" },
-  { value: "letter", label: "Official letter" }, { value: "other", label: "Other" },
-];
 const SORTS = [{ value: "", label: "By type" }, { value: "expiry", label: "Expiring soonest" }, { value: "recent", label: "Recently updated" }];
 const kb = (n: number) => (n === 0 ? "0 MB" : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; q?: string; sort?: string; reminders?: string; person?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
+  const kindOpts = docKindOptions(docTypesOf(o.settings));
+  // Filter list: every type, with "Other" for older documents saved before types could be named.
+  const KINDS = [...kindOpts.filter((k) => k.value !== "other"), { value: "other", label: "Other" }];
   const kind = KINDS.some((k) => k.value === sp.kind) ? sp.kind : undefined;
   const q = sp.q?.trim().slice(0, 80) || undefined;
   const people = await peopleList(o.id);
@@ -60,7 +59,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
         ...(sp.sort ? [{ label: SORTS.find((x) => x.value === sp.sort)?.label ?? sp.sort, href: withoutParam("/admin/documents", params, "sort") }] : []),
       ]} />
       <PageAddPanel title="Add a document">
-        <NewDocumentForm whose={whose} />
+        <NewDocumentForm whose={whose} kinds={kindOpts} />
       </PageAddPanel>
       </PageAddProvider>
       <div className="mb-8" />

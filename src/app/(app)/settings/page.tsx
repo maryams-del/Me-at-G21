@@ -31,6 +31,10 @@ export default async function SettingsPage() {
           <div className="panel p-4 grid gap-4">
             <p className="t-small text-ink-2 prose-w">Invite someone to make their own Me @ G21. They sign up with the email you add here and get a separate, private account with their own passkey. You never see their things, and they never see yours.</p>
             <OpForm op="invite.add" compact resetOnSuccess submitLabel="Invite" fields={[{ name: "email", label: "Their email", required: true, placeholder: "name@example.com" }]} />
+            {invited.length > 0 && (() => {
+              const done = invited.filter((e) => joined.get(e) === "complete").length;
+              return <p className="t-small"><strong>{done}</strong> of {invited.length} invited {invited.length === 1 ? "person has" : "people have"} signed up. You&apos;ll get an email each time someone finishes signing up.</p>;
+            })()}
             {invited.length > 0 && (
               <ul className="list">
                 {invited.map((e) => {
