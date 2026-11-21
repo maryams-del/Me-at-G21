@@ -3,22 +3,14 @@ import { PeopleManager } from "../People";
 import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
-import { OpForm, OpButton, ItemRow, type FieldDef } from "@/components/OpForm";
-import { fmtDate, fmtDateTime } from "@/lib/format";
-import { UploadButton, ProtectedId, ShareFile, NewDocumentForm } from "./DocClient";
+import { ItemRow } from "@/components/OpForm";
+import { fmtDate } from "@/lib/format";
+import { NewDocumentForm } from "./DocClient";
 
 const KINDS = [
   { value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "transcript", label: "Transcript" },
   { value: "certificate", label: "Certificate" }, { value: "cv", label: "CV" }, { value: "application", label: "Application file" },
   { value: "letter", label: "Official letter" }, { value: "other", label: "Other" },
-];
-const baseFields: FieldDef[] = [
-  { name: "title", label: "Title", required: true, placeholder: "Passport" },
-  { name: "kind", label: "Type", type: "select", required: true, options: KINDS },
-  { name: "issuer", label: "Issued by", nullable: true },
-  { name: "issuedOn", label: "Issue date", type: "date", nullable: true },
-  { name: "expiresOn", label: "Expiry date", type: "date", nullable: true },
-  { name: "notes", label: "Notes", type: "textarea", nullable: true },
 ];
 const SORTS = [{ value: "", label: "By type" }, { value: "expiry", label: "Expiring soonest" }, { value: "recent", label: "Recently updated" }];
 const kb = (n: number) => (n === 0 ? "0 MB" : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -71,57 +63,13 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
       </div>
       {rows.length === 0 ? (filtered ? <Empty>No documents match{kind ? ` type “${KINDS.find((k) => k.value === kind)?.label}”` : ""}{q ? ` “${q}”` : ""}.</Empty> : <Empty>No documents yet. Add your passport, national ID, transcripts, certificates or CV versions.</Empty>) : (
         <ul className="grid gap-4 md:grid-cols-2">
-          {rows.map(({ doc: d, files, reminders: rem }) => {
+          {rows.map(({ doc: d, files }) => {
             const latest = files[0];
             return (
             <li key={d.id} className="panel p-4 grid gap-2 content-start">
               <ItemRow del={{ op: "document.delete", input: { id: d.id }, confirm: `Delete “${d.title}”, its ID number and all its files?`, label: "Delete document" }} name={d.title}
                 head={<><h2 className="t-h3 min-w-0 truncate">{d.title}</h2><p className="t-meta">{d.expiresOn ? `Expires ${fmtDate(d.expiresOn)}` : d.issuedOn ? `Issued ${fmtDate(d.issuedOn)}` : ""}</p></>}
-                edit={
-                <div className="grid gap-4">
-                  <div>
-                    <h3 className="t-small font-semibold mb-1">Files</h3>
-                    {files.length ? (
-                      <ul className="list">
-                        {files.map((f, i) => (
-                          <li key={f.id} className="py-2 grid gap-1">
-                            <span className="t-small break-words">{f.filename} <span className="t-meta">v{f.version}{i === 0 ? " (latest)" : ""}, {kb(f.sizeBytes)}, {fmtDateTime(f.createdAt, o.timezone)}</span></span>
-                            <span className="flex flex-wrap gap-1">
-                              <ShareFile fileId={f.id} filename={f.filename} contentType={f.contentType} />
-                              <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}?view=1`} target="_blank" rel="noopener">View</a>
-                              <a className="btn btn-sm btn-ghost" href={`/api/documents/file/${f.id}`}>Download</a>
-                              <OpButton op="document.file.delete" input={{ fileId: f.id }} label="Delete" className="btn btn-sm btn-ghost" confirmText={`Delete ${f.filename} v${f.version}? This can't be undone.`} />
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : <p className="t-meta">No file uploaded.</p>}
-                    <div className="mt-2"><UploadButton documentId={d.id} hasFiles={files.length > 0} /></div>
-                  </div>
-                  {d.idMasked && <div className="t-small"><span className="text-ink-3 mr-2">ID number</span><ProtectedId documentId={d.id} masked={d.idMasked} /></div>}
-                  {d.expiresOn && (
-                    <div>
-                      <h3 className="t-small font-semibold mb-2">Expiry reminders</h3>
-                      <OpForm op="document.reminders" fixed={{ documentId: d.id }} submitLabel="Save reminders" compact
-                        initial={{ remindersEnabled: !!rem?.remindersEnabled, reminderOffsetsDays: rem?.reminderOffsetsDays ?? [-90, -30, -7], reminderTime: rem?.reminderTime ?? "09:00" }}
-                        fields={[
-                          { name: "reminderOffsetsDays", label: "Remind me", type: "intlist", negative: true, anchorDate: d.expiresOn },
-                          { name: "reminderTime", label: "Reminder time", type: "time", required: true },
-                          { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
-                        ]} />
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="t-small font-semibold mb-2">Details</h3>
-                    <OpForm op="document.update" fixed={{ id: d.id, personId: d.personId }} initial={{ ...d, idNumber: "" }} submitLabel="Save details" compact fields={[
-                      ...baseFields.slice(0, 5),
-                      { name: "idNumber", label: d.idMasked ? "Replace ID number" : "ID number", help: d.idMasked ? "Leave empty to keep the current number." : undefined },
-                      ...(d.idMasked ? [{ name: "clearId", label: "Remove the stored ID number", type: "checkbox", wide: true } as FieldDef] : []),
-                      baseFields[5],
-                    ]} 
-                      deleteAction={{ op: "document.delete", input: { id: d.id }, confirm: `Delete “${d.title}”, its ID number and all its files?`, label: "Delete document" }} />
-                  </div>
-                </div>}>
+                editHref={`/admin/documents/${d.id}`}>
               {latest
                 ? <a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0" href={`/api/documents/file/${latest.id}?view=1`} target="_blank" rel="noopener">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>

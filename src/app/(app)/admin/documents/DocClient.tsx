@@ -7,6 +7,7 @@ import { useRevealClose } from "@/components/OpForm";
 import { Dropdown } from "@/components/GlyphSelect";
 import { CountdownRail, TimeWheel } from "@/components/ReminderPickers";
 import { titleCaseInput } from "@/lib/titlecase";
+import { Icon } from "@/components/icons";
 
 /**
  * Optional, owner-chosen compression for photos: resize to ≤2000 px on the long side and re-encode as
@@ -34,7 +35,7 @@ export async function compressIfImage(file: File): Promise<{ file: File; note: s
   }
 }
 
-async function uploadFile(documentId: string, file: File) {
+export async function uploadFile(documentId: string, file: File) {
   const fd = new FormData();
   fd.set("documentId", documentId);
   fd.set("file", file);
@@ -105,11 +106,11 @@ export function ProtectedId({ documentId, masked }: { documentId: string; masked
 }
 
 /** Share via the device share sheet (Mail, AirDrop, WhatsApp…) — no public link is ever created. */
-export function ShareFile({ fileId, filename, contentType }: { fileId: string; filename: string; contentType: string }) {
+export function ShareFile({ fileId, filename, contentType, iconOnly, className }: { fileId: string; filename: string; contentType: string; iconOnly?: boolean; className?: string }) {
   const [busy, setBusy] = useState(false);
   if (typeof navigator !== "undefined" && !("share" in navigator)) return null;
   return (
-    <button className="btn btn-sm btn-ghost" disabled={busy} onClick={async () => {
+    <button type="button" className={className ?? "btn btn-sm btn-ghost"} disabled={busy} aria-label={iconOnly ? `Share ${filename}` : undefined} title={iconOnly ? "Share" : undefined} onClick={async () => {
       if (!(await askConfirm(`Share “${filename}” using your device's share sheet?`, { note: "Whoever you send it to will have a copy.", confirmLabel: "Share" }))) return;
       setBusy(true);
       try {
@@ -120,11 +121,11 @@ export function ShareFile({ fileId, filename, contentType }: { fileId: string; f
         await navigator.share({ files: [file], title: filename });
       } catch (e) { if ((e as Error).name !== "AbortError") toast((e as Error).message, "error"); }
       finally { setBusy(false); }
-    }}>{busy ? "Preparing…" : "Share"}</button>
+    }}>{iconOnly ? <Icon name="share" size={18} /> : busy ? "Preparing…" : "Share"}</button>
   );
 }
 
-const DOC_KIND_OPTIONS = [
+export const DOC_KIND_OPTIONS = [
   { value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "transcript", label: "Transcript" },
   { value: "certificate", label: "Certificate" }, { value: "cv", label: "CV" }, { value: "application", label: "Application file" },
   { value: "letter", label: "Official letter" }, { value: "other", label: "Other" },

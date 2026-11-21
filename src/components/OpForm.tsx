@@ -5,6 +5,7 @@ import { createContext, useContext, useId, useState } from "react";
 export const RevealCtx = createContext<{ close: () => void } | null>(null);
 /** True inside an EntryCard, which already shows the big countdown. */
 export const InEntryCardCtx = createContext(false);
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "./api";
 import { CountdownRail, TimeWheel } from "./ReminderPickers";
@@ -571,7 +572,7 @@ type DelAction = { op: string; input: unknown; confirm: string; note?: string; l
  * A list item whose name line carries the pencil (edit) and bin (delete) icons at its right end.
  * The edit form opens under the item in a panel with its own X.
  */
-export function ItemRow({ head, aside, children, edit, del, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit: React.ReactNode; del?: DelAction; name?: string }) {
+export function ItemRow({ head, aside, children, edit, editHref, del, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit?: React.ReactNode; editHref?: string; del?: DelAction; name?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
@@ -580,14 +581,16 @@ export function ItemRow({ head, aside, children, edit, del, name = "this" }: { h
         <div className="min-w-0 flex-1">{head}</div>
         {aside && <div className="shrink-0">{aside}</div>}
         <div className="entry-actions">
-          <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={open ? "Close editing" : `Edit ${name}`} title="Edit" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-            <Icon name="edit" size={17} />
-          </button>
+          {editHref
+            ? <Link href={editHref} className="icon-ghost" style={{ margin: 0 }} aria-label={`Edit ${name}`} title="Edit"><Icon name="edit" size={17} /></Link>
+            : <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={open ? "Close editing" : `Edit ${name}`} title="Edit" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+                <Icon name="edit" size={17} />
+              </button>}
           {del && <DeleteIcon op={del.op} input={del.input} confirm={del.confirm} note={del.note} label={`Delete ${name}`} redirectTo={del.redirectTo} />}
         </div>
       </div>
       {children}
-      {open && (
+      {open && !editHref && (
         <div id={id} className="panel form-panel panel-closable p-4 mt-1 preview-enter">
           <PanelClose onClick={() => setOpen(false)} label="Close editing" />
           <p className="t-h3 mb-3 pr-10">Edit</p>
