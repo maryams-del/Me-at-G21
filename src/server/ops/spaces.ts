@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { customSpaces, customSpaceItems, users } from "@/db/schema";
 import { defineOp, zId, zOptText, zText } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { NEW_SECTION, SPACE_GLYPHS } from "@/lib/spaces";
+import { MAX_PINS, NEW_SECTION, SPACE_GLYPHS } from "@/lib/spaces";
 
 /* ───────────── Custom spaces: owner-made sections holding a simple list ───────────── */
 
@@ -118,5 +118,19 @@ export const spacesOrder = defineOp({
     await ctx.tx.update(users).set({ settings: { ...(u?.settings ?? {}), spacesOrder: i }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
     await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, "Reordered spaces");
     return { id: null, message: "Order saved" };
+  },
+});
+
+/** The owner's pinned spaces (up to three, left to right), shown at the top of the Spaces page. */
+export const spacesPins = defineOp({
+  name: "spaces.pins", module: "spaces", label: "Pin spaces", aiAllowed: false,
+  schema: z.object({ hrefs: z.array(z.string().trim().min(1).max(200)).max(MAX_PINS) }),
+  summarize: () => "Pin spaces",
+  async run(ctx, i) {
+    const hrefs = [...new Set(i.hrefs)].slice(0, MAX_PINS);
+    const [u] = await ctx.tx.select({ settings: users.settings }).from(users).where(eq(users.id, ctx.ownerId));
+    await ctx.tx.update(users).set({ settings: { ...(u?.settings ?? {}), spacesPins: hrefs }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+    await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, "Changed pinned spaces");
+    return { id: null, message: "Pins saved" };
   },
 });

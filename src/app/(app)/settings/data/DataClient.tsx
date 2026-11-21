@@ -1,4 +1,5 @@
 "use client";
+import { askConfirm } from "@/components/ConfirmDialog";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { stepUp, toast } from "@/components/api";
@@ -8,7 +9,10 @@ import { backupItems } from "@/lib/backup-labels";
 /** Private sections ask before downloading. */
 export function PrivateCsvLink({ href, label }: { href: string; label: string }) {
   return (
-    <a href={href} className="t-small" onClick={(e) => { if (!window.confirm("This file contains your period log in plain text. Download it and keep it somewhere private?")) e.preventDefault(); }}>{label}</a>
+    <a href={href} className="t-small" onClick={async (e) => {
+      e.preventDefault();
+      if (await askConfirm("This file contains your period log in plain text.", { note: "Download it and keep it somewhere private?", confirmLabel: "Download" })) window.location.href = href;
+    }}>{label}</a>
   );
 }
 
@@ -161,7 +165,7 @@ export function RestorePanel({ stored, pending = 0 }: { stored: { id: string; la
   };
 
   const restore = async () => {
-    if (!window.confirm("Replace ALL your current records with this backup? Your current data will be saved as a safety backup first.")) return;
+    if (!(await askConfirm("Replace ALL your current records with this backup?", { note: "Your current data will be saved as a safety backup first.", danger: true, confirmLabel: "Yes, replace" }))) return;
     setBusy(true); setError(null);
     try {
       if (isFull && portable && file) {

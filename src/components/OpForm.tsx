@@ -1,4 +1,5 @@
 "use client";
+import { askConfirm, askConfirmFor } from "./ConfirmDialog";
 import { createContext, useContext, useId, useState } from "react";
 
 export const RevealCtx = createContext<{ close: () => void } | null>(null);
@@ -8,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "./api";
 import { CountdownRail, TimeWheel } from "./ReminderPickers";
 import { Icon, type IconName } from "./icons";
+import { GlyphSelect } from "./GlyphSelect";
 import { countdown, daysBetween } from "@/lib/countdown";
 import { dmy } from "@/lib/time";
 
@@ -22,7 +24,7 @@ const REMINDER_FIELDS = new Set(["reminderOffsetsDays", "reminderTime", "reminde
 export type FieldDef = {
   name: string;
   label: string;
-  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime" | "checks" | "interval";
+  type?: "text" | "amount" | "int" | "date" | "time" | "select" | "textarea" | "checkbox" | "intlist" | "datetime" | "checks" | "interval" | "glyph";
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -42,6 +44,8 @@ export type FieldDef = {
   /** send under a different key */
   sendAs?: string;
   wide?: boolean;
+  /** fields sharing a `row` sit side by side on one line, on every screen size (e.g. name + icon) */
+  row?: string;
   /** text/int: suggestions shown as you type (you can still type anything) */
   suggestions?: string[];
   /** only show this field while another field has one of these values */
@@ -66,7 +70,8 @@ type Props = {
   fixed?: Record<string, unknown>;
   submitLabel: string;
   successMessage?: string;
-  onDone?: () => void;
+  /** Runs after a successful save, with what the server sent back (e.g. the new id). */
+  onDone?: (res: { id?: string | null; message?: string }) => void;
   /** Use a custom endpoint instead of /api/ops/<op> (e.g. resolving a draft). */
   endpoint?: string;
   /** Send `{ ...nestExtra, [nestKey]: { ...nestBase, ...input } }` instead of the bare input (e.g. resolving a draft). */
@@ -79,7 +84,7 @@ type Props = {
   /** Clear the fields after a successful save (for quick-add forms). */
   resetOnSuccess?: boolean;
   /** Shows a bin button beside Save that asks before deleting the entry. */
-  deleteAction?: { op: string; input: unknown; confirm: string; label?: string };
+  deleteAction?: { op: string; input: unknown; confirm: string; label?: string; /** shown under the question (default: "You can’t undo this.") */ note?: string; /** a labelled button beside Save instead of the bin icon */ asButton?: boolean; /** go here after deleting (e.g. the page itself is gone) */ redirectTo?: string };
 };
 
 function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
@@ -192,16 +197,16 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText && !(await askConfirmFor(confirmText))) return;
     setBusy(true); setError(null);
     const form = e.currentTarget;
     const input = { ...toInput(fields.filter(visible), new FormData(form)), ...fixed };
     try {
       const body = nestKey ? { ...nestExtra, [nestKey]: { ...nestBase, ...input } } : input;
-      const res = await api<{ message?: string }>(endpoint ?? `/api/ops/${op}`, body);
+      const res = await api<{ id?: string | null; message?: string }>(endpoint ?? `/api/ops/${op}`, body);
       toast(successMessage ?? res.message ?? "Saved");
       if (resetOnSuccess) form.reset();
-      onDone?.();
+      onDone?.(res);
       reveal?.close();
       router.refresh();
     } catch (err) {
@@ -219,7 +224,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
       const r = await api<{ message?: string }>(`/api/ops/${deleteAction.op}`, deleteAction.input);
       toast(r.message ?? "Deleted");
       reveal?.close();
-      router.refresh();
+      if (deleteAction.redirectTo) router.push(deleteAction.redirectTo); else router.refresh();
     } catch (err) {
       setError({ message: err instanceof Error ? err.message : "Couldn't delete. Nothing was changed." });
       setConfirmDel(false);
@@ -262,14 +267,14 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
         <div key={key} role={tabs.length > 1 ? "tabpanel" : undefined} id={`${id}-panel-${key}`} aria-labelledby={tabs.length > 1 ? `${id}-tab-${key}` : undefined} hidden={tabs.length > 1 && tab !== key}>
           {key === "reminders" ? reminderBox() : (
             <div className={fs.length > 1 || (key === "details" && hasTabs) ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-              {(fs as readonly FieldDef[]).filter(visible).map((f) => renderField(f))}
+              {renderRows((fs as readonly FieldDef[]).filter(visible))}
               {key === "details" && hasTabs && <div className="sm:col-span-2 rule-t pt-4">{reminderSwitch("details")}</div>}
             </div>
           )}
         </div>
       )) : (
         <div className={fields.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-          {fields.filter(visible).map((f) => renderField(f))}
+          {renderRows(fields.filter(visible))}
         </div>
       )}
       {error && <p role="alert" className="error">{error.message}</p>}
@@ -278,7 +283,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
       ) : confirmDel && deleteAction ? (
         <div role="alertdialog" aria-labelledby={`${id}-delq`} className="confirm-box preview-enter">
           <p id={`${id}-delq`} className="font-semibold">{deleteAction.confirm}</p>
-          <p className="t-small text-ink-2">You can’t undo this.</p>
+          <p className="t-small text-ink-2">{deleteAction.note ?? "You can’t undo this."}</p>
           <div className="flex gap-2">
             <button type="button" className="btn flex-1" onClick={() => setConfirmDel(false)} autoFocus>Keep it</button>
             <button type="button" className="btn flex-1 btn-delete" disabled={deleting} onClick={doDelete}>{deleting ? "Deleting…" : "Yes, delete"}</button>
@@ -286,7 +291,13 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
         </div>
       ) : (
         <div className="form-foot">
-          {deleteAction && (
+          {deleteAction?.asButton && (
+            <button type="button" className="btn flex-1 btn-danger" style={{ minHeight: 48 }} disabled={deleting}
+              onClick={async () => { if (await askConfirm(deleteAction.confirm, { note: deleteAction.note ?? "You can’t undo this.", danger: true })) void doDelete(); }}>
+              <Icon name="trash" size={16} />{deleteAction.label ?? "Delete"}
+            </button>
+          )}
+          {deleteAction && !deleteAction.asButton && (
             <button type="button" className="trash-btn" aria-label={deleteAction.label ?? "Delete this entry"} title={deleteAction.label ?? "Delete"} onClick={() => setConfirmDel(true)}>
               <Icon name="trash" size={18} />
             </button>
@@ -308,6 +319,19 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
         </div>
       </div>
     );
+  }
+
+  /** Fields that share a `row` go side by side in one full-width line; the rest render as usual. */
+  function renderRows(fs: readonly FieldDef[]) {
+    const out: React.ReactNode[] = [];
+    for (let i = 0; i < fs.length; i++) {
+      const f = fs[i];
+      if (!f.row) { out.push(renderField(f)); continue; }
+      const group = [f];
+      while (fs[i + 1]?.row === f.row) group.push(fs[++i]);
+      out.push(<div key={`row-${f.row}`} className="field-row sm:col-span-2">{group.map((g) => renderField(g))}</div>);
+    }
+    return out;
   }
 
   function renderField(f: FieldDef, inReminders = false) {
@@ -334,6 +358,12 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               <span id={`${fid}-l`} className="label">{f.label}{f.required ? "" : <span className="t-meta"> (optional)</span>}</span>
               <TimeWheel name={f.name} initial={initial[f.name]} nullable={f.nullable || !f.required} label={f.label} />
               {f.help && <span className="t-meta">{f.help}</span>}
+            </div>
+          );
+          if (f.type === "glyph") return (
+            <div key={f.name} className="field min-w-0" role="group" aria-labelledby={`${fid}-l`}>
+              <span id={`${fid}-l`} className="label">{f.label}</span>
+              <GlyphSelect id={fid} name={f.name} options={f.options ?? []} initial={val(f)} labelledBy={`${fid}-l`} />
             </div>
           );
           if (f.type === "checkbox") return (
@@ -401,7 +431,7 @@ export function OpButton({ op, input, label, className = "btn", confirmText, suc
   const [busy, setBusy] = useState(false);
   return (
     <button className={className} disabled={busy} aria-label={ariaLabel} onClick={async () => {
-      if (confirmText && !window.confirm(confirmText)) return;
+      if (confirmText && !(await askConfirmFor(confirmText))) return;
       setBusy(true);
       try {
         const r = await api<{ message?: string }>(`/api/ops/${op}`, input);
