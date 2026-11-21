@@ -1,4 +1,5 @@
 import "server-only";
+import { starterSettings } from "@/lib/starter";
 import { z } from "zod";
 import { and, desc, eq, gt, lt, isNull, ne, sql, count } from "drizzle-orm";
 import {
@@ -120,7 +121,9 @@ const enrollVerify: Handler = async (body) => {
   let [u] = await getDb().select().from(users).where(eq(users.email, email));
   if (u?.onboardingStep === "complete") throw new AuthError(400, "This account is already set up. Sign in instead.");
   if (!u) {
-    [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey" }).returning();
+    // Invited people start with the basic spaces; the site owner gets everything.
+    const settings = email.trim().toLowerCase() === env.ownerEmail ? undefined : starterSettings();
+    [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey", ...(settings ? { settings } : {}) }).returning();
   } else {
     await getDb().update(users).set({ emailVerifiedAt: new Date(), onboardingStep: u.onboardingStep === "email" ? "passkey" : u.onboardingStep }).where(eq(users.id, u.id));
   }

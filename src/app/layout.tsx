@@ -29,7 +29,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export async function generateViewport(): Promise<Viewport> {
   const theme = (await cookies()).get(THEME_COOKIE)?.value;
   return {
-    width: "device-width", initialScale: 1, viewportFit: "cover",
+    // maximumScale stops phones zooming in when you tap into a field.
+    width: "device-width", initialScale: 1, maximumScale: 1, viewportFit: "cover",
     themeColor: theme === "dark" || theme === "light"
       ? THEME_COLORS[theme]
       : [{ media: "(prefers-color-scheme: light)", color: THEME_COLORS.light }, { media: "(prefers-color-scheme: dark)", color: THEME_COLORS.dark }],

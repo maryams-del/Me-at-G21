@@ -745,3 +745,9 @@ body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; hei
   .pill-action { min-height: 36px; font-size: .78rem; }
   .icon-ghost { width: 40px; height: 40px; }
 }
+
+/* Phones zoom in on any field with text under 16px when you tap it. Keep every field at 16px on touch screens. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea,
+  .input, .select, .textarea, .search-pill input, .filter-body .input, .filter-body .select { font-size: 16px !important; }
+}
