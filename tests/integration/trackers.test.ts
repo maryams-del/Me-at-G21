@@ -107,7 +107,9 @@ describe("Test 4 — make-up fasts ledger", () => {
   });
   it("no accidental negative balance", async () => {
     await expect(op(at("2026-11-18"), "fasts.complete", { onDate: "2026-11-17" })).rejects.toThrow(/don't owe any fasts/);
-    await expect(op(at("2026-11-18"), "fasts.adjust", { delta: -2, onDate: "2026-11-18", reason: "x" })).rejects.toThrow(/override/);
+    await expect(op(at("2026-11-18"), "fasts.adjust", { delta: -2, onDate: "2026-11-18", reason: "x" })).rejects.toThrow(/can't go below 0/);
+    // The old "override" escape hatch is gone: the balance can never be pushed below 0.
+    await expect(op(at("2026-11-18"), "fasts.adjust", { delta: -2, onDate: "2026-11-18", reason: "x", overrideNegative: true })).rejects.toThrow(/can't go below 0/);
   });
   it("Hijri rule adds on the Umm al-Qura date only once that date has passed", async () => {
     await op(at("2026-11-18"), "fasts.rule.save", { amount: 5, calendar: "hijri", month: 10, day: 1, startYear: 1447 });

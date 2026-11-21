@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { getDb, closeDb } from "@/db";
 import { reminders, zakatCalculations, zakatPayments, charityPayments } from "@/db/schema";
@@ -17,7 +17,11 @@ beforeEach(async () => { await resetDb(); owner = await makeOwner(); });
 afterAll(async () => { await closeDb(); });
 
 describe("Subscriptions (PRD 4.10)", () => {
+  // "Upcoming charges" are worked out from today's date, so pin today to the day this scenario is set on.
+  afterEach(() => { vi.useRealTimers(); });
   it("renewal and trial reminders, monthly equivalent, upcoming charges; cancelling stops reminders", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(at("2026-11-18"));
     const s = await op(at("2026-11-18"), "subscription.create", { name: "Cloud storage", amount: "119.88", currency: "SAR", cadence: "yearly", nextBillingDate: "2026-12-01", trialEndsOn: "2026-11-25", paymentLabel: "Visa ending 4821", reminderOffsetsDays: [-3, 0], trialOffsetsDays: [-1] });
     await op(at("2026-11-18"), "subscription.create", { name: "Music", amount: "21.99", currency: "SAR", cadence: "monthly", nextBillingDate: "2026-11-20" });
     const r = await pending("subscription");
