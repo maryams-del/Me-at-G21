@@ -95,15 +95,29 @@ export function PasskeyStep({ onDone, again = false }: { onDone: () => void; aga
     setSupported(browserSupportsWebAuthn());
     platformAuthenticatorIsAvailable().then(setPlatform).catch(() => setPlatform(false));
   }, []);
+  // Fetch the passkey options before the tap, so the phone's passkey prompt opens straight from the tap.
+  // (Android Chrome cancels the prompt if too much happens between the tap and the request.)
+  type Opts = Parameters<typeof startRegistration>[0]["optionsJSON"];
+  const ready = useRef<{ opts: Opts; at: number } | null>(null);
+  const prefetch = () => api<Opts>("/api/auth/passkey-register-options").then((opts) => { ready.current = { opts, at: Date.now() }; }).catch(() => { ready.current = null; });
+  useEffect(() => { prefetch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function create() {
     setBusy(true); setError(null);
     try {
-      const opts = await api<Parameters<typeof startRegistration>[0]["optionsJSON"]>("/api/auth/passkey-register-options");
+      const fresh = ready.current && Date.now() - ready.current.at < 4 * 60_000 ? ready.current.opts : null;
+      ready.current = null;
+      const opts = fresh ?? await api<Opts>("/api/auth/passkey-register-options");
       const response = await startRegistration({ optionsJSON: opts });
       await api("/api/auth/passkey-register-verify", { response, nickname: nickname || undefined });
       onDone();
     } catch (e) {
-      setError((e as Error).name === "InvalidStateError" ? "This device already has a passkey for your account." : msg(e, "Couldn't create a passkey on this device."));
+      const name = (e as Error)?.name;
+      const android = /android/i.test(navigator.userAgent);
+      setError(name === "InvalidStateError" ? "This device already has a passkey for your account."
+        : name === "NotAllowedError" && android
+          ? "Your phone didn't save the passkey. Check your phone has a screen lock (PIN, pattern or fingerprint), and that Google Password Manager is on: Settings › Passwords, passkeys & accounts. Then tap the button again and choose to save the passkey."
+          : msg(e, "Couldn't create a passkey on this device."));
+      prefetch();
     } finally { setBusy(false); }
   }
   if (supported === false) return <p className="panel p-4" style={{ background: "var(--tint-rust)" }}>This browser can&apos;t create passkeys. Open this page in a current version of Safari (iPhone/Mac), Chrome or Edge to continue setup.</p>;
@@ -119,7 +133,7 @@ export function PasskeyStep({ onDone, again = false }: { onDone: () => void; aga
       {again && <p className="t-small">Tip: name it after the device, e.g. “MacBook” or “Spare iPhone”.</p>}
       <label className="field"><span className="label">Name <span className="t-meta">(optional)</span></span><input className="input" placeholder={platform ? "iPhone" : "Security key"} value={nickname} maxLength={60} onChange={(e) => setNickname(e.target.value)} /></label>
       <button className="btn btn-primary" onClick={create} disabled={busy || platform === null}>
-        {busy ? "Waiting for your device…" : platform ? "Create passkey with Face ID / Touch ID" : "Create passkey"}
+        {busy ? "Waiting for your device…" : platform ? (typeof navigator !== "undefined" && /android/i.test(navigator.userAgent) ? "Create passkey with fingerprint or screen lock" : "Create passkey with Face ID / Touch ID") : "Create passkey"}
       </button>
       <Err e={error} />
     </div>
