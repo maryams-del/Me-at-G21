@@ -42,7 +42,7 @@ describe("Accounts for other people (invite-only)", () => {
     const { verifier } = await import("@/lib/crypto");
     const { env } = await import("@/lib/env");
     await op(owner.id, "invite.add", { email: "friend@example.com" });
-    const r = await op(owner.id, "invite.link", { email: "friend@example.com" }) as { url: string };
+    const r = await op(owner.id, "invite.link", { email: "friend@example.com" }) as unknown as { url: string };
     const invite = new URL(r.url).searchParams.get("invite")!;
     const [b64, token] = invite.split(".");
     expect(Buffer.from(b64, "base64url").toString()).toBe("friend@example.com");
