@@ -6,12 +6,21 @@ import "./globals.css";
 /** Tab icon follows the saved Dark/Light choice (or the device setting when there isn't one). */
 export async function generateMetadata(): Promise<Metadata> {
   const theme = (await cookies()).get(THEME_COOKIE)?.value;
-  const svg = theme === "dark" || theme === "light" ? FAVICONS[theme] : FAVICONS.auto;
+  const chosen = theme === "dark" || theme === "light" ? theme : null;
+  const set = FAVICONS[chosen ?? "light"];
   return {
     title: "Me @ G21",
     description: "Private personal dashboard",
     manifest: "/manifest.webmanifest?v=6",
-    icons: { shortcut: "/favicon-v6.ico", icon: [{ url: svg, type: "image/svg+xml" }, { url: "/favicon-v6.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon-v6.png" },
+    icons: {
+      shortcut: set.ico,
+      icon: chosen
+        ? [{ url: set.svg, type: "image/svg+xml" }, { url: set.png, sizes: "32x32", type: "image/png" }]
+        : [{ url: FAVICONS.autoSvg, type: "image/svg+xml" },
+           { url: FAVICONS.light.png, sizes: "32x32", type: "image/png", media: "(prefers-color-scheme: light)" },
+           { url: FAVICONS.dark.png, sizes: "32x32", type: "image/png", media: "(prefers-color-scheme: dark)" }],
+      apple: "/icons/apple-touch-icon-v6.png",
+    },
     appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
     robots: { index: false, follow: false },
   };

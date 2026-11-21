@@ -24,7 +24,16 @@ export function ThemeToggle() {
     meta.content = THEME_COLORS[t];
     document.head.appendChild(meta);
     // And the browser-tab icon, so it matches the logo in the chosen mode.
-    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]').forEach((l) => { l.href = FAVICONS[t]; });
+    // Every tab-icon link (SVG, PNG and ICO) is replaced, so each browser picks up the new one straight away.
+    document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]').forEach((l) => l.remove());
+    const add = (rel: string, href: string, type?: string, sizes?: string) => {
+      const l = document.createElement("link"); l.rel = rel; l.href = href;
+      if (type) l.type = type; if (sizes) l.setAttribute("sizes", sizes);
+      document.head.appendChild(l);
+    };
+    add("icon", FAVICONS[t].svg, "image/svg+xml");
+    add("icon", FAVICONS[t].png, "image/png", "32x32");
+    add("shortcut icon", FAVICONS[t].ico);
   }
 
   return (
