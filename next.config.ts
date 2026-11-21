@@ -34,13 +34,13 @@ const config: NextConfig = {
   // Icons now have versioned names; anything still asking for an old name gets the current mark.
   async redirects() {
     return [
-      { source: "/favicon.svg", destination: "/favicon-v3.svg", permanent: true },
-      { source: "/favicon.png", destination: "/favicon-v3.png", permanent: true },
-      { source: "/apple-touch-icon.png", destination: "/icons/apple-touch-icon-v3.png", permanent: true },
-      { source: "/apple-touch-icon-precomposed.png", destination: "/icons/apple-touch-icon-v3.png", permanent: true },
-      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512).png", destination: "/icons/:name-v3.png", permanent: true },
-      { source: "/favicon-v2.:ext(svg|png)", destination: "/favicon-v3.:ext", permanent: true },
-      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512)-v2.png", destination: "/icons/:name-v3.png", permanent: true },
+      { source: "/favicon.svg", destination: "/favicon-v5.svg", permanent: false },
+      { source: "/favicon.png", destination: "/favicon-v5.png", permanent: false },
+      { source: "/apple-touch-icon.png", destination: "/icons/apple-touch-icon-v5.png", permanent: false },
+      { source: "/apple-touch-icon-precomposed.png", destination: "/icons/apple-touch-icon-v5.png", permanent: false },
+      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512).png", destination: "/icons/:name-v5.png", permanent: false },
+      { source: "/favicon-:v(v2|v3|v4).:ext(svg|png|ico)", destination: "/favicon-v5.:ext", permanent: false },
+      { source: "/icons/:name(apple-touch-icon|icon-192|icon-512|maskable-512)-:v(v2|v3|v4).png", destination: "/icons/:name-v5.png", permanent: false },
     ];
   },
   async headers() {
@@ -51,6 +51,8 @@ const config: NextConfig = {
         { key: "X-Frame-Options", value: "SAMEORIGIN" },
         { key: "Content-Security-Policy", value: "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'self'" },
       ] },
+      // Browsers ask for /favicon.ico on their own (e.g. a bare PDF tab): make them re-check it, so the new logo shows.
+      { source: "/favicon.ico", headers: [{ key: "Cache-Control", value: "no-cache" }] },
       { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }, { key: "Service-Worker-Allowed", value: "/" }] },
     ];
   },
