@@ -29,8 +29,9 @@ const withPin = (pins: string[], href: string) => [href, ...pins.filter((h) => h
  * Press and hold any space to reorder: the sections turn into lists with three-line grips to drag,
  * then tap Done to save. Tap a section heading to rearrange the sections themselves.
  */
-export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addInitial }: {
+export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addInitial, focus }: {
   groups: StackGroup[]; pins: string[] | null; addFields?: FieldDef[]; addInitial?: Record<string, unknown>;
+  /** a section title or a space's href to scroll to (e.g. when a space is tapped on Home) */ focus?: string;
 }) {
   const router = useRouter();
   const STEP = 60, ROW_H = 52;
@@ -56,6 +57,17 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
     setFlash(focusHref); setFocusHref(null);
   }, [focusHref, groups]);
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 2400); return () => clearTimeout(t); }, [flash]);
+
+  // Opened from a Home tile: scroll to that section or space, give it a short glow, then tidy the address.
+  useEffect(() => {
+    if (!focus) return;
+    const el = document.querySelector<HTMLElement>(`[data-space="${CSS.escape(focus)}"], [data-section="${CSS.escape(focus)}"]`);
+    window.history.replaceState(null, "", "/more");
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: el.dataset.section ? "start" : "center" }));
+    if (el.dataset.space) setFlash(focus);
+    else { el.classList.add("section-flash"); setTimeout(() => el.classList.remove("section-flash"), 2400); }
+  }, [focus]);
 
   // Pinned: the owner's own picks once they've pinned anything; until then, the three spaces opened most on this device.
   const [autoPins, setAutoPins] = useState(PIN_DEFAULTS);
@@ -238,7 +250,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
         return (
-          <section key={g.title} aria-labelledby={`st-${gi}`} className="mt-7 min-w-0">
+          <section key={g.title} aria-labelledby={`st-${gi}`} data-section={g.title} className="mt-7 min-w-0 scroll-mt-24">
             <button type="button" className="flex items-center gap-2 mb-4 bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
               onClick={() => setSorting(true)} aria-label={`${g.title}. Rearrange sections`}>
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.tint }} aria-hidden />

@@ -54,6 +54,10 @@ export default async function Dashboard() {
     ...mine.map((c) => ({ key: c.space.id, name: c.space.name, href: `/spaces/${c.space.id}`, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const) })),
   ];
   // Built-in spaces follow the owner's own name / icon, and removed ones stay off the home screen.
+  // Tapping a space on Home opens the Spaces page (same as the Spaces tab) and scrolls to that section or space.
+  const SECTION_OF: Record<string, string> = { money: "Money", care: "Care", admin: "Life admin", education: "Education & career" };
+  const spacesLink = (x: { key: string; href: string }) =>
+    x.href === "/history" ? "/history" : `/more?focus=${encodeURIComponent(SECTION_OF[x.key] ?? x.href)}`;
   const spaces = spacesAll.flatMap((x) => {
     const b = isBuiltinHref(x.href) ? builtinSpace(x.href, o.settings) : null;
     if (!b) return [x];
@@ -74,7 +78,7 @@ export default async function Dashboard() {
           <ul className="grid grid-cols-4 gap-y-5">
             {spaces.map((sp) => (
               <li key={sp.key} className="min-w-0">
-                <Link href={`${sp.href}?from=home`} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
+                <Link href={spacesLink(sp)} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
               </li>
             ))}
           </ul>
