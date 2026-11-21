@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb, type Tx } from "@/db";
-import { captureDrafts } from "@/db/schema";
+import { captureDrafts, auditEvents } from "@/db/schema";
 import { getOp, allOps, defineOp, zId } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
 import "./finance";
@@ -28,6 +28,17 @@ export const draftDiscard = defineOp({
     if (!res.length) throw new UserError("Draft not found");
     await audit(ctx, "inbox", "discarded", "capture_draft", i.id, "Discarded a draft");
     return { id: i.id, message: "Draft discarded" };
+  },
+});
+
+/** Clear the History page: removes the activity log lines only. Entries themselves (donations, expiries, …) are untouched. */
+export const historyClear = defineOp({
+  name: "history.clear", module: "history", label: "Clear history", aiAllowed: false,
+  schema: z.object({}),
+  summarize: () => "Clear history",
+  async run(ctx) {
+    const gone = await ctx.tx.delete(auditEvents).where(eq(auditEvents.ownerId, ctx.ownerId)).returning({ id: auditEvents.id });
+    return { id: null, message: gone.length ? `History cleared (${gone.length} line${gone.length === 1 ? "" : "s"})` : "History was already empty" };
   },
 });
 
