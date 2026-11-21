@@ -134,7 +134,7 @@ export const DOC_KIND_OPTIONS = [
 /** New document with an optional file chosen up front: saves the details, then encrypts + uploads the file. */
 export type PersonOpt = { id: string; name: string; relation: string };
 
-export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
+export function NewDocumentForm({ onDone, whose }: { onDone?: () => void; whose: { value: string; label: string }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,12 +157,13 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
-    if (!v("title")) { setTab("details"); setError("Add a title."); return; }
+    const personId = v("personId") || null;
+    const title = whose.find((w) => w.value === (personId ?? ""))?.label ?? whose[0]?.label ?? "Me";
     let toSend = file, note: string | null = null;
     if (file && compress) ({ file: toSend, note } = await compressIfImage(file));
     if (toSend && toSend.size > 4 * 1024 * 1024) { setError(toSend.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress file to reduce size” to shrink a photo." : "Files must be 4 MB or smaller."); return; }
     const input: Record<string, unknown> = {
-      title: v("title"), personId: null, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
+      title, personId, kind: v("kind"), issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null,
       notes: v("notes") || null, trackExpiry: remind,
     };
     if (remind) {
@@ -199,7 +200,7 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
         <button type="button" role="tab" aria-selected={tab === "reminders"} disabled={!remind} title={!remind ? "Turn reminders on in Details" : undefined} onClick={() => setTab("reminders")}>Reminders</button>
       </div>
       <div className="grid gap-4 sm:grid-cols-2" hidden={tab !== "details"}>
-        <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" autoCapitalize="words" onInput={titleCaseInput} /></label>
+        <div className="field"><span className="label" id="doc-whose">Whose is it?</span><Dropdown name="personId" initial="" labelledBy="doc-whose" options={whose} /></div>
         <div className="field" role="group"><span className="label">Type</span>
           <Dropdown name="kind" initial="passport" ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
         <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" autoCapitalize="words" onInput={titleCaseInput} /></label>

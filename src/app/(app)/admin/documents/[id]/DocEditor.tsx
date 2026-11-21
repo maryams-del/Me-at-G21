@@ -30,7 +30,8 @@ function localToday() {
 const TABS = [["details", "Details"], ["reminders", "Reminders"], ["files", "Files"], ["notes", "Notes"]] as const;
 type Tab = (typeof TABS)[number][0];
 
-export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[]; reminders: Rem }) {
+export function DocEditor({ doc, files, reminders, whose }: { doc: Doc; files: FileV[]; reminders: Rem; whose: { value: string; label: string }[] }) {
+  const ownerLabel = whose.find((w) => w.value === (doc.personId ?? ""))?.label ?? doc.title;
   const router = useRouter();
   const formId = "doc-edit-form";
   const pickRef = useRef<HTMLInputElement>(null);
@@ -137,11 +138,12 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
-    if (!v("title")) { setTab("details"); setError("Add a title."); return; }
+    const personId = v("personId") || null;
+    const title = whose.find((w) => w.value === (personId ?? ""))?.label ?? doc.title;
     if (remOn && !v("expiresOn")) { setTab("details"); setError("Add an expiry date to get reminders."); return; }
     if (remOn && !remDays.length) { setTab("reminders"); setError("Pick at least one reminder, or turn reminders off."); return; }
     const input: Record<string, unknown> = {
-      id: doc.id, personId: doc.personId, tags: doc.tags, title: v("title"), kind: v("kind"),
+      id: doc.id, personId, tags: doc.tags, title, kind: v("kind"),
       issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null, notes: v("notes") || null,
     };
     if (idEditing && idValue.trim() !== idOriginal.trim()) {
@@ -217,7 +219,7 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
         <form id={formId} className="doc-main" onSubmit={save} noValidate>
           <header className="grid gap-1">
             <span className="t-label">{DOC_KIND_OPTIONS.find((k) => k.value === doc.kind)?.label ?? "Document"}</span>
-            <h1 className="t-h1">{doc.title}</h1>
+            <h1 className="t-h1">{ownerLabel}</h1>
           </header>
 
           <div className="seg-tabs doc-tabs" role="tablist" aria-label="Sections">
@@ -228,7 +230,7 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
 
           <section id="doc-panel-details" role="tabpanel" aria-labelledby="doc-tab-details" hidden={tab !== "details"} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="field"><span className="label">Title</span><input className="input" name="title" defaultValue={doc.title} required autoCapitalize="words" onInput={titleCaseInput} /></label>
+              <div className="field"><span className="label" id="doc-whose-edit">Whose is it?</span><Dropdown name="personId" initial={doc.personId ?? ""} labelledBy="doc-whose-edit" options={whose} /></div>
               <div className="field" role="group"><span className="label">Type</span>
                 <Dropdown name="kind" initial={doc.kind} ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
               <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" defaultValue={doc.issuer ?? ""} autoCapitalize="words" onInput={titleCaseInput} /></label>

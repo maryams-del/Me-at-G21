@@ -207,8 +207,10 @@ export async function peopleList(ownerId: string) {
   return db().select().from(t.people).where(and(eq(t.people.ownerId, ownerId), isNull(t.people.deletedAt))).orderBy(asc(t.people.createdAt));
 }
 /** "me" = the owner's own items (person_id is null); a UUID = that family member. */
-export async function expiriesState(o: Owner, f: { kind?: string; sort?: string; reminders?: string; q?: string } = {}) {
+export async function expiriesState(o: Owner, f: { kind?: string; sort?: string; reminders?: string; q?: string; person?: string } = {}) {
   const conds = [eq(t.expiryItems.ownerId, o.id), isNull(t.expiryItems.deletedAt)];
+  if (f.person === "me") conds.push(isNull(t.expiryItems.personId));
+  else if (f.person && /^[0-9a-f-]{36}$/.test(f.person)) conds.push(eq(t.expiryItems.personId, f.person));
   if (f.kind) conds.push(eq(t.expiryItems.kind, f.kind));
   if (f.reminders === "on" || f.reminders === "off") conds.push(eq(t.expiryItems.remindersEnabled, f.reminders === "on"));
   if (f.q) conds.push(sql`(${t.expiryItems.label} ilike ${"%" + f.q + "%"} or ${t.expiryItems.notes} ilike ${"%" + f.q + "%"})`);
@@ -220,8 +222,10 @@ export async function expiriesState(o: Owner, f: { kind?: string; sort?: string;
   return { items: items.map((i) => ({ item: i, daysLeft: daysBetween(today, i.expiresOn), renewals: renewals.filter((r) => r.itemId === i.id) })), docs, today };
 }
 
-export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; reminders?: string } = {}) {
+export async function documentsState(o: Owner, f: { kind?: string; q?: string; sort?: string; reminders?: string; person?: string } = {}) {
   const conds = [eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)];
+  if (f.person === "me") conds.push(isNull(t.documents.personId));
+  else if (f.person && /^[0-9a-f-]{36}$/.test(f.person)) conds.push(eq(t.documents.personId, f.person));
   if (f.kind) conds.push(eq(t.documents.kind, f.kind));
   const order = f.sort === "expiry" ? [sql`${t.documents.expiresOn} asc nulls last`, asc(t.documents.title)]
     : f.sort === "recent" ? [desc(t.documents.updatedAt)] : [asc(t.documents.kind), asc(t.documents.title)];
