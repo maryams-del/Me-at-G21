@@ -302,7 +302,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
       )}
       {error && !(error.field && fields.some((f) => f.name === error.field && visible(f))) && <p role="alert" className="error">{error.message}</p>}
       {!rich ? (
-        <div><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Saving…" : submitLabel}</button></div>
+        <div className="flex justify-end"><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Saving…" : submitLabel}</button></div>
       ) : confirmDel && deleteAction ? (
         <div role="alertdialog" aria-labelledby={`${id}-delq`} className="confirm-box preview-enter">
           <p id={`${id}-delq`} className="font-semibold">{deleteAction.confirm}</p>

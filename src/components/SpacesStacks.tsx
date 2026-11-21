@@ -340,7 +340,7 @@ function SectionSorter({ titles, tints, saving, onCancel, onSave }: { titles: st
           {order.map((t, i) => {
             const dragging = drag?.title === t;
             return (
-              <div key={t} className="absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[16px] glass-light"
+              <div key={t} className="absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[16px] sorter-row"
                 style={{ position: "absolute", top: i * ROW + (dragging ? drag.dy : 0), height: ROW - 8, zIndex: dragging ? 10 : 1, touchAction: "none", cursor: "grab",
                   transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.45)" : undefined }}
                 onPointerDown={(e) => down(e, i, t)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}

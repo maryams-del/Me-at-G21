@@ -7,7 +7,7 @@ import { resetDb, makeOwner, withCtx } from "../support/db";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { spacesOrderOf, spacesPinsOf, bySavedOrder } from "@/lib/spaces";
+import { spacesOrderOf, spacesPinsOf, bySavedOrder, builtinSpace } from "@/lib/spaces";
 
 let owner: Awaited<ReturnType<typeof makeOwner>>;
 const now = new Date("2026-11-19T09:00:00Z");
@@ -66,5 +66,17 @@ describe("Custom spaces", () => {
     expect(await pinsNow()).toEqual([]);
     const [u] = await getDb().select().from(users).where(eq(users.id, owner.id));
     expect(spacesOrderOf(u.settings).sections).toEqual(["Money"]); // pins don't wipe the order
+  });
+
+  it("lets the owner rename, re-icon, move, remove and bring back a built-in space", async () => {
+    const now2 = async () => builtinSpace("/admin/expiries", (await getDb().select().from(users).where(eq(users.id, owner.id)))[0].settings)!;
+    await op("space.builtin.update", { href: "/admin/expiries", name: "Renewals", glyph: "vault", section: "__new", newSection: "Paperwork", description: "IDs and cards" });
+    expect(await now2()).toMatchObject({ label: "Renewals", glyph: "vault", section: "Paperwork", note: "IDs and cards", hidden: false });
+    await expect(op("space.builtin.update", { href: "/admin/expiries", name: "X", glyph: "not-an-icon", section: "Money" })).rejects.toThrow(/icon/);
+    await expect(op("space.builtin.update", { href: "/nope", name: "X", glyph: "vault", section: "Money" })).rejects.toThrow(/not found/);
+    await op("space.builtin.hide", { href: "/admin/expiries" });
+    expect((await now2()).hidden).toBe(true);
+    await op("space.builtin.restore", { href: "/admin/expiries" });
+    expect(await now2()).toMatchObject({ hidden: false, label: "Renewals" });
   });
 });

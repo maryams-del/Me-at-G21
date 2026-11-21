@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { pageOwner, dashboardState, customSpacesState } from "@/server/queries";
-import { isSpaceGlyph } from "@/lib/spaces";
+import { isSpaceGlyph, isBuiltinHref, builtinSpace, spaceOverridesOf } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { addDays, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
 import { WeekRings, type Day } from "@/components/home/WeekRings";
@@ -40,7 +40,7 @@ export default async function Dashboard() {
   for (const r of s.appDeadlines) if (r.app.deadlineAt) add(instantToLocal(r.app.deadlineAt, tz).date, `${r.app.university} deadline`, `/education/applications/${r.app.id}`, hm(r.app.deadlineAt));
 
   // Spaces, as quiet icon tiles: the built-in areas, then the owner's own.
-  const spaces: { key: string; name: string; href: string; glyph: GlyphKind }[] = [
+  const spacesAll: { key: string; name: string; href: string; glyph: GlyphKind }[] = [
     { key: "money", name: "Money", href: "/finance", glyph: "finance" },
     { key: "care", name: "Care", href: "/care", glyph: "care" },
     ...(s.period ? [{ key: "period", name: "Period", href: "/care/period", glyph: "period" as const }] : []),
@@ -53,6 +53,12 @@ export default async function Dashboard() {
     { key: "history", name: "History", href: "/history", glyph: "history" },
     ...mine.map((c) => ({ key: c.space.id, name: c.space.name, href: `/spaces/${c.space.id}`, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const) })),
   ];
+  // Built-in spaces follow the owner's own name / icon, and removed ones stay off the home screen.
+  const spaces = spacesAll.flatMap((x) => {
+    const b = isBuiltinHref(x.href) ? builtinSpace(x.href, o.settings) : null;
+    if (!b) return [x];
+    return b.hidden ? [] : [{ ...x, name: spaceOverridesOf(o.settings)[x.href]?.label ? b.label : x.name, glyph: b.glyph }];
+  });
 
   return (
     <div className="grid gap-9 md:gap-12">

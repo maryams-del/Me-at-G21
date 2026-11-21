@@ -1,4 +1,5 @@
 import { pageOwner, achievementsState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageHeader, Section, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { OpForm, OpButton, Reveal, ItemRow, type FieldDef } from "@/components/OpForm";
@@ -55,7 +56,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="achievements" title="Achievements & hobbies"><PageAddButton label="Add achievement" /></PageHeader>
+      <SpaceHeader href="/education/achievements"><PageAddButton label="Add" choices={[{ key: "add", label: "Add achievement" }, { key: "hobby", label: "Add hobby" }]} /></SpaceHeader>
 
       <div className="toolbar">
         <SearchPill q={sp.q} placeholder="Search achievements" keep={{ kind: sp.kind, area: sp.area, tag: sp.tag, year: sp.year }} />
@@ -79,6 +80,9 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
       ]} />
       <PageAddPanel title="Add achievement">
         <OpForm op="achievement.create" fields={fields} initial={{ kind: "accomplishment", area: "work" }} submitLabel="Save achievement" />
+      </PageAddPanel>
+      <PageAddPanel id="hobby" title="Add hobby">
+        <OpForm op="hobby.create" fields={hobbyFields} initial={{ active: true }} submitLabel="Save hobby" compact />
       </PageAddPanel>
       </PageAddProvider>
       <div className="mb-6" />
@@ -119,7 +123,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
         </Section>
       )}
 
-      <Section title="Hobbies" aside={<Reveal label="Add hobby"><OpForm op="hobby.create" fields={hobbyFields} initial={{ active: true }} submitLabel="Save hobby" compact /></Reveal>}>
+      <Section title="Hobbies">
         {d.hobbies.length === 0 ? <Empty>No hobbies yet.</Empty> : (
           <ul className="list">
             {d.hobbies.map((h) => (

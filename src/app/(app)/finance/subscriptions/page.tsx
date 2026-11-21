@@ -1,4 +1,5 @@
 import { pageOwner, subscriptionsState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
@@ -37,7 +38,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="subscriptions" title="Subscriptions"><PageAddButton label="Add subscription" /></PageHeader>
+      <SpaceHeader href="/finance/subscriptions"><PageAddButton label="Add subscription" /></SpaceHeader>
       <PageAddPanel title="Add subscription">
         <OpForm op="subscription.create" fields={f} initial={{ currency: o.defaultCurrency, cadence: "monthly", renewal: "auto", intervalValue: 1, intervalUnit: "month", beforeDays: [3], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Save subscription" />
       </PageAddPanel>

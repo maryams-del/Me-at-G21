@@ -1,4 +1,5 @@
 import { pageOwner, routinesState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
@@ -35,7 +36,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="routines" title="Routines"><PageAddButton label="New custom routine" /></PageHeader>
+      <SpaceHeader href="/care/routines"><PageAddButton label="New custom routine" /></SpaceHeader>
       <PageAddPanel title="New custom routine">
         <OpForm op="routine.create" fields={routineFields} fixed={{ kind: "custom" }} initial={{ anchor: "completed", intervalValue: 7, intervalUnit: "day", reminderTime: "09:00", remindersEnabled: true, beforeDays: [1] }} submitLabel="Create routine" />
       </PageAddPanel>

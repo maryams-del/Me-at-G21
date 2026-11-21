@@ -1,4 +1,6 @@
 import { pageOwner, periodState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef, ItemRow } from "@/components/OpForm";
 import { SYMPTOMS } from "@/server/ops/period";
@@ -70,7 +72,12 @@ export default async function PeriodPage() {
 
   return (
     <>
-      <PageHeader glyph="period" title="Period log" />
+      <PageAddProvider>
+      <SpaceHeader href="/care/period"><PageAddButton label="Add a past period" /></SpaceHeader>
+      <PageAddPanel title="Add a past period">
+        <OpForm op="period.add" fields={fullFields.map((f) => f.name === "endDate" ? { ...f, required: true, nullable: false } : f)} submitLabel="Add period" compact />
+      </PageAddPanel>
+      </PageAddProvider>
 
       <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] mb-9">
         <div className="panel p-5 grid gap-4 content-start" style={{ boxShadow: open ? "inset 8px 0 0 var(--rust)" : undefined }}>
@@ -121,8 +128,8 @@ export default async function PeriodPage() {
           {settings.showEstimate && <> <span className="inline-block w-3 h-3 rounded-full align-middle ml-3 mr-1" style={{ outline: "2px dashed var(--rust)", outlineOffset: -2 }} /> estimated</>}</p>
       </Section>
 
-      <Section title="History" aside={<Reveal label="Add a past period"><OpForm op="period.add" fields={fullFields.map((f) => f.name === "endDate" ? { ...f, required: true, nullable: false } : f)} submitLabel="Add period" compact /></Reveal>}>
-        {s.cycles.length === 0 ? <Empty>Nothing logged yet. Use “Period started” above, or add past periods with both dates.</Empty> : (
+      <Section title="History">
+        {s.cycles.length === 0 ? <Empty>Nothing logged yet. Use “Period started” above, or tap + to add past periods.</Empty> : (
           <ul className="list">
             {s.cycles.map((c) => (
               <li key={c.id} className="py-3 grid gap-2">

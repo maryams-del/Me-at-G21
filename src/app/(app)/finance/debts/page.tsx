@@ -1,4 +1,5 @@
 import { pageOwner, debtsState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, Reveal, type FieldDef } from "@/components/OpForm";
@@ -25,7 +26,7 @@ export default async function DebtsPage() {
   return (
     <>
       <PageAddProvider>
-      <PageHeader glyph="debts" title="Lent & borrowed"><PageAddButton label="Add a record" /></PageHeader>
+      <SpaceHeader href="/finance/debts"><PageAddButton label="Add a record" /></SpaceHeader>
       <PageAddPanel title="Add a record">
         <OpForm op="debt.create" submitLabel="Save record" initial={{ onDate: today, currency: o.defaultCurrency, direction: "lent", remindersEnabled: true, reminderOffsetsDays: "1", overdueRepeatDays: 3, reminderTime: "09:00" }}
             fields={[

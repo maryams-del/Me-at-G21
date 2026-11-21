@@ -1,4 +1,5 @@
 import { pageOwner, expiriesState, remindersFor, peopleList } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PeopleManager } from "../People";
 import { PageHeader, Section, Empty, ReminderList, SearchPill, FilterTags, withoutParam } from "@/components/ui";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
@@ -39,7 +40,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="expiries" title="Expiries & renewals"><PageAddButton label="Track something" /></PageHeader>
+      <SpaceHeader href="/admin/expiries"><PageAddButton label="Track something" /></SpaceHeader>
       <div className="toolbar">
         <SearchPill q={q} placeholder="Search expiries" keep={{ kind, reminders, sort: sort === "latest" ? sort : undefined }} />
         <FilterPanel active={!!(kind || reminders) || sort === "latest"}>

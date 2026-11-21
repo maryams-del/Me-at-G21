@@ -1,4 +1,5 @@
 import { pageOwner, projectsState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, ItemRow, type FieldDef } from "@/components/OpForm";
@@ -30,11 +31,11 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1" ? "task" : null}>
-      <PageHeader glyph="projects" title="Projects & tasks">
+      <SpaceHeader href="/projects">
         <a href="?view=list" className={`btn btn-sm ${view === "list" ? "btn-primary" : ""}`} aria-current={view === "list" ? "page" : undefined}>By deadline</a>
         <a href="?view=board" className={`btn btn-sm ${view === "board" ? "btn-primary" : ""}`} aria-current={view === "board" ? "page" : undefined}>Board</a>
         <PageAddButton label="Add" choices={[{ key: "task", label: "Add task" }, { key: "project", label: "New project" }]} />
-      </PageHeader>
+      </SpaceHeader>
       <PageAddPanel id="task" title="Add task">
         <OpForm op="task.create" fields={taskFields} initial={{ status: "backlog", reminderOffsetsDays: "0", remindersEnabled: true }} submitLabel="Add task" />
       </PageAddPanel>
