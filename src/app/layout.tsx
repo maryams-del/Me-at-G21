@@ -1,16 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { THEME_COOKIE, THEME_COLORS } from "@/lib/theme";
+import { THEME_COOKIE, THEME_COLORS, FAVICONS } from "@/lib/theme";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Me @ G21",
-  description: "Private personal dashboard",
-  manifest: "/manifest.webmanifest?v=5",
-  icons: { shortcut: "/favicon-v5.ico", icon: [{ url: "/favicon-v5.svg", type: "image/svg+xml" }, { url: "/favicon-v5.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon-v6.png" },
-  appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
-  robots: { index: false, follow: false },
-};
+/** Tab icon follows the saved Dark/Light choice (or the device setting when there isn't one). */
+export async function generateMetadata(): Promise<Metadata> {
+  const theme = (await cookies()).get(THEME_COOKIE)?.value;
+  const svg = theme === "dark" || theme === "light" ? FAVICONS[theme] : FAVICONS.auto;
+  return {
+    title: "Me @ G21",
+    description: "Private personal dashboard",
+    manifest: "/manifest.webmanifest?v=6",
+    icons: { shortcut: "/favicon-v6.ico", icon: [{ url: svg, type: "image/svg+xml" }, { url: "/favicon-v6.png", sizes: "32x32", type: "image/png" }], apple: "/icons/apple-touch-icon-v6.png" },
+    appleWebApp: { capable: true, title: "Me @ G21", statusBarStyle: "default" },
+    robots: { index: false, follow: false },
+  };
+}
 /** Status-bar colour: follows the Dark/Light choice when one is saved, otherwise the device setting. */
 export async function generateViewport(): Promise<Viewport> {
   const theme = (await cookies()).get(THEME_COOKIE)?.value;

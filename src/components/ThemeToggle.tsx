@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { THEME_COOKIE, THEME_COLORS, type ThemeChoice } from "@/lib/theme";
+import { THEME_COOKIE, THEME_COLORS, FAVICONS, type ThemeChoice } from "@/lib/theme";
 
 function current(): ThemeChoice {
   const set = document.documentElement.dataset.theme;
@@ -23,6 +23,8 @@ export function ThemeToggle() {
     meta.name = "theme-color";
     meta.content = THEME_COLORS[t];
     document.head.appendChild(meta);
+    // And the browser-tab icon, so it matches the logo in the chosen mode.
+    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]').forEach((l) => { l.href = FAVICONS[t]; });
   }
 
   return (
