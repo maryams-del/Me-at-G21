@@ -587,16 +587,18 @@ export function ItemRow({ head, aside, children, edit, editHref, del, name = "th
                 <Icon name="edit" size={17} />
               </button>}
           {del && <DeleteIcon op={del.op} input={del.input} confirm={del.confirm} note={del.note} label={`Delete ${name}`} redirectTo={del.redirectTo} />}
+          {/* The edit form drops down from the pencil, on the right, over whatever is below. */}
+          {open && !editHref && (
+            <div id={id} className="panel form-panel panel-closable p-4 item-pop preview-enter" role="dialog" aria-label={`Edit ${name}`}
+              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}>
+              <PanelClose onClick={() => setOpen(false)} label="Close editing" />
+              <p className="t-h3 mb-3 pr-10">Edit</p>
+              <RevealCtx.Provider value={{ close: () => setOpen(false) }}>{edit}</RevealCtx.Provider>
+            </div>
+          )}
         </div>
       </div>
       {children}
-      {open && !editHref && (
-        <div id={id} className="panel form-panel panel-closable p-4 mt-1 preview-enter">
-          <PanelClose onClick={() => setOpen(false)} label="Close editing" />
-          <p className="t-h3 mb-3 pr-10">Edit</p>
-          <RevealCtx.Provider value={{ close: () => setOpen(false) }}>{edit}</RevealCtx.Provider>
-        </div>
-      )}
     </>
   );
 }
