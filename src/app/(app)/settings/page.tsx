@@ -8,6 +8,7 @@ import { users } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { invitedEmailsOf } from "@/lib/invites";
+import { InviteLinkButton } from "./InviteLinkButton";
 
 export default async function SettingsPage() {
   const o = await pageOwner();
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
             <OpForm op="invite.add" compact resetOnSuccess submitLabel="Invite" fields={[{ name: "email", label: "Their email", required: true, placeholder: "name@example.com" }]} />
             {invited.length > 0 && (() => {
               const done = invited.filter((e) => joined.get(e) === "complete").length;
-              return <p className="t-small"><strong>{done}</strong> of {invited.length} invited {invited.length === 1 ? "person has" : "people have"} signed up. You&apos;ll get an email each time someone finishes signing up.</p>;
+              return <p className="t-small"><strong>{done}</strong> of {invited.length} invited {invited.length === 1 ? "person has" : "people have"} signed up. Tap <strong>Share link</strong> to send someone their private sign-up link (it works once, for 7 days).</p>;
             })()}
             {invited.length > 0 && (
               <ul className="list">
@@ -45,8 +46,11 @@ export default async function SettingsPage() {
                         <span className="truncate font-medium">{e}</span>
                         <span className="t-meta">{step === "complete" ? "Has an account" : step ? "Setting up" : "Invited, not signed up yet"}</span>
                       </span>
+                      <span className="flex items-start gap-2">
+                      {step !== "complete" && <InviteLinkButton email={e} />}
                       <OpButton op="invite.remove" input={{ email: e }} label="Remove" icon="trash" className="btn btn-sm"
                         confirmText={step === "complete" ? `Remove ${e} from your invite list? They keep their account and can still sign in.` : `Remove the invite for ${e}? They won't be able to sign up.`} />
+                      </span>
                     </li>
                   );
                 })}

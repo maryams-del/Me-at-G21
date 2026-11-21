@@ -1,5 +1,6 @@
 import "server-only";
 import { starterSettings } from "@/lib/starter";
+import { inviteTokensOf } from "@/lib/invites";
 import { z } from "zod";
 import { and, desc, eq, gt, lt, isNull, ne, sql, count } from "drizzle-orm";
 import {
@@ -130,6 +131,32 @@ const enrollVerify: Handler = async (body) => {
   await createSession(u.id, "onboarding");
   await securityEvent(u.id, "email_verified");
   return { ok: true };
+};
+
+/** Opening a one-time invite link: proves the invite came from the owner, so no email code is needed. */
+const inviteRedeem: Handler = async (body) => {
+  const { invite } = z.object({ invite: z.string().min(10).max(400) }).parse(body);
+  if (!(await rateLimit(`invite-redeem:${await ipKey()}`, 20, 3600))) throw new AuthError(429, "Too many attempts. Try again later.");
+  const bad = () => new AuthError(400, "This invite link isn't valid any more. Ask for a new one.");
+  const dot = invite.indexOf(".");
+  if (dot < 1) throw bad();
+  let email: string;
+  try { email = Buffer.from(invite.slice(0, dot), "base64url").toString("utf8").trim().toLowerCase(); } catch { throw bad(); }
+  const token = invite.slice(dot + 1);
+  const [owner] = await getDb().select({ id: users.id, settings: users.settings }).from(users).where(eq(users.email, env.ownerEmail));
+  const settings = (owner?.settings ?? {}) as Record<string, unknown>;
+  const entry = inviteTokensOf(settings)[email];
+  if (!owner || !entry || entry.exp < Date.now() || !(await mayEnroll(email)) || !safeEqual(entry.h, verifier(token, env.pepper, `invite:${email}`))) throw bad();
+  let [u] = await getDb().select().from(users).where(eq(users.email, email));
+  if (u?.onboardingStep === "complete") throw new AuthError(400, "This account is already set up. Sign in instead.");
+  // Single use.
+  const rest = Object.fromEntries(Object.entries(inviteTokensOf(settings)).filter(([e]) => e !== email));
+  await getDb().update(users).set({ settings: { ...settings, inviteTokens: rest } }).where(eq(users.id, owner.id));
+  if (!u) [u] = await getDb().insert(users).values({ email, emailVerifiedAt: new Date(), onboardingStep: "passkey", settings: starterSettings() }).returning();
+  else await getDb().update(users).set({ emailVerifiedAt: new Date(), onboardingStep: u.onboardingStep === "email" ? "passkey" : u.onboardingStep }).where(eq(users.id, u.id));
+  await createSession(u.id, "onboarding");
+  await securityEvent(u.id, "email_verified");
+  return { ok: true, email };
 };
 
 const enrollProfile: Handler = async (body) => {
@@ -443,7 +470,7 @@ const status: Handler = async () => {
 };
 
 export const authHandlers: Record<string, Handler> = {
-  "enroll-start": enrollStart, "enroll-verify": enrollVerify, "enroll-profile": enrollProfile,
+  "enroll-start": enrollStart, "invite-redeem": inviteRedeem, "enroll-verify": enrollVerify, "enroll-profile": enrollProfile,
   "passkey-register-options": passkeyRegisterOptions, "passkey-register-verify": passkeyRegisterVerify,
   "passkey-remove": passkeyRemove, "passkey-rename": passkeyRename,
   "login-options": loginOptions, "login-verify": loginVerify,

@@ -36,4 +36,23 @@ describe("Accounts for other people (invite-only)", () => {
     const [o] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
     expect(invitedEmailsOf(o.settings)).toEqual([]);
   });
+
+  it("an invite link is one-time, tied to the email, and only its hash is stored", async () => {
+    const { inviteTokensOf } = await import("@/lib/invites");
+    const { verifier } = await import("@/lib/crypto");
+    const { env } = await import("@/lib/env");
+    await op(owner.id, "invite.add", { email: "friend@example.com" });
+    const r = await op(owner.id, "invite.link", { email: "friend@example.com" }) as unknown as { url: string };
+    const invite = new URL(r.url).searchParams.get("invite")!;
+    const [b64, token] = invite.split(".");
+    expect(Buffer.from(b64, "base64url").toString()).toBe("friend@example.com");
+    const [u] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
+    const entry = inviteTokensOf(u.settings)["friend@example.com"];
+    expect(entry.h).toBe(verifier(token, env.pepper, "invite:friend@example.com"));
+    expect(JSON.stringify(u.settings)).not.toContain(token);
+    await expect(op(owner.id, "invite.link", { email: "nobody@example.com" })).rejects.toThrow(/isn't invited/);
+    await op(owner.id, "invite.remove", { email: "friend@example.com" });
+    const [u2] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
+    expect(inviteTokensOf(u2.settings)["friend@example.com"]).toBeUndefined();
+  });
 });
