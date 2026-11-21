@@ -38,6 +38,32 @@ const MODULE_GLYPH: Record<string, Parameters<typeof Glyph>[0]["kind"]> = {
 // Minimal typing for the Web Speech API (not in TS DOM lib everywhere)
 type SR = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; abort(): void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
 
+function speechCtor() {
+  const W = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
+  return W.SpeechRecognition ?? W.webkitSpeechRecognition;
+}
+// Phones (and tablets) handle continuous dictation badly: Android repeats words, iOS drops out. One phrase per go works on both.
+const isTouch = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+function newRec(Ctor: new () => SR) {
+  const rec = new Ctor();
+  rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = !isTouch();
+  return rec;
+}
+let primed: SR | null = null;
+/** Creates and starts the recogniser during the user's tap (required on iOS and Android); the sheet picks it up. */
+export function primeMic() {
+  const Ctor = speechCtor();
+  if (!Ctor) return;
+  try {
+    primed?.abort();
+    const rec = newRec(Ctor) as SR & { _ended?: boolean; _err?: string };
+    // In case it stops before the sheet takes over (e.g. permission refused straight away).
+    rec.onerror = (e) => { rec._err = e.error; };
+    rec.onend = () => { rec._ended = true; };
+    rec.start(); primed = rec;
+  } catch { primed = null; }
+}
+
 export function CaptureSheet({ open, onClose, initialText = "", startVoice = false }: { open: boolean; onClose: () => void; initialText?: string; startVoice?: boolean }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
@@ -59,7 +85,8 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
   useEffect(() => { fixRef.current = fix; }, [fix]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 30); }, [open]);
+  // While dictating, don't pop the phone keyboard up (it also interrupts the microphone on iOS).
+  useEffect(() => { if (open && !startVoice) setTimeout(() => inputRef.current?.focus(), 30); }, [open, startVoice]);
   // Opened from a microphone button: start dictation straight away.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open && startVoice) listen("main"); else if (open && initialText.trim()) send(initialText, "text"); }, [open, startVoice]);
@@ -152,11 +179,15 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
    */
   function listen(target: "main" | "fix") {
     if (listening) { recRef.current?.stop(); return; }
-    const W = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
-    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition;
+    const Ctor = speechCtor();
     if (!Ctor) { setVoiceNote("Voice input isn't available in this browser. Tap the microphone on your keyboard to dictate instead."); inputRef.current?.focus(); return; }
-    const rec = new Ctor();
-    rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = true;
+    const early = (target === "main" ? primed : null) as (SR & { _ended?: boolean; _err?: string }) | null;
+    primed = null;
+    if (early?._ended && (early._err === "not-allowed" || early._err === "service-not-allowed")) {
+      setVoiceNote("The microphone is blocked for this site. Allow it in your phone's browser settings (and make sure dictation is on), then try again."); return;
+    }
+    const pre = early && !early._ended ? early : null;
+    const rec = pre ?? newRec(Ctor);
     const base = target === "main" ? textRef.current.trimEnd() : "";
     let heard = "";
     let silence: ReturnType<typeof setTimeout> | null = null;
@@ -164,7 +195,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
     const arm = () => { if (silence) clearTimeout(silence); silence = setTimeout(() => rec.stop(), SILENCE_MS); };
     rec.onresult = (e) => {
       let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      for (let i = 0; i < e.results.length; i++) t += (t && !t.endsWith(" ") ? " " : "") + e.results[i][0].transcript.trim();
       heard = t;
       const full = (base ? base + " " : "") + t;
       if (target === "main") { setText(full); textRef.current = full; setMode("voice"); } else { setFix(t); fixRef.current = t; }
@@ -172,7 +203,13 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
     };
     rec.onerror = (e) => {
       failed = true;
-      setVoiceNote(e.error === "not-allowed" ? "Microphone permission was denied. You can allow it in your browser settings." : e.error === "no-speech" ? "I didn't hear anything. Tap the microphone and try again." : "Voice input stopped. You can type instead.");
+      if (e.error === "aborted") return;
+      setVoiceNote(e.error === "not-allowed" || e.error === "service-not-allowed"
+        ? "The microphone is blocked for this site. Allow it in your phone's browser settings (and make sure dictation is on), then try again."
+        : e.error === "no-speech" ? "I didn't hear anything. Tap the microphone and try again."
+        : e.error === "audio-capture" ? "No microphone was found, or another app is using it."
+        : e.error === "network" ? "Voice input needs a connection. Check you're online, or type instead."
+        : "Voice input stopped. You can type instead.");
     };
     rec.onend = () => {
       if (silence) clearTimeout(silence);
@@ -184,7 +221,8 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
     };
     recRef.current = rec;
     setVoiceNote("Listening… I'll go ahead when you stop talking.");
-    rec.start(); setListening(true);
+    if (!pre) { try { rec.start(); } catch { setVoiceNote("Couldn't start the microphone. Tap it again."); return; } }
+    setListening(true);
     arm(); // stops if nothing at all is said
     if (silence) { clearTimeout(silence); silence = setTimeout(() => rec.stop(), 8000); }
   }

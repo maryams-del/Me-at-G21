@@ -1,4 +1,5 @@
 import { pageOwner, expiriesState, remindersFor, peopleList } from "@/server/queries";
+import { personOptions, personName, selfNameOf } from "@/lib/people";
 import { SpaceHeader } from "@/components/SpaceHeader";
 import { PeopleManager } from "../People";
 import { PageHeader, Section, Empty, ReminderList, SearchPill, FilterTags, withoutParam } from "@/components/ui";
@@ -10,23 +11,26 @@ import { fmtDate } from "@/lib/format";
 import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 
 /** Example names for "Whose is it?" — one is picked at random as the hint. */
-const SAMPLE_NAMES = ["Sara", "Omar", "Layla", "Yusuf", "Noura", "Ahmed", "Mariam", "Khalid", "Huda", "Faisal"];
 const KINDS = [{ value: "passport", label: "Passport" }, { value: "national_id", label: "National ID / Iqama" }, { value: "license", label: "Driving licence" }, { value: "bank_card", label: "Bank card" }, { value: "membership", label: "Membership" }, { value: "custom", label: "Other" }];
 
-export default async function ExpiriesPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; sort?: string; reminders?: string; q?: string }> }) {
+export default async function ExpiriesPage({ searchParams }: { searchParams: Promise<{ add?: string; kind?: string; sort?: string; reminders?: string; q?: string; person?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
   const kind = KINDS.some((k) => k.value === sp.kind) ? sp.kind : undefined;
   const sort = sp.sort === "latest" ? "latest" : "soonest";
   const people = await peopleList(o.id);
+  const selfName = selfNameOf(o);
+  const whose = personOptions(selfName, people);
+  const person = sp.person === "me" || people.some((p) => p.id === sp.person) ? sp.person : undefined;
+  const personLabel = person === "me" ? selfName : people.find((p) => p.id === person)?.name;
   const reminders = sp.reminders === "on" || sp.reminders === "off" ? sp.reminders : undefined;
   const q = sp.q?.trim().slice(0, 80) || undefined;
-  const filtering = !!(kind || reminders || q);
-  const params = { q, kind, reminders, sort: sort === "latest" ? sort : undefined };
-  const s = await expiriesState(o, { kind, sort, reminders, q });
+  const filtering = !!(kind || reminders || q || person);
+  const params = { q, kind, reminders, person, sort: sort === "latest" ? sort : undefined };
+  const s = await expiriesState(o, { kind, sort, reminders, q, person });
   const rem = await remindersFor(o.id, "expiry", s.items.map((x) => x.item.id));
   const fields: FieldDef[] = [
-    { name: "label", label: "Whose is it?", required: true, placeholder: SAMPLE_NAMES[Math.floor(Math.random() * SAMPLE_NAMES.length)], requiredMessage: "Add whose it is." },
+    { name: "personId", label: "Whose is it?", type: "select", nullable: true, options: whose },
     { name: "kind", label: "Type", type: "select", required: true, options: KINDS },
     { name: "expiresOn", label: "Expiry date", type: "date", required: true, requiredMessage: "Add the expiry date." },
     { name: "documentId", label: "Linked document", type: "select", nullable: true, options: s.docs.map((d) => ({ value: d.id, label: d.title })) },
@@ -42,10 +46,11 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
       <PageAddProvider initialOpen={sp.add === "1"}>
       <SpaceHeader href="/admin/expiries"><PageAddButton label="Track something" /></SpaceHeader>
       <div className="toolbar">
-        <SearchPill q={q} placeholder="Search expiries" keep={{ kind, reminders, sort: sort === "latest" ? sort : undefined }} />
+        <SearchPill q={q} placeholder="Search expiries" keep={{ kind, reminders, person, sort: sort === "latest" ? sort : undefined }} />
         <FilterPanel active={!!(kind || reminders) || sort === "latest"}>
           <form className="panel p-3 flex flex-wrap gap-3 items-end" role="search" aria-label="Filter and sort">
             {q && <input type="hidden" name="q" value={q} />}
+            <FilterSelect label="Person" name="person" value={person} options={[{ value: "", label: "Everyone" }, { value: "me", label: selfName }, ...people.map((p) => ({ value: p.id, label: p.name }))]} />
             <FilterSelect label="Type" name="kind" value={kind} options={[{ value: "", label: "All types" }, ...KINDS]} />
             <FilterSelect label="Reminders" name="reminders" value={reminders} options={[{ value: "", label: "All" }, { value: "on", label: "On" }, { value: "off", label: "Off" }]} />
             <FilterSelect label="Sort" name="sort" value={sort} options={[{ value: "soonest", label: "Closest expiry first" }, { value: "latest", label: "Farthest expiry first" }]} />
@@ -56,6 +61,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
       </div>
       <FilterTags clearHref="/admin/expiries" tags={[
         ...(q ? [{ label: `“${q}”`, href: withoutParam("/admin/expiries", params, "q") }] : []),
+        ...(person ? [{ label: personLabel ?? "Person", href: withoutParam("/admin/expiries", params, "person") }] : []),
         ...(kind ? [{ label: KINDS.find((k) => k.value === kind)?.label ?? kind, href: withoutParam("/admin/expiries", params, "kind") }] : []),
         ...(reminders ? [{ label: `Reminders ${reminders}`, href: withoutParam("/admin/expiries", params, "reminders") }] : []),
         ...(sort === "latest" ? [{ label: "Farthest expiry first", href: withoutParam("/admin/expiries", params, "sort") }] : []),
@@ -70,7 +76,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
           {active.map(({ item: it, daysLeft, renewals }) => {
             const kindLabel = KINDS.find((k) => k.value === it.kind)?.label;
             return (
-              <EntryCard key={it.id} icon="idcard" countLabel="Expires" title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
+              <EntryCard key={it.id} icon="idcard" countLabel="Expires" title={it.personId ? personName(it.personId, selfName, people) : it.label} subtitle={kindLabel}
                 count={countdown(daysLeft, "expiry")} countSub={fmtDate(it.expiresOn)}
                 reminder={reminderLine({ enabled: it.remindersEnabled, date: it.expiresOn, offsets: it.reminderOffsetsDays, time: it.reminderTime, today: s.today })}
                 action={
@@ -80,7 +86,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
                   </Reveal>
                 }
                 edit={
-                  <OpForm op="expiry.update" fixed={{ id: it.id, personId: it.personId, issuer: it.issuer }} initial={it} submitLabel="Save changes" compact fields={fields}
+                  <OpForm op="expiry.update" fixed={{ id: it.id, issuer: it.issuer }} initial={{ ...it, personId: it.personId ?? "" }} submitLabel="Save changes" compact fields={fields}
                     deleteAction={{ op: "expiry.delete", input: { id: it.id }, confirm: `Delete “${it.label}”?`, note: "Its reminders will be cancelled." }} />
                 }>
                 {renewals.length > 0 && <p className="t-meta">Renewal history: {renewals.map((r) => `${fmtDate(r.renewedOn)} (was ${fmtDate(r.previousExpiresOn)}, now ${fmtDate(r.newExpiresOn)})`).join("; ")}</p>}

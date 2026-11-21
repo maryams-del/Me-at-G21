@@ -3,7 +3,7 @@ import { ConfirmHost } from "./ConfirmDialog";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CaptureSheet } from "./Capture";
+import { primeMic, CaptureSheet } from "./Capture";
 import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
@@ -30,6 +30,8 @@ function Icon({ d, size = 22 }: { d: string; size?: number }) {
 
 /** Opens the AI capture sheet from anywhere. `text` pre-fills it; `voice` starts dictation. */
 export function openCapture(detail: { text?: string; voice?: boolean } = {}) {
+  // Phones only allow the microphone to start inside the tap itself, so start it here, not after the sheet opens.
+  if (detail.voice) primeMic();
   window.dispatchEvent(new CustomEvent("ld-capture", { detail }));
 }
 
