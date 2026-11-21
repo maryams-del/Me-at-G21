@@ -32,8 +32,8 @@ describe("Custom spaces", () => {
     const d = await customSpaceDetail(owner, b.id!);
     expect(d!.items.map((x) => [x.text, x.done])).toEqual([["The Alchemist", false], ["Atomic Habits", true]]);
 
-    await op("space.update", { id: a.id, name: "Gifts", section: "You", glyph: "charity" });
-    expect((await customSpacesState(owner)).find((x) => x.space.id === a.id)!.space.section).toBe("You");
+    await op("space.update", { id: a.id, name: "Gifts", section: "Faith", glyph: "charity" });
+    expect((await customSpacesState(owner)).find((x) => x.space.id === a.id)!.space.section).toBe("Faith");
   });
 
   it("delete goes to Recently deleted and can be undone; other owners can't touch it", async () => {

@@ -7,13 +7,13 @@ import { BUILTIN_SECTIONS, NEW_SECTION, SPACE_GLYPHS } from "@/lib/spaces";
  * name only appears once "+ New section…" is chosen.
  */
 export const spaceFields = (custom: string[]): FieldDef[] => [
-  { name: "name", label: "Name", required: true, placeholder: "Reading list", row: "name-icon" },
+  { name: "name", label: "Name", required: true, placeholder: "Reading List", row: "name-icon", requiredMessage: "Give the space a name." },
   { name: "glyph", label: "Icon", type: "glyph", required: true, options: SPACE_GLYPHS.map((g) => ({ value: g.value, label: g.label })), row: "name-icon" },
   { name: "section", label: "Section", type: "select", required: true, wide: true, options: [
     ...BUILTIN_SECTIONS.map((s) => ({ value: s, label: s })),
     ...custom.filter((c) => !(BUILTIN_SECTIONS as readonly string[]).includes(c)).map((s) => ({ value: s, label: s })),
     { value: NEW_SECTION, label: "+ New section…" },
   ] },
-  { name: "newSection", label: "New section name", required: true, wide: true, placeholder: "Home", showIf: { field: "section", values: [NEW_SECTION] } },
+  { name: "newSection", label: "New section name", required: true, wide: true, placeholder: "Home", showIf: { field: "section", values: [NEW_SECTION] }, requiredMessage: "Name the new section." },
   { name: "description", label: "What it's for", type: "textarea", nullable: true, wide: true, placeholder: "Books I want to read this year" },
 ];

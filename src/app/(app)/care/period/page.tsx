@@ -1,6 +1,6 @@
 import { pageOwner, periodState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, ItemRow } from "@/components/OpForm";
 import { SYMPTOMS } from "@/server/ops/period";
 import { addDays, addMonths, daysBetween, dmy, isoWeekday } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
@@ -126,15 +126,13 @@ export default async function PeriodPage() {
           <ul className="list">
             {s.cycles.map((c) => (
               <li key={c.id} className="py-3 grid gap-2">
-                <div className="flex flex-wrap justify-between gap-3">
-                  <span className="t-small font-medium">{fmtDate(c.startDate)} → {c.endDate ? fmtDate(c.endDate) : "ongoing"}</span>
-                  <span className="t-small text-ink-2">{c.length ? `${c.length} days` : ""}{c.cycleLength ? `${c.length ? ", " : ""}cycle ${c.cycleLength} days` : ""}</span>
-                </div>
-                {(c.symptoms.length > 0 || c.notes) && <p className="t-small text-ink-2">{[c.symptoms.join(", "), c.notes].filter(Boolean).join(". ")}</p>}
-                <EditPanel label="Correct or delete">
-                    <OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact 
-                      deleteAction={{ op: "period.delete", input: { id: c.id }, confirm: "Delete this period entry?", label: "Delete entry" }} />
-                  </EditPanel>
+                <ItemRow del={{ op: "period.delete", input: { id: c.id }, confirm: "Delete this period entry?", label: "Delete entry" }} name="this entry"
+                  head={<span className="t-small font-medium">{fmtDate(c.startDate)} → {c.endDate ? fmtDate(c.endDate) : "ongoing"}</span>}
+                  aside={<span className="t-small text-ink-2">{c.length ? `${c.length} days` : ""}{c.cycleLength ? `${c.length ? ", " : ""}cycle ${c.cycleLength} days` : ""}</span>}
+                  edit={<OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact
+                      deleteAction={{ op: "period.delete", input: { id: c.id }, confirm: "Delete this period entry?", label: "Delete entry" }} />}>
+                  {(c.symptoms.length > 0 || c.notes) && <p className="t-small text-ink-2">{[c.symptoms.join(", "), c.notes].filter(Boolean).join(". ")}</p>}
+                </ItemRow>
               </li>
             ))}
           </ul>

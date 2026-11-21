@@ -1,4 +1,5 @@
 import { pageOwner, quranState, remindersFor } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { fmtDate, fmtDateTime } from "@/lib/format";
@@ -28,7 +29,12 @@ export default async function QuranPage() {
 
   return (
     <>
-      <PageHeader glyph="quran" title="Quran class" />
+      <PageAddProvider>
+      <PageHeader glyph="quran" title="Quran class"><PageAddButton label="Add a weekly class" /></PageHeader>
+      <PageAddPanel title="Add a weekly class">
+        <OpForm op="event.create" fields={eventFields()} fixed={{ kind: "class", startDate: new Date().toISOString().slice(0, 10) }} initial={{ weekday: "1", localTime: "18:00", reminderLeadMinutes: 60, remindersEnabled: true }} submitLabel="Create" />
+      </PageAddPanel>
+      </PageAddProvider>
 
       {!cls ? <Empty>No class set up.</Empty> : (
         <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] mb-8">
@@ -128,9 +134,6 @@ export default async function QuranPage() {
 
       <Section title="Other weekly commitments">
         {others.map((e) => <p key={e.id} className="t-small mb-2">{e.title}: {DAYS[e.weekday - 1].label} {e.localTime}</p>)}
-        <Reveal label="Add a weekly class">
-          <OpForm op="event.create" fields={eventFields()} fixed={{ kind: "class", startDate: new Date().toISOString().slice(0, 10) }} initial={{ weekday: "1", localTime: "18:00", reminderLeadMinutes: 60, remindersEnabled: true }} submitLabel="Create" />
-        </Reveal>
       </Section>
     </>
   );

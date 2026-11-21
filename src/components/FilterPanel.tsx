@@ -1,13 +1,14 @@
 "use client";
 import { useId, useState } from "react";
+import { Dropdown } from "./GlyphSelect";
 
 export function FilterIcon({ size = 17 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 5h16l-6 7.5V19l-4 1.5v-8z" /></svg>;
 }
 
-/** A "Filter" button with the funnel icon; the filtering options appear when it's tapped. Starts open while a filter is active. */
+/** A "Filter" button with the funnel icon; the filtering options appear when it's tapped. Applied filters show as tags instead. */
 export function FilterPanel({ active = false, children, className = "" }: { active?: boolean; children: React.ReactNode; className?: string }) {
-  const [open, setOpen] = useState(active);
+  const [open, setOpen] = useState(false);
   const id = useId();
   return (
     <div className={`contents ${className}`}>
@@ -35,10 +36,20 @@ export function IconToggle({ icon, label, count, children }: { icon: "family"; l
   const id = useId();
   return (
     <div className="contents">
-      <button type="button" className="btn icon-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-        {icon === "family" && <FamilyIcon />}{label}{count !== undefined && ` (${count})`}
+      <button type="button" className="btn icon-btn icon-toggle shrink-0" aria-expanded={open} aria-controls={id} aria-label={`${label}${count !== undefined ? ` (${count})` : ""}`} title={label} onClick={() => setOpen(!open)}>
+        {icon === "family" && <FamilyIcon />}<span className="icon-toggle-text" aria-hidden>{label}{count !== undefined && ` (${count})`}</span>
       </button>
       {open && <div id={id} className="basis-full w-full min-w-0 order-last mt-1 panel p-4 preview-enter">{children}</div>}
+    </div>
+  );
+}
+
+/** One filter choice, using the site's dropdown (same look as every other picker). */
+export function FilterSelect({ label, name, options, value }: { label: string; name: string; options: { value: string; label: string }[]; value?: string }) {
+  return (
+    <div className="field" role="group">
+      <span className="label">{label}</span>
+      <Dropdown name={name} options={options} initial={value ?? ""} ariaLabel={label} size="sm" />
     </div>
   );
 }

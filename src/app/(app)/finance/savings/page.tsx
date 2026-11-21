@@ -1,6 +1,7 @@
 import { pageOwner, savingsState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty } from "@/components/ui";
-import { OpForm, Reveal } from "@/components/OpForm";
+import { OpForm, Reveal, ItemRow } from "@/components/OpForm";
 import { currencyField } from "@/components/fields";
 import { formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
@@ -27,32 +28,36 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader glyph="savings" title="Savings" />
-      <div className="mb-8 flex flex-wrap gap-3 items-start">
-        {active.length > 0 && (
-          <Reveal label="Add savings" buttonClass="btn btn-primary" open={sp.add === "1"}>
-            <OpForm op="savings.deposit" submitLabel="Save deposit" initial={{ onDate: today }} fields={[
+      <PageAddProvider initialOpen={sp.add === "1" ? (active.length ? "deposit" : "goal") : null}>
+      <PageHeader glyph="savings" title="Savings">
+        <PageAddButton label="Add" choices={[...(active.length ? [{ key: "deposit", label: "Add savings" }] : []), { key: "goal", label: "New goal" }]} />
+      </PageHeader>
+      {active.length > 0 && (
+        <PageAddPanel id="deposit" title="Add savings">
+          <OpForm op="savings.deposit" submitLabel="Save deposit" initial={{ onDate: today }} fields={[
               { name: "goalId", label: "Goal", type: "select", required: true, options: active.map((g) => ({ value: g.goal.id, label: g.goal.name })) },
               { name: "amount", label: "Amount", type: "amount", required: true },
               { name: "onDate", label: "Date", type: "date", required: true },
               { name: "notes", label: "Note", nullable: true },
             ]} />
-          </Reveal>
-        )}
-        <Reveal label="New goal" open={sp.add === "1" && !active.length}>
-          <OpForm op="savings.goal.create" fields={goalFields(o.defaultCurrency)} initial={{ currency: o.defaultCurrency, openingBalance: "0" }} submitLabel="Create goal" />
-        </Reveal>
-      </div>
+        </PageAddPanel>
+      )}
+      <PageAddPanel id="goal" title="New goal">
+        <OpForm op="savings.goal.create" fields={goalFields(o.defaultCurrency)} initial={{ currency: o.defaultCurrency, openingBalance: "0" }} submitLabel="Create goal" />
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-8" />
 
       {goals.length === 0 && <Empty>No goals yet. Create one for each thing you&apos;re saving towards — they run side by side.</Empty>}
 
       <div className="grid gap-6">
         {goals.map(({ goal: g, balance, pct, txs, byMonth }) => (
           <article key={g.id} className="panel p-4 sm:p-5" style={{ opacity: g.status === "archived" ? 0.6 : 1 }}>
-            <div className="flex flex-wrap justify-between gap-3 items-baseline">
-              <h2 className="t-h2">{g.name} {g.status !== "active" && <span className="chip chip-pine">{g.status}</span>}</h2>
-              <p className="t-small text-ink-2">{g.targetDate ? `Target ${fmtDate(g.targetDate)}` : "No target date"}</p>
-            </div>
+            <ItemRow name={g.name}
+              head={<><h2 className="t-h2">{g.name} {g.status !== "active" && <span className="chip chip-pine">{g.status}</span>}</h2>
+                <p className="t-small text-ink-2">{g.targetDate ? `Target ${fmtDate(g.targetDate)}` : "No target date"}</p></>}
+              edit={<OpForm op="savings.goal.update" fixed={{ id: g.id }} submitLabel="Save goal" fields={[...goalFields(g.currency), { name: "status", label: "Status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "achieved", label: "Achieved" }, { value: "archived", label: "Archived" }] }]}
+                  initial={{ ...g, target: fromMinor(g.targetMinor, g.currency), openingBalance: fromMinor(g.openingBalanceMinor, g.currency), plannedMonthly: g.plannedMonthlyMinor ? fromMinor(g.plannedMonthlyMinor, g.currency) : "" }} />} />
             <div className="mt-4 grid gap-1">
               <div className="flex justify-between items-end"><span className="t-num text-[1.7rem] sm:text-[2.4rem]">{formatMoney(balance, g.currency)}</span><span className="t-small">{pct}% of {formatMoney(g.targetMinor, g.currency)}</span></div>
               <div className="bar" style={{ height: 14 }}><i style={{ width: `${pct}%` }} /></div>
@@ -77,10 +82,6 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
               <Reveal label="Withdraw" buttonClass="btn btn-sm">
                 <OpForm op="savings.withdraw" fixed={{ goalId: g.id }} initial={{ onDate: today }} submitLabel="Save withdrawal" fields={[
                   { name: "amount", label: "Amount", type: "amount", required: true }, { name: "onDate", label: "Date", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
-              </Reveal>
-              <Reveal label="Edit goal" buttonClass="btn btn-sm">
-                <OpForm op="savings.goal.update" fixed={{ id: g.id }} submitLabel="Save goal" fields={[...goalFields(g.currency), { name: "status", label: "Status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "achieved", label: "Achieved" }, { value: "archived", label: "Archived" }] }]}
-                  initial={{ ...g, target: fromMinor(g.targetMinor, g.currency), openingBalance: fromMinor(g.openingBalanceMinor, g.currency), plannedMonthly: g.plannedMonthlyMinor ? fromMinor(g.plannedMonthlyMinor, g.currency) : "" }} />
               </Reveal>
             </div>
           </article>

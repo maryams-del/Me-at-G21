@@ -9,7 +9,8 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "./api";
 import { CountdownRail, TimeWheel } from "./ReminderPickers";
 import { Icon, type IconName } from "./icons";
-import { GlyphSelect } from "./GlyphSelect";
+import { Dropdown, GlyphSelect } from "./GlyphSelect";
+import { titleCaseInput } from "@/lib/titlecase";
 import { countdown, daysBetween } from "@/lib/countdown";
 import { dmy } from "@/lib/time";
 
@@ -44,6 +45,10 @@ export type FieldDef = {
   /** send under a different key */
   sendAs?: string;
   wide?: boolean;
+  /** shown under the field when a required field is left empty */
+  requiredMessage?: string;
+  /** capitalise each word as it is typed (on by default for name / label / title fields) */
+  titleCase?: boolean;
   /** fields sharing a `row` sit side by side on one line, on every screen size (e.g. name + icon) */
   row?: string;
   /** text/int: suggestions shown as you type (you can still type anything) */
@@ -131,8 +136,13 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
 
 /** Date fields that the reminder rail counts back from, in order of preference. */
 const ANCHOR_FIELDS = ["expiresOn", "dueDate", "dueOn", "deadlineDate"];
-const DEFAULT_PRESETS = [90, 60, 30, 14, 7, 3, 1];
-const REPEAT_PRESETS = [14, 7, 3, 2, 1];
+/** The quick picks on every reminder setter: a month, a week and a day before. */
+const FAST_PRESETS = [30, 7, 1];
+/** Text fields that are titles: they're capitalised as you type, for consistency. */
+const TITLE_FIELDS = new Set(["name", "label", "title", "newSection"]);
+const isTitle = (f: FieldDef) => (f.titleCase ?? TITLE_FIELDS.has(f.name)) && (!f.type || f.type === "text");
+/** "Remind me this many days before…" → "Remind me". */
+const reminderLabel = (l: string) => l.replace(/ \(0 = on the day\)/, "").replace(/ (this many days )?before.*$/i, "");
 
 function isArchiveStatus(f: FieldDef) {
   const vals = (f.options ?? []).map((o) => o.value).sort().join(",");
@@ -200,6 +210,18 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
     if (confirmText && !(await askConfirmFor(confirmText))) return;
     setBusy(true); setError(null);
     const form = e.currentTarget;
+    // Required fields must be filled in before anything is sent.
+    const data = new FormData(form);
+    const missing = fields.filter(visible).find((f) => f.required && !["checkbox", "checks", "intlist", "time", "interval"].includes(f.type ?? "text")
+      && !String(data.get(f.name) ?? "").trim());
+    if (missing) {
+      setBusy(false);
+      setError({ message: missing.requiredMessage ?? `Fill in “${missing.label.replace(/\?$/, "")}” first.`, field: missing.name });
+      const home = tabs.find(([, , fs]) => (fs as readonly FieldDef[]).includes(missing));
+      if (home) setTab(home[0]);
+      requestAnimationFrame(() => (form.querySelector(`#${CSS.escape(`${id}-${missing.name}`)}`) as HTMLElement | null)?.focus());
+      return;
+    }
     const input = { ...toInput(fields.filter(visible), new FormData(form)), ...fixed };
     try {
       const body = nestKey ? { ...nestExtra, [nestKey]: { ...nestBase, ...input } } : input;
@@ -277,7 +299,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
           {renderRows(fields.filter(visible))}
         </div>
       )}
-      {error && <p role="alert" className="error">{error.message}</p>}
+      {error && !(error.field && fields.some((f) => f.name === error.field && visible(f))) && <p role="alert" className="error">{error.message}</p>}
       {!rich ? (
         <div><button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} disabled={busy}>{busy ? "Saving…" : submitLabel}</button></div>
       ) : confirmDel && deleteAction ? (
@@ -342,9 +364,9 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
           if (f === archiveField) return null;
           if (f.type === "intlist" && f.negative) return (
             <div key={f.name} className="field sm:col-span-2" role="group" aria-labelledby={`${fid}-l`}>
-              <span id={`${fid}-l`} className="label">{f.label.replace(/ this many days/, "").replace(/ \(0 = on the day\)/, "")}</span>
+              <span id={`${fid}-l`} className="label">{reminderLabel(f.label)}</span>
               <CountdownRail name={f.name} initial={initial[f.name]} anchor={fixedAnchor ?? anchor} endLabel={anchorField ? anchorLabel : "The day"}
-                presets={f.presets ?? (anchorField || fixedAnchor ? DEFAULT_PRESETS : REPEAT_PRESETS)} includeZero={f.includeZero}
+                presets={FAST_PRESETS} includeZero={f.includeZero}
                 maxDays={f.maxDays} maxCount={f.maxCount} onSummary={setRemSummary} />
             </div>
           );
@@ -364,6 +386,7 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
             <div key={f.name} className="field min-w-0" role="group" aria-labelledby={`${fid}-l`}>
               <span id={`${fid}-l`} className="label">{f.label}</span>
               <GlyphSelect id={fid} name={f.name} options={f.options ?? []} initial={val(f)} labelledBy={`${fid}-l`} />
+              {invalid && <span role="alert" className="error t-small">{error?.message}</span>}
             </div>
           );
           if (f.type === "checkbox") return (
@@ -390,31 +413,32 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
               <legend className="label mb-1">{f.label}</legend>
               <div className="interval-row">
                 <input className="input" {...common} aria-label={`${f.label} (number)`} defaultValue={val(f) || "1"} inputMode="numeric" />
-                <select className="select" name={f.unitName} aria-label={`${f.label} (unit)`} defaultValue={f.unitName && initial[f.unitName] != null ? String(initial[f.unitName]) : f.options?.[0]?.value}>
-                  {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <Dropdown name={f.unitName ?? `${f.name}Unit`} ariaLabel={`${f.label} (unit)`} options={f.options ?? []}
+                  initial={f.unitName && initial[f.unitName] != null ? String(initial[f.unitName]) : f.options?.[0]?.value} />
               </div>
             </fieldset>
           );
+          const Wrap = (f.type === "select" ? "div" : "label") as "label";
           return (
-            <label key={f.name} htmlFor={fid} className={`field ${f.wide || f.type === "textarea" ? "sm:col-span-2" : ""}`}>
+            <Wrap key={f.name} {...(f.type === "select" ? { role: "group" } : { htmlFor: fid })} className={`field ${f.wide || f.type === "textarea" ? "sm:col-span-2" : ""}`}>
               <span className="label">{f.label}{f.required ? "" : <span className="t-meta"> (optional)</span>}</span>
               {f.type === "select" ? (
-                <select className="select" {...common} defaultValue={val(f)}>
-                  {!f.required && <option value="">—</option>}
-                  {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <Dropdown id={fid} name={f.name} initial={val(f)} ariaLabel={f.label}
+                  options={[...(f.required ? [] : [{ value: "", label: "—" }]), ...(f.options ?? [])]}
+                  onChange={(v) => { if (f.name in watch) setWatch((w) => ({ ...w, [f.name]: v })); if (error?.field === f.name) setError(null); }} />
               ) : f.type === "textarea" ? (
                 <textarea className="textarea" {...common} defaultValue={val(f)} placeholder={f.placeholder} />
               ) : (
                 <input className="input" {...common} defaultValue={val(f)} placeholder={f.placeholder}
                   type={f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"}
                   inputMode={f.type === "amount" ? "decimal" : f.type === "int" ? "numeric" : undefined}
-                  list={f.suggestions?.length ? `${fid}-l` : undefined} autoComplete={f.suggestions?.length ? "off" : undefined} />
+                  list={f.suggestions?.length ? `${fid}-l` : undefined} autoComplete={f.suggestions?.length ? "off" : undefined}
+                  autoCapitalize={isTitle(f) ? "words" : undefined} onInput={(e) => { if (isTitle(f)) titleCaseInput(e); if (invalid) setError(null); }} />
               )}
+              {invalid && <span role="alert" className="error t-small">{error?.message}</span>}
               {!!f.suggestions?.length && <datalist id={`${fid}-l`}>{f.suggestions.map((x) => <option key={x} value={x} />)}</datalist>}
               {f.help && <span id={`${fid}-h`} className="t-meta">{f.help}</span>}
-            </label>
+            </Wrap>
           );
           }
   }
@@ -450,28 +474,51 @@ export function PlusIcon({ size = 18 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>;
 }
 
-/** Disclosure wrapper for “add” forms so tracker pages stay calm. */
-export function Reveal({ label, children, open: initialOpen = false, buttonClass = "btn", iconOnly = false, icon }: { label: string; children: React.ReactNode; open?: boolean; buttonClass?: string; iconOnly?: boolean; icon?: IconName }) {
+/** The small round X in the top-right corner of every add / edit panel. */
+export function PanelClose({ onClick, label = "Close" }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" className="panel-x" aria-label={label} title="Close" onClick={onClick}>
+      <Icon name="close" size={16} strokeWidth={2.2} />
+    </button>
+  );
+}
+
+/**
+ * Disclosure wrapper for “add” forms so tracker pages stay calm. While open, the panel has its own X in the
+ * top-right corner (the button that opened it steps aside).
+ */
+export function Reveal({ label, children, open: initialOpen = false, buttonClass = "btn", iconOnly = false, icon, title }: { label: string; children: React.ReactNode; open?: boolean; buttonClass?: string; iconOnly?: boolean; icon?: IconName; title?: string }) {
   const [open, setOpen] = useState(initialOpen);
   const id = useId();
   const isAdd = ADD_LABEL.test(label);
   const text = label.replace(/^\+\s*/, "");
+  const panel = open && (
+    <div id={id} className={`mt-2 panel form-panel panel-closable p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}>
+      <PanelClose onClick={() => setOpen(false)} label={`Close ${text.toLowerCase()}`} />
+      <p className="t-h3 mb-3 pr-10">{title ?? text}</p>
+      <RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider>
+    </div>
+  );
+  if (iconOnly) return (
+    <div className="contents">
+      <button type="button" className="plus-btn" aria-label={open ? "Close" : text} title={text} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <PlusIcon size={22} />
+      </button>
+      {panel}
+    </div>
+  );
   return (
-    <div className={iconOnly ? "contents" : open ? "basis-full w-full min-w-0" : undefined}>
-      {iconOnly ? (
-        <button type="button" className="plus-btn" aria-label={open ? "Close" : text} title={text} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-          <PlusIcon size={22} />
-        </button>
-      ) : icon ? (
-        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}><Icon name={open ? "close" : icon} size={15} />{open ? "Close" : label}</button>
+    <div className={open ? "basis-full w-full min-w-0" : undefined}>
+      {open ? null : icon ? (
+        <button type="button" className={buttonClass} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}><Icon name={icon} size={15} />{label}</button>
       ) : isAdd ? (
-        <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
-          <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{open ? "Close" : text}
+        <button type="button" className={`btn add-btn ${buttonClass.includes("btn-sm") ? "btn-sm" : ""}`} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}>
+          <span className="add-ico"><PlusIcon size={buttonClass.includes("btn-sm") ? 15 : 18} /></span>{text}
         </button>
       ) : (
-        <button type="button" className={buttonClass} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close" : label}</button>
+        <button type="button" className={buttonClass} aria-expanded={false} aria-controls={id} onClick={() => setOpen(true)}>{label}</button>
       )}
-      {open && <div id={id} className={`mt-2 panel form-panel p-4 preview-enter ${iconOnly ? "basis-full w-full min-w-0 order-last" : ""}`}><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
+      {panel}
     </div>
   );
 }
@@ -494,5 +541,59 @@ export function EditPanel({ children, label = "Edit", buttonClass = "btn btn-sm 
       )}
       {open && <div id={id} className="mt-3 panel form-panel p-4 grid gap-3 preview-enter"><RevealCtx.Provider value={{ close: () => setOpen(false) }}>{children}</RevealCtx.Provider></div>}
     </div>
+  );
+}
+
+/** A bin icon that asks (with the site's popup) and then deletes. Sits beside the edit pencil on a card's title line. */
+export function DeleteIcon({ op, input, confirm, note, label = "Delete", redirectTo, className = "icon-ghost icon-danger" }: {
+  op: string; input: unknown; confirm: string; note?: string; label?: string; redirectTo?: string; className?: string;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button type="button" className={className} style={{ margin: 0 }} aria-label={label} title={label} disabled={busy}
+      onClick={async () => {
+        if (!(await askConfirm(confirm, { note: note ?? "You can’t undo this.", danger: true }))) return;
+        setBusy(true);
+        try {
+          const r = await api<{ message?: string }>(`/api/ops/${op}`, input);
+          toast(r.message ?? "Deleted");
+          if (redirectTo) router.push(redirectTo); else router.refresh();
+        } catch (e) { toast(e instanceof Error ? e.message : "Couldn't delete. Nothing was changed.", "error"); setBusy(false); }
+      }}>
+      <Icon name="trash" size={17} />
+    </button>
+  );
+}
+
+type DelAction = { op: string; input: unknown; confirm: string; note?: string; label?: string; redirectTo?: string };
+/**
+ * A list item whose name line carries the pencil (edit) and bin (delete) icons at its right end.
+ * The edit form opens under the item in a panel with its own X.
+ */
+export function ItemRow({ head, aside, children, edit, del, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit: React.ReactNode; del?: DelAction; name?: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <>
+      <div className="item-head">
+        <div className="min-w-0 flex-1">{head}</div>
+        {aside && <div className="shrink-0">{aside}</div>}
+        <div className="entry-actions">
+          <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={open ? "Close editing" : `Edit ${name}`} title="Edit" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+            <Icon name="edit" size={17} />
+          </button>
+          {del && <DeleteIcon op={del.op} input={del.input} confirm={del.confirm} note={del.note} label={`Delete ${name}`} redirectTo={del.redirectTo} />}
+        </div>
+      </div>
+      {children}
+      {open && (
+        <div id={id} className="panel form-panel panel-closable p-4 mt-1 preview-enter">
+          <PanelClose onClick={() => setOpen(false)} label="Close editing" />
+          <p className="t-h3 mb-3 pr-10">Edit</p>
+          <RevealCtx.Provider value={{ close: () => setOpen(false) }}>{edit}</RevealCtx.Provider>
+        </div>
+      )}
+    </>
   );
 }

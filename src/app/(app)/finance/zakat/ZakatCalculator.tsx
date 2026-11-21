@@ -1,4 +1,5 @@
 "use client";
+import { Dropdown } from "@/components/GlyphSelect";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
@@ -68,7 +69,7 @@ export function ZakatCalculator({ today, currency: defCurrency }: { today: strin
       <div className="panel p-5 grid gap-6">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="field"><span className="label">Evaluation date</span><input type="date" className="input" value={date} max={today} onChange={(e) => setDate(e.target.value)} /></label>
-          <label className="field"><span className="label">Currency</span><select className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <div className="field" role="group"><span className="label">Currency</span><Dropdown ariaLabel="Currency" value={currency} onChange={setCurrency} options={CURRENCIES.map((c) => ({ value: c, label: c }))} /></div>
         </div>
         <Lines title="Assets you count" lines={assets} set={setAssets} suggestions={ASSET_SUGGESTIONS} currency={currency} />
         <Lines title="Deductions" lines={liabilities} set={setLiabilities} suggestions={LIAB_SUGGESTIONS} currency={currency} />

@@ -1,4 +1,5 @@
 import { pageOwner, subscriptionsState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { EntryCard } from "@/components/EntryCard";
@@ -35,16 +36,19 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
 
   return (
     <>
-      <PageHeader glyph="subscriptions" title="Subscriptions" />
+      <PageAddProvider initialOpen={sp.add === "1"}>
+      <PageHeader glyph="subscriptions" title="Subscriptions"><PageAddButton label="Add subscription" /></PageHeader>
+      <PageAddPanel title="Add subscription">
+        <OpForm op="subscription.create" fields={f} initial={{ currency: o.defaultCurrency, cadence: "monthly", renewal: "auto", intervalValue: 1, intervalUnit: "month", beforeDays: [3], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Save subscription" />
+      </PageAddPanel>
+      </PageAddProvider>
 
       <div className="money-tiles mb-6">
         <div className="tile mustard min-h-0"><p className="t-small">Per month (average)</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.monthly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p><p className="t-small mt-1">{s.active.length} active</p></div>
         <div className="tile min-h-0"><p className="t-small text-ink-2">Per year</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{totals.length ? totals.map(([c, v]) => formatMoney(v.yearly, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</p></div>
       </div>
 
-      <div className="mb-8"><Reveal label="Add subscription" open={sp.add === "1"}>
-        <OpForm op="subscription.create" fields={f} initial={{ currency: o.defaultCurrency, cadence: "monthly", renewal: "auto", intervalValue: 1, intervalUnit: "month", beforeDays: [3], reminderTime: "09:00", remindersEnabled: true }} submitLabel="Save subscription" />
-      </Reveal></div>
+      <div className="mb-2" />
 
       <Section title="All subscriptions">
         {s.rows.length === 0 ? <Empty>No subscriptions yet. Add streaming, cloud storage, phone plans, gym memberships, anything that charges you on a schedule.</Empty> : (
@@ -53,7 +57,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
               const active = x.status === "active";
               const how = x.cadence === "custom" ? `Every ${x.intervalValue} ${x.intervalUnit}s` : CADENCE[x.cadence];
               return (
-                <EntryCard key={x.id} icon="card" countLabel="Next charge" title={x.name} dim={!active}
+                <EntryCard del={{ op: "subscription.delete", input: { id: x.id }, confirm: `Delete “${x.name}”? Its reminders stop.` }} key={x.id} icon="card" countLabel="Next charge" title={x.name} dim={!active}
                   badge={!active ? <span className="chip chip-fill">cancelled {x.cancelledOn ? fmtDate(x.cancelledOn) : ""}</span> : undefined}
                   subtitle={[`${formatMoney(x.amountMinor, x.currency)} · ${how}`, x.cadence !== "monthly" ? `≈ ${formatMoney(monthlyMinor, x.currency)}/month` : null, x.category, x.renewal === "manual" ? "renews manually" : null].filter(Boolean).join(" · ")}
                   count={active ? countdown(daysLeft, "charge") : null} countSub={active && next ? fmtDate(next) : undefined}

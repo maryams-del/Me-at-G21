@@ -1,4 +1,5 @@
 "use client";
+import { Dropdown } from "@/components/GlyphSelect";
 import { askConfirm } from "@/components/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -40,12 +41,12 @@ export function FamilyMenu({ people, relations }: { people: Person[]; relations:
 
   return (
     <div ref={box} className="relative inline-block">
-      <button type="button" className="btn icon-btn" aria-expanded={open} aria-haspopup="dialog" onClick={() => {
+      <button type="button" className="btn icon-btn icon-toggle shrink-0" aria-expanded={open} aria-haspopup="dialog" aria-label={`Family (${people.length})`} title="Family" onClick={() => {
         const rect = box.current?.getBoundingClientRect();
         if (rect) setAlignRight(rect.left + Math.min(304, window.innerWidth - 40) > window.innerWidth - 12);
         setOpen(!open); setEditing(null);
       }}>
-        <FamilyIcon />Family ({people.length})
+        <FamilyIcon /><span className="icon-toggle-text" aria-hidden>Family ({people.length})</span>
       </button>
       {open && (
         <div role="dialog" aria-label="Family" className="glass p-3 preview-enter"
@@ -87,9 +88,7 @@ function Row({ p, busy, relations, run, onCancel }: { p?: Person; busy: boolean;
     }}>
       <input className="input" style={{ minHeight: 38, borderRadius: 999, fontSize: 14 }} autoFocus placeholder="Name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
       <div className="flex gap-2">
-        <select className="select flex-1" style={{ minHeight: 38, borderRadius: 999, fontSize: 14 }} value={relation} onChange={(e) => setRelation(e.target.value)} aria-label="Relation">
-          {relations.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
+        <Dropdown className="flex-1 min-w-0" size="sm" value={relation} onChange={setRelation} ariaLabel="Relation" options={relations} />
         <button className="btn btn-sm btn-primary" disabled={busy || !name.trim()}>{busy ? "…" : "Save"}</button>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onCancel}>Cancel</button>
       </div>

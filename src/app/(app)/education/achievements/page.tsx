@@ -1,7 +1,8 @@
 import { pageOwner, achievementsState } from "@/server/queries";
-import { PageHeader, Section, Empty, SearchPill } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
-import { FilterPanel } from "@/components/FilterPanel";
+import { PageHeader, Section, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
+import { OpForm, OpButton, Reveal, ItemRow, type FieldDef } from "@/components/OpForm";
+import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 import { ACHIEVEMENT_KINDS, ACHIEVEMENT_AREAS } from "@/db/schema";
 import { datesLabel } from "@/server/ops/career";
 import { fmtDate } from "@/lib/format";
@@ -48,41 +49,51 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
   const filtered = !!(sp.q || sp.kind || sp.area || sp.tag || sp.year);
   const rows = sp.featured === "1" ? d.rows.filter((r) => r.featured) : d.rows;
   const cv = rows.map((r) => r.bullet).join("\n");
+  const PATH = "/education/achievements";
+  const params = { q: sp.q, kind: sp.kind, area: sp.area, tag: sp.tag, year: sp.year, featured: sp.featured };
 
   return (
     <>
-      <PageHeader glyph="achievements" title="Achievements & hobbies" />
+      <PageAddProvider initialOpen={sp.add === "1"}>
+      <PageHeader glyph="achievements" title="Achievements & hobbies"><PageAddButton label="Add achievement" /></PageHeader>
 
-      <div className="toolbar mb-6">
+      <div className="toolbar">
         <SearchPill q={sp.q} placeholder="Search achievements" keep={{ kind: sp.kind, area: sp.area, tag: sp.tag, year: sp.year }} />
         <FilterPanel active={!!(sp.kind || sp.area || sp.tag || sp.year)}>
-          <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto_auto] items-end" aria-label="Filter achievements">
+          <form className="panel p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] items-end" aria-label="Filter achievements">
             {sp.q && <input type="hidden" name="q" value={sp.q} />}
-            <label className="field"><span className="label">Type</span><select name="kind" defaultValue={sp.kind ?? ""} className="select"><option value="">All</option>{ACHIEVEMENT_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
-            <label className="field"><span className="label">Area</span><select name="area" defaultValue={sp.area ?? ""} className="select"><option value="">All</option>{ACHIEVEMENT_AREAS.map((k) => <option key={k} value={k}>{AREA_LABEL[k]}</option>)}</select></label>
-            <label className="field"><span className="label">Tag or skill</span><select name="tag" defaultValue={sp.tag ?? ""} className="select"><option value="">All</option>{d.tags.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
-            <label className="field"><span className="label">Year</span><select name="year" defaultValue={sp.year ?? ""} className="select"><option value="">Any</option>{d.years.map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
+            <FilterSelect label="Type" name="kind" value={sp.kind} options={[{ value: "", label: "All" }, ...ACHIEVEMENT_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))]} />
+            <FilterSelect label="Area" name="area" value={sp.area} options={[{ value: "", label: "All" }, ...ACHIEVEMENT_AREAS.map((k) => ({ value: k, label: AREA_LABEL[k] }))]} />
+            <FilterSelect label="Tag or skill" name="tag" value={sp.tag} options={[{ value: "", label: "All" }, ...d.tags.map((t) => ({ value: t, label: t }))]} />
+            <FilterSelect label="Year" name="year" value={sp.year} options={[{ value: "", label: "Any" }, ...d.years.map((y) => ({ value: String(y), label: String(y) }))]} />
             <button className="btn">Apply</button>
-            {filtered && <a href="/education/achievements" className="btn btn-ghost">Clear</a>}
           </form>
         </FilterPanel>
-        <Reveal label="Add achievement" iconOnly open={sp.add === "1"}>
-          <OpForm op="achievement.create" fields={fields} initial={{ kind: "accomplishment", area: "work" }} submitLabel="Save achievement" />
-        </Reveal>
       </div>
+      <FilterTags clearHref="/education/achievements" tags={[
+        ...(sp.q ? [{ label: `“${sp.q}”`, href: withoutParam(PATH, params, "q") }] : []),
+        ...(sp.kind ? [{ label: KIND_LABEL[sp.kind as keyof typeof KIND_LABEL] ?? sp.kind, href: withoutParam(PATH, params, "kind") }] : []),
+        ...(sp.area ? [{ label: AREA_LABEL[sp.area as keyof typeof AREA_LABEL] ?? sp.area, href: withoutParam(PATH, params, "area") }] : []),
+        ...(sp.tag ? [{ label: `#${sp.tag}`, href: withoutParam(PATH, params, "tag") }] : []),
+        ...(sp.year ? [{ label: sp.year, href: withoutParam(PATH, params, "year") }] : []),
+      ]} />
+      <PageAddPanel title="Add achievement">
+        <OpForm op="achievement.create" fields={fields} initial={{ kind: "accomplishment", area: "work" }} submitLabel="Save achievement" />
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-6" />
 
       <Section title={filtered ? `${rows.length} of ${d.total}` : "Achievements"}>
         {rows.length === 0 ? <Empty>{filtered ? "Nothing matches these filters." : "Nothing here yet. Add projects, awards, certifications, volunteering and results as they happen, so they're ready when you need them."}</Empty> : (
           <ul className="grid gap-4 md:grid-cols-2">
             {rows.map((a) => (
               <li key={a.id} className="panel p-4 grid gap-2 content-start" style={a.featured ? { boxShadow: "inset 6px 0 0 var(--mustard)" } : undefined}>
-                <div className="flex justify-between gap-3">
-                  <div>
-                    <h2 className="t-h3">{a.title}</h2>
-                    <p className="t-meta">{[KIND_LABEL[a.kind], AREA_LABEL[a.area], a.organisation].filter(Boolean).join(", ")}</p>
-                  </div>
-                  {datesLabel(a) && <p className="t-small text-right text-ink-2 shrink-0">{datesLabel(a)}</p>}
-                </div>
+                <ItemRow del={{ op: "achievement.delete", input: { id: a.id }, confirm: `Delete “${a.title}”?`, label: "Delete" }} name={a.title}
+                  head={<><h2 className="t-h3">{a.title}</h2><p className="t-meta">{[KIND_LABEL[a.kind], AREA_LABEL[a.area], a.organisation].filter(Boolean).join(", ")}</p></>}
+                  aside={datesLabel(a) ? <p className="t-small text-right text-ink-2">{datesLabel(a)}</p> : undefined}
+                  edit={<OpForm op="achievement.update" fields={fields} fixed={{ id: a.id }} compact submitLabel="Save"
+                      initial={{ ...a, skillsText: a.skills.join(", "), tagsText: a.tags.join(", "), linksText: linksText(a.links) }}
+                      deleteAction={{ op: "achievement.delete", input: { id: a.id }, confirm: `Delete “${a.title}”?`, label: "Delete" }} />}>
                 {a.outcome && <p className="t-small"><span className="font-medium">Outcome:</span> {a.outcome}</p>}
                 {a.description && <p className="t-small text-ink-2 whitespace-pre-line">{a.description}</p>}
                 {(a.skills.length > 0 || a.tags.length > 0) && <div className="flex flex-wrap gap-1.5">{a.skills.map((x) => <span key={`s${x}`} className="chip chip-fill">{x}</span>)}{a.tags.map((x) => <span key={`t${x}`} className="chip">#{x}</span>)}</div>}
@@ -94,11 +105,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
                     {a.links.map((l) => <li key={l.url}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></li>)}
                   </ul>
                 )}
-                <EditPanel>
-                    <OpForm op="achievement.update" fields={fields} fixed={{ id: a.id }} compact submitLabel="Save"
-                      initial={{ ...a, skillsText: a.skills.join(", "), tagsText: a.tags.join(", "), linksText: linksText(a.links) }} 
-                      deleteAction={{ op: "achievement.delete", input: { id: a.id }, confirm: `Delete “${a.title}”?`, label: "Delete" }} />
-                  </EditPanel>
+                </ItemRow>
               </li>
             ))}
           </ul>
@@ -117,16 +124,14 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
           <ul className="list">
             {d.hobbies.map((h) => (
               <li key={h.id} className="py-3 grid gap-1">
-                <div className="flex flex-wrap justify-between gap-3">
-                  <span className="t-small font-medium">{h.name}{h.level ? `, ${h.level}` : ""} {!h.active && <span className="chip chip-fill">paused</span>}</span>
-                  {h.since && <span className="t-small text-ink-2">since {fmtDate(h.since)}</span>}
-                </div>
+                <ItemRow del={{ op: "hobby.delete", input: { id: h.id }, confirm: `Delete “${h.name}”?`, label: "Delete" }} name={h.name}
+                  head={<span className="t-small font-medium">{h.name}{h.level ? `, ${h.level}` : ""} {!h.active && <span className="chip chip-fill">paused</span>}</span>}
+                  aside={h.since ? <span className="t-small text-ink-2">since {fmtDate(h.since)}</span> : undefined}
+                  edit={<OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact
+                      deleteAction={{ op: "hobby.delete", input: { id: h.id }, confirm: `Delete “${h.name}”?`, label: "Delete" }} />}>
                 {h.notes && <p className="t-small text-ink-2">{h.notes}</p>}
                 {h.links.length > 0 && <p className="t-small">{h.links.map((l, n) => <span key={l.url}>{n ? ", " : ""}<a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a></span>)}</p>}
-                <EditPanel>
-                    <OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact 
-                      deleteAction={{ op: "hobby.delete", input: { id: h.id }, confirm: `Delete “${h.name}”?`, label: "Delete" }} />
-                  </EditPanel>
+                </ItemRow>
               </li>
             ))}
           </ul>

@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { pageOwner, applicationDetail } from "@/server/queries";
 import { PageHeader, Section, ReminderList } from "@/components/ui";
-import { OpForm, OpButton, Reveal } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, DeleteIcon } from "@/components/OpForm";
+import { PageAddProvider, PageEditButton, PageAddPanel } from "@/components/PageAdd";
 import { applicationFields, STATUS_LABEL, STATUS_OPTIONS } from "../../fields";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { formatMoney, fromMinor } from "@/lib/money";
@@ -21,9 +22,17 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
 
   return (
     <>
+      <PageAddProvider>
       <PageHeader glyph="applications" title={a.university} intro={`${a.program}${a.intake ? `, ${a.intake}` : ""}${a.country ? `, ${a.country}` : ""}`}>
         <span className="chip chip-fill self-center">{STATUS_LABEL[a.status]}</span>
+        <PageEditButton label="Edit details" />
+        <DeleteIcon op="application.delete" input={{ id: a.id }} confirm={`Delete ${a.program} at ${a.university}?`} label="Delete application" redirectTo="/education/applications" />
       </PageHeader>
+      <PageAddPanel id="edit" title="Edit details">
+        <OpForm op="application.update" fields={applicationFields([], true)} fixed={{ id: a.id, links: a.links, documentIds: a.documentIds }}
+          initial={{ ...a, fee: a.feeMinor !== null ? fromMinor(a.feeMinor, a.feeCurrency ?? "SAR") : "", linksText: a.links.map((l) => `${l.label} | ${l.url}`).join("\n") }} submitLabel="Save" />
+      </PageAddPanel>
+      </PageAddProvider>
 
       <div className="money-tiles mb-8">
         <div className="tile slate min-h-0">
@@ -34,7 +43,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
               <p className="t-small mt-1">Your time ({o.timezone}){theirTime ? `. University time: ${theirTime} (${a.deadlineTz})` : ""}</p>
               <p className="t-small mt-1">{a.deadlineVerified ? "Verified on the official site." : "Not verified yet. Check the official program page."}</p>
             </>
-          ) : <p className="t-small mt-2">No deadline set. Add it from the official site under “Edit details”.</p>}
+          ) : <p className="t-small mt-2">No deadline set. Add it from the official site with the pencil above.</p>}
         </div>
         <div className="tile min-h-0">
           <p className="t-small text-ink-2">Fee and funding</p>
@@ -48,12 +57,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
           <OpForm op="application.status" fixed={{ id: a.id }} initial={{ status: a.status === "researching" ? "preparing" : a.status === "preparing" ? "submitted" : a.status, onDate: today }} submitLabel="Save status" fields={[
             { name: "status", label: "New status", type: "select", required: true, options: STATUS_OPTIONS }, { name: "onDate", label: "Date", type: "date", required: true }, { name: "note", label: "Note", nullable: true, wide: true }]} />
         </Reveal>
-        <Reveal label="Edit details" buttonClass="btn">
-          <OpForm op="application.update" fields={applicationFields([], true)} fixed={{ id: a.id, links: a.links, documentIds: a.documentIds }}
-            initial={{ ...a, fee: a.feeMinor !== null ? fromMinor(a.feeMinor, a.feeCurrency ?? "SAR") : "", linksText: a.links.map((l) => `${l.label} | ${l.url}`).join("\n") }} submitLabel="Save" />
-        </Reveal>
         {a.url && <a href={a.url} target="_blank" rel="noopener noreferrer" className="btn">Open application site</a>}
-        <OpButton op="application.delete" input={{ id: a.id }} label="Delete" className="btn btn-ghost" confirmText={`Delete ${a.program} at ${a.university}?`} />
       </div>
 
       <div className="grid gap-8 md:grid-cols-2">
@@ -113,7 +117,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
             {a.notes && <p className="t-small whitespace-pre-line text-ink-2">{a.notes}</p>}
           </Section>
         )}
-        <Section title="Upcoming reminders"><ReminderList items={d.reminders} tz={o.timezone} /></Section>
+        <div className="md:col-span-2"><Section title="Upcoming reminders"><ReminderList items={d.reminders} tz={o.timezone} /></Section></div>
       </div>
     </>
   );

@@ -1,4 +1,5 @@
 import { pageOwner, historyState } from "@/server/queries";
+import { FilterSelect } from "@/components/FilterPanel";
 import { PageHeader, Empty, SearchPill } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
 import { SearchBox } from "./SearchBox";
@@ -17,8 +18,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         <FilterPanel active={!!(sp.category || sp.from || sp.to)}>
           <form className="panel p-4 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] items-end" aria-label="Filter history">
             {sp.q && <input type="hidden" name="q" value={sp.q} />}
-            <label className="field"><span className="label">Category</span>
-              <select name="category" defaultValue={sp.category ?? ""} className="select"><option value="">All</option>{s.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+            <FilterSelect label="Category" name="category" value={sp.category} options={[{ value: "", label: "All" }, ...s.categories.map((c) => ({ value: c, label: c }))]} />
             <label className="field"><span className="label">From</span><input type="date" name="from" defaultValue={sp.from} className="input" /></label>
             <label className="field"><span className="label">To</span><input type="date" name="to" defaultValue={sp.to} className="input" /></label>
             <button className="btn">Apply</button>

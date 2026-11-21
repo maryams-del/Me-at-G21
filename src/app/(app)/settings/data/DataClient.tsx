@@ -1,4 +1,5 @@
 "use client";
+import { Dropdown } from "@/components/GlyphSelect";
 import { askConfirm } from "@/components/ConfirmDialog";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -202,10 +203,9 @@ export function RestorePanel({ stored, pending = 0 }: { stored: { id: string; la
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="field"><span className="label">A backup file from your device</span>
           <input type="file" accept=".mebackup,application/octet-stream" className="input" onChange={(e) => pick(e.target.files?.[0] ?? null)} /></label>
-        <label className="field"><span className="label">or one saved in the app</span>
-          <select className="select" value={storedId} onChange={(e) => { setStoredId(e.target.value); setFile(null); setIsFull(false); reset(); }}>
-            <option value="">Choose…</option>{stored.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select></label>
+        <div className="field" role="group"><span className="label">or one saved in the app</span>
+          <Dropdown ariaLabel="A backup saved in the app" value={storedId} onChange={(v) => { setStoredId(v); setFile(null); setIsFull(false); reset(); }}
+            options={[{ value: "", label: "Choose…" }, ...stored.map((s) => ({ value: s.id, label: s.label }))]} /></div>
       </div>
       {isFull && <label className="field max-w-md"><span className="label">This is a full backup. Its password:</span><input type="password" className="input" autoComplete="off" value={password} onChange={(e) => { setPassword(e.target.value); reset(); }} /></label>}
       <button type="button" className="btn justify-self-start" disabled={busy || (!file && !storedId) || (isFull && !password)} onClick={preview}>{busy && !summary ? "Checking…" : "Check backup"}</button>

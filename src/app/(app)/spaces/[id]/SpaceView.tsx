@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
 import { Icon } from "@/components/icons";
-import { OpForm, PlusIcon, RevealCtx, type FieldDef } from "@/components/OpForm";
+import { OpForm, PanelClose, PlusIcon, RevealCtx, type FieldDef } from "@/components/OpForm";
 import { api, ApiError, toast } from "@/components/api";
 import { askConfirm } from "@/components/ConfirmDialog";
 
@@ -77,14 +77,10 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
       </header>
 
       {editing && (
-        <div className="side-wrap">
-          <div id="edit-space" className="panel form-panel side-panel p-4 preview-enter" role="region" aria-labelledby="edit-h">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p id="edit-h" className="t-h3">Edit space</p>
-              <button type="button" className="icon-ghost" style={{ margin: "-6px -6px 0 0" }} aria-label="Close editing" title="Close" onClick={() => setEditing(false)}>
-                <Icon name="close" size={18} />
-              </button>
-            </div>
+        <div className="center-panel-wrap">
+          <div id="edit-space" className="panel center-panel panel-closable p-4 md:p-5 preview-enter" role="region" aria-labelledby="edit-h">
+            <PanelClose onClick={() => setEditing(false)} label="Close editing" />
+            <p id="edit-h" className="t-h3 mb-3 pr-10">Edit space</p>
             <RevealCtx.Provider value={{ close: () => setEditing(false) }}>
               <OpForm op="space.update" fields={fields} fixed={{ id: s.id }} compact submitLabel="Save"
                 initial={{ name: s.name, description: s.description, section: s.section, glyph: s.glyph }}
@@ -96,8 +92,10 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
       )}
 
       {adding && (
-        <form id="add-item" className="panel p-4 mb-6 preview-enter" onSubmit={addItem} noValidate>
-          <label htmlFor="add-item-text" className="block text-[0.875rem] font-semibold text-ink-2 mb-2">Add a to do list item</label>
+        <div className="center-panel-wrap">
+        <form id="add-item" className="panel center-panel panel-closable p-4 md:p-5 preview-enter" onSubmit={addItem} noValidate>
+          <PanelClose onClick={() => setAdding(false)} label="Close adding" />
+          <label htmlFor="add-item-text" className="block text-[0.875rem] font-semibold text-ink-2 mb-2 pr-10">Add a to do list item</label>
           <div className="flex items-center gap-2">
             <input ref={input} id="add-item-text" className="input flex-1 min-w-0" placeholder="Something to remember or do" maxLength={500} autoFocus autoComplete="off"
               aria-invalid={!!error || undefined} aria-describedby={error ? "add-item-err" : undefined} />
@@ -105,6 +103,7 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
           </div>
           {error && <p id="add-item-err" role="alert" className="error mt-2">{error}</p>}
         </form>
+        </div>
       )}
 
       {children}

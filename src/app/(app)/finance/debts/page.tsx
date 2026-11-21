@@ -1,4 +1,5 @@
 import { pageOwner, debtsState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, Reveal, type FieldDef } from "@/components/OpForm";
 import { EntryCard } from "@/components/EntryCard";
@@ -23,14 +24,10 @@ export default async function DebtsPage() {
 
   return (
     <>
-      <PageHeader glyph="debts" title="Lent & borrowed" />
-      <div className="money-tiles mb-8">
-        <div className="tile slate min-h-0"><p className="t-small">Owed to me (I need to collect)</p><p className="t-num text-[2.2rem] mt-2">{sum(owedToMe)}</p></div>
-        <div className="tile rust min-h-0"><p className="t-small">I owe (I need to repay)</p><p className="t-num text-[2.2rem] mt-2">{sum(iOwe)}</p></div>
-      </div>
-      <div className="mb-8">
-        <Reveal label="Add a record" buttonClass="btn btn-primary">
-          <OpForm op="debt.create" submitLabel="Save record" initial={{ onDate: today, currency: o.defaultCurrency, direction: "lent", remindersEnabled: true, reminderOffsetsDays: "1", overdueRepeatDays: 3, reminderTime: "09:00" }}
+      <PageAddProvider>
+      <PageHeader glyph="debts" title="Lent & borrowed"><PageAddButton label="Add a record" /></PageHeader>
+      <PageAddPanel title="Add a record">
+        <OpForm op="debt.create" submitLabel="Save record" initial={{ onDate: today, currency: o.defaultCurrency, direction: "lent", remindersEnabled: true, reminderOffsetsDays: "1", overdueRepeatDays: 3, reminderTime: "09:00" }}
             fields={[
               { name: "direction", label: "Type", type: "select", required: true, options: [{ value: "lent", label: "I lent (they owe me)" }, { value: "borrowed", label: "I borrowed (I owe them)" }] },
               { name: "counterparty", label: "Person", required: true },
@@ -44,7 +41,11 @@ export default async function DebtsPage() {
               { name: "remindersEnabled", label: "Reminders on", type: "checkbox" },
               { name: "notes", label: "Note", type: "textarea", nullable: true },
             ]} />
-        </Reveal>
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="money-tiles mb-8">
+        <div className="tile slate min-h-0"><p className="t-small">Owed to me (I need to collect)</p><p className="t-num text-[2.2rem] mt-2">{sum(owedToMe)}</p></div>
+        <div className="tile rust min-h-0"><p className="t-small">I owe (I need to repay)</p><p className="t-num text-[2.2rem] mt-2">{sum(iOwe)}</p></div>
       </div>
       <Section title="Open">
         {open.length === 0 ? <Empty>No open records. Try “I lent Sara 200 SAR yesterday, she will repay Friday” in Capture.</Empty> : <DebtList rows={open} today={today} />}
@@ -74,7 +75,7 @@ function DebtList({ rows, today }: { rows: Awaited<ReturnType<typeof debtsState>
         const isOpen = d.status === "open";
         const left = isOpen && d.dueDate ? daysBetween(today, d.dueDate) : null;
         return (
-          <EntryCard key={d.id} icon="cash" countLabel="Due" title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
+          <EntryCard del={{ op: "debt.delete", input: { id: d.id }, confirm: "Delete this record and its reminders?" }} key={d.id} icon="cash" countLabel="Due" title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
             badge={!isOpen ? <span className="chip chip-pine">settled</span> : undefined}
             subtitle={`${formatMoney(outstanding, d.currency)} outstanding · ${d.direction === "lent" ? "lent" : "borrowed"} ${formatMoney(d.originalMinor, d.currency)} on ${fmtDate(d.onDate)}`}
             count={countdown(left, "due")} countSub={left !== null ? fmtDate(d.dueDate) : undefined}

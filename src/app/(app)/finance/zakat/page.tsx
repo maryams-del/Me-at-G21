@@ -1,6 +1,6 @@
 import { pageOwner, zakatState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal, type FieldDef, ItemRow } from "@/components/OpForm";
 import { CURRENCIES, formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
@@ -36,15 +36,13 @@ export default async function ZakatPage() {
           <ul className="list">
             {s.payments.map((p) => (
               <li key={p.id} className="py-2.5 grid gap-1">
-                <div className="flex flex-wrap justify-between gap-3 t-small">
-                  <span><span className="font-medium">{formatMoney(p.amountMinor, p.currency)}</span> to {p.recipient}{p.calc ? <span className="text-ink-2">, for the {fmtDate(p.calc.evaluationDate)} estimate</span> : null}</span>
-                  <span className="text-ink-2">{fmtDate(p.paidOn)}</span>
-                </div>
-                {p.notes && <p className="t-small text-ink-2">{p.notes}</p>}
-                <EditPanel>
-                    <OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact 
-                      deleteAction={{ op: "zakat.payment.delete", input: { id: p.id }, confirm: "Delete this payment record?", label: "Delete" }} />
-                  </EditPanel>
+                <ItemRow del={{ op: "zakat.payment.delete", input: { id: p.id }, confirm: "Delete this payment record?", label: "Delete" }} name={`payment to ${p.recipient}`}
+                  head={<span className="t-small"><span className="font-medium">{formatMoney(p.amountMinor, p.currency)}</span> to {p.recipient}{p.calc ? <span className="text-ink-2">, for the {fmtDate(p.calc.evaluationDate)} estimate</span> : null}</span>}
+                  aside={<span className="t-small text-ink-2">{fmtDate(p.paidOn)}</span>}
+                  edit={<OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact
+                      deleteAction={{ op: "zakat.payment.delete", input: { id: p.id }, confirm: "Delete this payment record?", label: "Delete" }} />}>
+                  {p.notes && <p className="t-small text-ink-2">{p.notes}</p>}
+                </ItemRow>
               </li>
             ))}
           </ul>
