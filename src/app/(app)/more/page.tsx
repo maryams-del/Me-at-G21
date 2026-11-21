@@ -1,8 +1,7 @@
 import { PageHeader } from "@/components/ui";
 import { type GlyphKind } from "@/components/Glyph";
 import { pageOwner, attentionCount, customSpacesState, dashboardState } from "@/server/queries";
-import { OpForm, Reveal } from "@/components/OpForm";
-import { isSpaceGlyph, spacesOrderOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
+import { isSpaceGlyph, spacesOrderOf, spacesPinsOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { relDays } from "@/lib/format";
 import { addDays, dmy } from "@/lib/time";
@@ -95,11 +94,7 @@ export default async function Spaces() {
   return (
     <>
       <PageHeader title="Spaces" />
-      <SpacesStacks groups={stacked} addSlot={
-        <Reveal label="Add a space" iconOnly>
-          <OpForm op="space.create" fields={spaceFields(sections)} initial={{ section: "You", glyph: "projects" }} submitLabel="Add space" />
-        </Reveal>
-      } />
+      <SpacesStacks groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "You", glyph: "projects" }} />
     </>
   );
 }

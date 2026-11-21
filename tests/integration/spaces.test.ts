@@ -7,7 +7,7 @@ import { resetDb, makeOwner, withCtx } from "../support/db";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { spacesOrderOf, bySavedOrder } from "@/lib/spaces";
+import { spacesOrderOf, spacesPinsOf, bySavedOrder } from "@/lib/spaces";
 
 let owner: Awaited<ReturnType<typeof makeOwner>>;
 const now = new Date("2026-11-19T09:00:00Z");
@@ -53,5 +53,18 @@ describe("Custom spaces", () => {
     const order = spacesOrderOf(u.settings);
     expect(bySavedOrder(["Money", "Care", "Faith"], (x) => x, order.sections)).toEqual(["Faith", "Money", "Care"]);
     expect(bySavedOrder(["/finance/charity", "/finance/savings", "/finance/zakat"], (x) => x, order.cards.Money)).toEqual(["/finance/zakat", "/finance/charity", "/finance/savings"]);
+  });
+
+  it("keeps up to three pinned spaces alongside the saved order", async () => {
+    const pinsNow = async () => spacesPinsOf((await getDb().select().from(users).where(eq(users.id, owner.id)))[0].settings);
+    expect(await pinsNow()).toBeNull(); // never pinned: the page picks for them
+    await op("spaces.order", { sections: ["Money"], cards: {} });
+    await op("spaces.pins", { hrefs: ["/quran", "/finance/charity", "/quran"] });
+    expect(await pinsNow()).toEqual(["/quran", "/finance/charity"]);
+    await expect(op("spaces.pins", { hrefs: ["/a", "/b", "/c", "/d"] })).rejects.toThrow();
+    await op("spaces.pins", { hrefs: [] });
+    expect(await pinsNow()).toEqual([]);
+    const [u] = await getDb().select().from(users).where(eq(users.id, owner.id));
+    expect(spacesOrderOf(u.settings).sections).toEqual(["Money"]); // pins don't wipe the order
   });
 });

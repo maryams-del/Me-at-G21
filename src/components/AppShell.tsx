@@ -1,4 +1,5 @@
 "use client";
+import { ConfirmHost } from "./ConfirmDialog";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -72,6 +73,7 @@ export function AppShell({ children, inboxCount }: { children: React.ReactNode; 
   return (
     <div className="min-h-dvh">
       <a href="#main" className="skip-link btn btn-primary">Skip to content</a>
+      <ConfirmHost />
       <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
         <header className="flex items-end justify-between gap-x-6 pt-4 md:pt-6">
           <Link href="/" className="no-underline pb-1.5 shrink-0" aria-label="Me @ G21, home" data-splash="logo">

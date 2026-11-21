@@ -1,4 +1,5 @@
 "use client";
+import { askConfirmFor } from "./ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -121,8 +122,8 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
 
   function go(href: string) { reset(); onClose(); router.push(href); }
 
-  function runCommand(c: CommandOption) {
-    if (c.confirm && !window.confirm(c.confirm)) return;
+  async function runCommand(c: CommandOption) {
+    if (c.confirm && !(await askConfirmFor(c.confirm, { confirmLabel: "Download" }))) return;
     if (c.action.type === "navigate") return go(c.action.href);
     const a = Object.assign(document.createElement("a"), { href: c.action.href, download: "" });
     document.body.appendChild(a); a.click(); a.remove();

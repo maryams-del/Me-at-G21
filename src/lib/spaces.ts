@@ -19,6 +19,13 @@ export function spacesOrderOf(settings: Record<string, unknown> | null | undefin
   const v = (settings ?? {}).spacesOrder as Partial<SpacesOrder> | undefined;
   return { sections: Array.isArray(v?.sections) ? v.sections : [], cards: v?.cards && typeof v.cards === "object" ? v.cards : {} };
 }
+/** Pinned spaces: at most three. */
+export const MAX_PINS = 3;
+/** The owner's chosen pins (hrefs, left to right), or null if they've never pinned anything (then the page picks for them). */
+export function spacesPinsOf(settings: Record<string, unknown> | null | undefined): string[] | null {
+  const v = (settings ?? {}).spacesPins;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, MAX_PINS) : null;
+}
 /** Sort `xs` by the saved order of their keys; unknown keys keep their place after the known ones. */
 export function bySavedOrder<T>(xs: T[], key: (x: T) => string, saved: string[] = []): T[] {
   const pos = new Map(saved.map((k, i) => [k, i]));

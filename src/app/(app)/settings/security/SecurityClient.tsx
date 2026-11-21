@@ -1,4 +1,5 @@
 "use client";
+import { askConfirm, askConfirmFor } from "@/components/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, toast } from "@/components/api";
 import { PasskeyStep, TotpStep, CodesDisplay } from "@/app/(auth)/onboarding/OnboardingClient";
@@ -27,7 +28,7 @@ export function SecurityClient({ recovered }: { recovered: boolean }) {
   const load = useCallback(() => api<Overview>("/api/auth/security-overview").then(setO).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
   const act = async (path: string, body: unknown, ok: string, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText && !(await askConfirmFor(confirmText))) return;
     setErr(null);
     try { await api(path, body); toast(ok); await load(); } catch (e) { setErr(e instanceof ApiError ? e.message : "Action failed"); }
   };
@@ -75,7 +76,7 @@ export function SecurityClient({ recovered }: { recovered: boolean }) {
       </Section>
 
       <Section title="Recovery codes" aside={<button className="btn btn-sm" onClick={async () => {
-        if (!window.confirm("Generate new codes? All your current codes stop working immediately.")) return;
+        if (!(await askConfirm("Generate new codes?", { note: "All your current codes stop working immediately.", danger: true, confirmLabel: "Yes, replace codes" }))) return;
         setErr(null);
         try { setCodes(await api("/api/auth/recovery-codes-generate")); setMode("codes"); load(); } catch (e) { setErr(e instanceof ApiError ? e.message : "Failed"); }
       }}>Replace codes</button>}>

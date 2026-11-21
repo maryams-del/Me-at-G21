@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { pageOwner, customSpaceDetail, customSpacesState } from "@/server/queries";
-import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal } from "@/components/OpForm";
+import { Section, Empty } from "@/components/ui";
+import { OpButton } from "@/components/OpForm";
+import { SpaceView } from "./SpaceView";
 import { isSpaceGlyph } from "@/lib/spaces";
 import { spaceFields } from "../fields";
 
@@ -16,25 +17,10 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
   const open = items.filter((i) => !i.done), done = items.filter((i) => i.done);
 
   return (
-    <>
-      <p className="t-label mb-2">Spaces · {s.section}</p>
-      <PageHeader glyph={isSpaceGlyph(s.glyph) ? s.glyph : "projects"} title={s.name} />
-
-      <div className="mb-5">
-        <Reveal label="Edit space">
-          <div className="grid gap-3">
-            <OpForm op="space.update" fields={spaceFields(sections)} fixed={{ id: s.id }} initial={{ name: s.name, description: s.description, section: s.section, glyph: s.glyph }} submitLabel="Save" compact />
-            <OpButton op="space.delete" input={{ id: s.id }} label="Delete space" className="btn btn-sm btn-danger justify-self-start" confirmText={`Delete “${s.name}” and its list? You can undo this from Settings › Data for 30 days.`} />
-          </div>
-        </Reveal>
-      </div>
-
-      <div className="panel p-4 mb-6">
-        <OpForm op="spaceItem.add" fields={[{ name: "text", label: "Add to this space", required: true, placeholder: "Something to remember or do", wide: true }]} fixed={{ spaceId: s.id }} submitLabel="Add" compact resetOnSuccess />
-      </div>
-
+    <SpaceView space={{ id: s.id, name: s.name, description: s.description, section: s.section, glyph: s.glyph }}
+      glyph={isSpaceGlyph(s.glyph) ? s.glyph : "projects"} fields={spaceFields(sections)}>
       <Section title={`To do · ${open.length}`}>
-        {open.length === 0 ? <Empty>Nothing here yet. Add the first item above.</Empty> : (
+        {open.length === 0 ? <Empty>Nothing here yet. Tap + above to add the first item.</Empty> : (
           <ul className="panel list px-4">
             {open.map((it) => (
               <li key={it.id} className="py-2.5 flex items-center gap-3">
@@ -60,6 +46,6 @@ export default async function SpacePage({ params }: { params: Promise<{ id: stri
           </ul>
         </Section>
       )}
-    </>
+    </SpaceView>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { askConfirm } from "@/components/ConfirmDialog";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
@@ -106,7 +107,7 @@ export function ShareFile({ fileId, filename, contentType }: { fileId: string; f
   if (typeof navigator !== "undefined" && !("share" in navigator)) return null;
   return (
     <button className="btn btn-sm btn-ghost" disabled={busy} onClick={async () => {
-      if (!window.confirm(`Share “${filename}” using your device's share sheet? Whoever you send it to will have a copy.`)) return;
+      if (!(await askConfirm(`Share “${filename}” using your device's share sheet?`, { note: "Whoever you send it to will have a copy.", confirmLabel: "Share" }))) return;
       setBusy(true);
       try {
         const res = await fetch(`/api/documents/file/${fileId}`, { credentials: "same-origin" });

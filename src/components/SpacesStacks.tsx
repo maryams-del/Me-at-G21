@@ -3,8 +3,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
+import { Icon } from "./icons";
 import { api, ApiError, toast } from "./api";
+import { OpForm, PlusIcon, RevealCtx, type FieldDef } from "./OpForm";
 import { frequent } from "@/lib/visits";
+import { MAX_PINS } from "@/lib/spaces";
 
 const PIN_DEFAULTS = ["/admin/documents", "/finance/charity", "/quran"];
 
@@ -17,12 +20,18 @@ function Grip() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M5 8h14M5 12h14M5 16h14" /></svg>;
 }
 
+/** Newest pin goes on the left; with three already pinned, the right-most one drops off. */
+const withPin = (pins: string[], href: string) => [href, ...pins.filter((h) => h !== href)].slice(0, MAX_PINS);
+
 /**
  * Spaces as quiet icon tiles, grouped by section. Search filters across every section.
+ * Right-click a space to pin it (up to three); tap the pin on a pinned card to unpin it.
  * Press and hold any space to reorder: the sections turn into lists with three-line grips to drag,
  * then tap Done to save. Tap a section heading to rearrange the sections themselves.
  */
-export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[]; addSlot?: React.ReactNode }) {
+export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addInitial }: {
+  groups: StackGroup[]; pins: string[] | null; addFields?: FieldDef[]; addInitial?: Record<string, unknown>;
+}) {
   const router = useRouter();
   const STEP = 60, ROW_H = 52;
   const [groups, setGroups] = useState(initial);
@@ -31,13 +40,65 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
   const [saving, setSaving] = useState(false);
   const [cardDrag, setCardDrag] = useState<{ key: string; dy: number } | null>(null);
   const [sorting, setSorting] = useState(false);
-  // Pinned: the three spaces opened most on this device, topped up with sensible defaults.
-  const [pinHrefs, setPinHrefs] = useState(PIN_DEFAULTS);
-  useEffect(() => setPinHrefs([...new Set([...frequent().map((f) => f.href), ...PIN_DEFAULTS])]), []);
+  const [adding, setAdding] = useState(false);
+  const [focusHref, setFocusHref] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  // Keep up with the server: a space added (or renamed, or deleted) shows up straight away, without a reload.
+  useEffect(() => { if (!reorder && !cd.current) setGroups(initial); }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After adding a space, scroll to it once it's on the page and give it a brief glow.
+  useEffect(() => {
+    if (!focusHref) return;
+    const el = document.querySelector(`[data-space="${CSS.escape(focusHref)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlash(focusHref); setFocusHref(null);
+  }, [focusHref, groups]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 2400); return () => clearTimeout(t); }, [flash]);
+
+  // Pinned: the owner's own picks once they've pinned anything; until then, the three spaces opened most on this device.
+  const [autoPins, setAutoPins] = useState(PIN_DEFAULTS);
+  useEffect(() => setAutoPins([...new Set([...frequent().map((f) => f.href), ...PIN_DEFAULTS])]), []);
+  const [pins, setPins] = useState<string[] | null>(savedPins);
+  const savedKey = JSON.stringify(savedPins);
+  useEffect(() => setPins(savedPins), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const allCards = groups.flatMap((g) => g.cards);
-  const pinned = pinHrefs.map((h) => allCards.find((c) => c.href === h)).filter((c): c is StackCard => !!c).slice(0, 3);
+  const pinned = (pins ?? autoPins).map((h) => allCards.find((c) => c.href === h)).filter((c): c is StackCard => !!c).slice(0, MAX_PINS);
+  const pinnedHrefs = pinned.map((c) => c.href);
+  const isPinned = (href: string) => pinnedHrefs.includes(href);
+
+  const [menu, setMenu] = useState<{ href: string; x: number; y: number } | null>(null);
+  const [unpinFor, setUnpinFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!menu && !unpinFor) return;
+    const close = () => { setMenu(null); setUnpinFor(null); };
+    const off = (e: PointerEvent) => { if (!(e.target as Element).closest?.("[data-pin-pop]")) close(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("pointerdown", off);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("resize", close);
+    return () => { document.removeEventListener("pointerdown", off); document.removeEventListener("keydown", esc); window.removeEventListener("scroll", close); window.removeEventListener("resize", close); };
+  }, [menu, unpinFor]);
+
+  async function savePins(next: string[], message: string) {
+    const prev = pins;
+    setPins(next); setMenu(null); setUnpinFor(null);
+    try {
+      await api("/api/ops/spaces.pins", { hrefs: next });
+      toast(message);
+    } catch (e) {
+      setPins(prev);
+      toast(e instanceof ApiError ? e.message : "Couldn't change your pins. Try again.", "error");
+    }
+  }
+  const labelOf = (href: string) => allCards.find((c) => c.href === href)?.label ?? "Space";
+  const pin = (href: string) => savePins(withPin(pinnedHrefs, href), `Pinned ${labelOf(href)}`);
+  const unpin = (href: string) => savePins(pinnedHrefs.filter((h) => h !== href), `Unpinned ${labelOf(href)}`);
 
   const press = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
+  const pointerKind = useRef<string>("mouse");
   const cd = useRef<{ gi: number; idx: number; startY: number } | null>(null);
 
   const query = q.trim().toLowerCase();
@@ -54,12 +115,23 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
   // ---- Long press on a space starts reorder mode ----
   const cancelPress = () => clearTimeout(press.current.t);
   const startPress = (e: React.PointerEvent) => {
-    if (reorder) return;
+    pointerKind.current = e.pointerType;
+    if (reorder || e.button !== 0) return;
     cancelPress();
     press.current = { x: e.clientX, y: e.clientY, fired: false };
-    press.current.t = setTimeout(() => { press.current.fired = true; setQ(""); setReorder(true); navigator.vibrate?.(12); }, LONG_PRESS_MS);
+    press.current.t = setTimeout(() => { press.current.fired = true; setQ(""); setAdding(false); setReorder(true); navigator.vibrate?.(12); }, LONG_PRESS_MS);
   };
   const movePress = (e: React.PointerEvent) => { if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress(); };
+  // ---- Right-click (or the keyboard menu key) on a space opens the pin menu. A finger's long press stays "reorder". ----
+  const openMenu = (e: React.MouseEvent, href: string) => {
+    e.preventDefault();
+    if (pointerKind.current === "touch") return;
+    cancelPress();
+    let { clientX: x, clientY: y } = e;
+    if (!x && !y) { const r = e.currentTarget.getBoundingClientRect(); x = r.left + r.width / 2; y = r.bottom; }
+    setUnpinFor(null);
+    setMenu({ href, x, y });
+  };
 
   // ---- Drag a space by its grip (within its section) ----
   const cardDown = (e: React.PointerEvent, gi: number, ci: number, key: string) => {
@@ -94,9 +166,12 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
     } finally { setSaving(false); }
   }
 
+  const menuCard = menu ? allCards.find((c) => c.href === menu.href) : undefined;
+  const bumped = menu && !isPinned(menu.href) && pinnedHrefs.length >= MAX_PINS ? labelOf(pinnedHrefs[pinnedHrefs.length - 1]) : null;
+
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         {reorder ? (
           <>
             <span className="t-small font-semibold flex-1">Drag the grips to reorder</span>
@@ -104,27 +179,53 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
             <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
         ) : (
-          <label className="flex items-center gap-2 rounded-full pl-4 pr-2 py-0.5 flex-1 min-w-0 basis-[10rem]" style={{ boxShadow: "inset 0 0 0 1px var(--hair)", background: "var(--field-bg)" }}>
+          <label className="flex items-center gap-2 rounded-full pl-4 pr-2 py-0.5 flex-1 min-w-0" style={{ boxShadow: "inset 0 0 0 1px var(--hair)", background: "var(--field-bg)" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="opacity-60 shrink-0"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4 4" /></svg>
             <span className="sr-only">Search spaces</span>
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search spaces"
               className="flex-1 min-w-0 bg-transparent border-0 outline-none py-2 text-[15px]" style={{ color: "inherit", font: "inherit" }} />
           </label>
         )}
-        {!reorder && addSlot}
+        {!reorder && addFields && (
+          <button type="button" className="plus-btn" aria-label={adding ? "Close" : "Add a space"} title="Add a space" aria-expanded={adding} aria-controls="add-space" onClick={() => setAdding(!adding)}>
+            <PlusIcon size={22} />
+          </button>
+        )}
       </div>
-      {!reorder && !query && <p className="t-meta mt-2">A dot means something there needs you. Press and hold a space to reorder.</p>}
+      {adding && !reorder && addFields && (
+        <div id="add-space" className="panel add-space p-4 md:p-5 mt-3 preview-enter">
+          <div className="add-space-inner">
+            <p className="t-h3 mb-3">Add a space</p>
+            <RevealCtx.Provider value={{ close: () => setAdding(false) }}>
+              <OpForm op="space.create" fields={addFields} initial={addInitial} submitLabel="Add space" compact
+                onDone={(r) => { if (r.id) { setQ(""); setFocusHref(`/spaces/${r.id}`); } }} />
+            </RevealCtx.Provider>
+          </div>
+        </div>
+      )}
+      {!reorder && !query && <p className="t-meta mt-2">Press on a space to reorder.</p>}
       {!reorder && !query && pinned.length > 0 && (
         <section aria-labelledby="pin-h" className="mt-7">
           <h2 id="pin-h" className="t-label mb-3">Pinned</h2>
           <ul className="pins">
             {pinned.map((c) => (
-              <li key={c.key}>
-                <Link href={c.href} className="pin-card">
+              <li key={c.key} className="relative min-w-0">
+                <Link href={c.href} className="pin-card" onContextMenu={(e) => openMenu(e, c.href)} onPointerDown={(e) => { pointerKind.current = e.pointerType; }}>
                   <span className="ic"><Glyph kind={c.glyph} size={18} color="currentColor" accent="currentColor" /></span>
-                  <span className="mt-auto font-semibold text-[14px] leading-snug">{c.label}</span>
+                  <span className="mt-auto font-semibold text-[14px] leading-snug pr-6">{c.label}</span>
                   {c.stat && <span className="pin-stat">{c.stat}</span>}
                 </Link>
+                <button type="button" className="pin-mark" data-pin-pop aria-label={`${c.label} is pinned. Pin options`} aria-expanded={unpinFor === c.href}
+                  onClick={() => { setMenu(null); setUnpinFor(unpinFor === c.href ? null : c.href); }}>
+                  <Icon name="pin" size={15} strokeWidth={2.2} />
+                </button>
+                {unpinFor === c.href && (
+                  <div className="pin-pop pin-pop-anchored preview-enter" data-pin-pop role="menu" aria-label={`${c.label} pin options`}>
+                    <button type="button" role="menuitem" className="pin-pop-item" autoFocus onClick={() => unpin(c.href)}>
+                      <Icon name="pin" size={15} />Unpin
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -146,12 +247,17 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
               <div className="relative no-callout" style={{ height: g.cards.length * STEP - (STEP - ROW_H) }}>
                 {g.cards.map((c, ci) => {
                   const dragging = cardDrag?.key === c.key;
+                  const on = isPinned(c.href);
                   return (
                     <div key={c.key} className="space-row absolute left-0 right-0"
                       style={{ top: ci * STEP + (dragging ? cardDrag.dy : 0), height: ROW_H, zIndex: dragging ? 20 : 1,
                         transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.4)" : undefined }}>
                       <span className="ic"><Glyph kind={c.glyph} size={17} color="currentColor" accent="currentColor" /></span>
                       <span className="flex-1 truncate text-[14px] font-semibold">{c.label}</span>
+                      <button type="button" className={`row-pin ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? `Unpin ${c.label}` : `Pin ${c.label}`} title={on ? "Unpin" : "Pin"}
+                        onClick={() => (on ? unpin(c.href) : pin(c.href))}>
+                        <Icon name="pin" size={16} />
+                      </button>
                       <button type="button" className="grip" aria-label={`Drag to move ${c.label}`}
                         onPointerDown={(e) => cardDown(e, gi, ci, c.key)} onPointerMove={cardMove} onPointerUp={cardUp} onPointerCancel={cardUp}
                         onKeyDown={(e) => {
@@ -168,9 +274,9 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
               <ul className="space-grid">
                 {g.cards.map((c) => (
                   <li key={c.key} className="min-w-0">
-                    <Link href={c.href} className="sp-tile no-callout" draggable={false} title={c.stat ? `${c.label} · ${c.stat}` : c.label}
+                    <Link href={c.href} data-space={c.href} className={`sp-tile no-callout ${flash === c.href ? "just-added" : ""}`} draggable={false} title={c.stat ? `${c.label} · ${c.stat}` : c.label}
                       onPointerDown={startPress} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={cancelPress}
-                      onContextMenu={(e) => e.preventDefault()}
+                      onContextMenu={(e) => openMenu(e, c.href)}
                       onClick={(e) => { if (press.current.fired) { e.preventDefault(); press.current.fired = false; } }}>
                       <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" />{c.needs && <span className="need-dot" />}</span>
                       <span>{c.label}{c.needs && <span className="sr-only"> (needs you)</span>}</span>
@@ -183,6 +289,19 @@ export function SpacesStacks({ groups: initial, addSlot }: { groups: StackGroup[
         );
       })}
       </div>
+      {menu && menuCard && (
+        <div className="pin-pop preview-enter" data-pin-pop role="menu" aria-label={`${menuCard.label} options`}
+          style={{ position: "fixed", left: Math.max(8, Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 400) - 208)), top: Math.max(8, Math.min(menu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 96)) }}>
+          {isPinned(menu.href) ? (
+            <button type="button" role="menuitem" className="pin-pop-item" autoFocus onClick={() => unpin(menu.href)}><Icon name="pin" size={15} />Unpin</button>
+          ) : (
+            <>
+              <button type="button" role="menuitem" className="pin-pop-item" autoFocus onClick={() => pin(menu.href)}><Icon name="pin" size={15} />Pin</button>
+              {bumped && <p className="t-meta px-3 pb-1.5">Replaces {bumped}</p>}
+            </>
+          )}
+        </div>
+      )}
       {sorting && <SectionSorter titles={groups.map((g) => g.title)} tints={Object.fromEntries(groups.map((g) => [g.title, g.tint]))} saving={saving}
         onCancel={() => setSorting(false)}
         onSave={(order) => save(order.map((t) => groups.find((g) => g.title === t)!))} />}

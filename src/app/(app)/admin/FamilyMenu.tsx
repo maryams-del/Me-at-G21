@@ -1,4 +1,5 @@
 "use client";
+import { askConfirm } from "@/components/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
@@ -64,7 +65,7 @@ export function FamilyMenu({ people, relations }: { people: Person[]; relations:
                     <span className="flex-1 min-w-0 truncate"><span className="font-semibold">{p.name}</span> <span className="t-meta">{rel(p.relation)}</span></span>
                     <button type="button" className="btn btn-sm btn-ghost" style={{ width: 34, padding: 0 }} aria-label={`Edit ${p.name}`} onClick={() => setEditing(p.id)}><PencilIcon /></button>
                     <button type="button" className="btn btn-sm btn-ghost" style={{ width: 34, padding: 0 }} aria-label={`Delete ${p.name}`} disabled={busy}
-                      onClick={() => { if (window.confirm(`Remove ${p.name}? Their documents and expiries stay, but will show as yours.`)) void run("/api/ops/person.delete", { id: p.id }, `${p.name} removed`); }}><TrashIcon /></button>
+                      onClick={async () => { if (await askConfirm(`Remove ${p.name}?`, { note: "Their documents and expiries stay, but will show as yours.", danger: true, confirmLabel: "Yes, remove" })) void run("/api/ops/person.delete", { id: p.id }, `${p.name} removed`); }}><TrashIcon /></button>
                   </div>
                 )}
               </li>
