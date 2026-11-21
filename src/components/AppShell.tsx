@@ -74,7 +74,7 @@ export function AppShell({ children, inboxCount }: { children: React.ReactNode; 
     <div className="min-h-dvh">
       <a href="#main" className="skip-link btn btn-primary">Skip to content</a>
       <ConfirmHost />
-      <div className="max-w-[1320px] mx-auto px-[18px] md:px-8">
+      <div className="max-w-[1320px] mx-auto px-[18px] md:px-8 min-h-dvh flex flex-col">
         <header className="flex items-end justify-between gap-x-6 pt-4 md:pt-6">
           <Link href="/" className="no-underline pb-1.5 shrink-0" aria-label="Me @ G21, home" data-splash="logo">
             <LogoMark className="w-[40px] h-[40px] md:w-[48px] md:h-[48px]" />
@@ -92,7 +92,7 @@ export function AppShell({ children, inboxCount }: { children: React.ReactNode; 
           <ThemeToggle />
         </header>
 
-        <main id="main" className="pt-5 md:pt-8">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
+        <main id="main" className="pt-5 md:pt-8 flex-1">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
         <footer className="mt-14 pt-4 pb-32 md:pb-10 rule-t flex items-center justify-between gap-4">
           <p className="logo text-[16px] md:text-[18px]">Me @ G21</p>
           <p className="t-meta text-right">A project by Project G21</p>
