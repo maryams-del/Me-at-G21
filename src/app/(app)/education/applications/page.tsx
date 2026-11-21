@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { pageOwner, applicationsState } from "@/server/queries";
 import { getDb } from "@/db";
 import { documents } from "@/db/schema";
@@ -47,15 +48,17 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
   return (
     <>
+      <PageAddProvider initialOpen={sp.add === "1"}>
       <PageHeader glyph="applications" title="Master's applications">
         <a href="?view=list" className={`btn btn-sm ${view === "list" ? "btn-primary" : ""}`} aria-current={view === "list" ? "page" : undefined}>By deadline</a>
         <a href="?view=board" className={`btn btn-sm ${view === "board" ? "btn-primary" : ""}`} aria-current={view === "board" ? "page" : undefined}>Board</a>
+        <PageAddButton label="Add application" />
       </PageHeader>
-      <div className="mb-8">
-        <Reveal label="Add application" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <OpForm op="application.create" fields={applicationFields(docs)} initial={{ deadlineTz: o.timezone, reminderOffsetsDays: [-30, -14, -7, -1], remindersEnabled: true, feeCurrency: "SAR" }} submitLabel="Add application" />
-        </Reveal>
-      </div>
+      <PageAddPanel title="Add application">
+        <OpForm op="application.create" fields={applicationFields(docs)} initial={{ deadlineTz: o.timezone, reminderOffsetsDays: [-30, -14, -7, -1], remindersEnabled: true, feeCurrency: "SAR" }} submitLabel="Add application" />
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-8" />
       {rows.length === 0 ? <Empty>No applications yet. Add each program you&apos;re considering; you can track several programs at the same university.</Empty>
         : view === "list" ? <ul className="entry-grid">{rows.map((r) => <li key={r.app.id}><Card r={r} /></li>)}</ul>
         : (

@@ -1,6 +1,7 @@
 import { pageOwner, projectsState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
-import { OpForm, OpButton, Reveal, type FieldDef, EditPanel } from "@/components/OpForm";
+import { OpForm, OpButton, ItemRow, type FieldDef } from "@/components/OpForm";
 import { fmtDate } from "@/lib/format";
 
 const COLS = [{ key: "backlog", label: "Backlog" }, { key: "in_progress", label: "In progress" }, { key: "done", label: "Done" }] as const;
@@ -28,22 +29,24 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
+      <PageAddProvider initialOpen={sp.add === "1" ? "task" : null}>
       <PageHeader glyph="projects" title="Projects & tasks">
         <a href="?view=list" className={`btn btn-sm ${view === "list" ? "btn-primary" : ""}`} aria-current={view === "list" ? "page" : undefined}>By deadline</a>
         <a href="?view=board" className={`btn btn-sm ${view === "board" ? "btn-primary" : ""}`} aria-current={view === "board" ? "page" : undefined}>Board</a>
+        <PageAddButton label="Add" choices={[{ key: "task", label: "Add task" }, { key: "project", label: "New project" }]} />
       </PageHeader>
-      <div className="mb-8 flex flex-wrap gap-3 items-start">
-        <Reveal label="Add task" buttonClass="btn btn-primary" open={sp.add === "1"}>
-          <OpForm op="task.create" fields={taskFields} initial={{ status: "backlog", reminderOffsetsDays: "0", remindersEnabled: true }} submitLabel="Add task" />
-        </Reveal>
-        <Reveal label="New project">
-          <OpForm op="project.create" submitLabel="Create project" fields={[
+      <PageAddPanel id="task" title="Add task">
+        <OpForm op="task.create" fields={taskFields} initial={{ status: "backlog", reminderOffsetsDays: "0", remindersEnabled: true }} submitLabel="Add task" />
+      </PageAddPanel>
+      <PageAddPanel id="project" title="New project">
+        <OpForm op="project.create" submitLabel="Create project" fields={[
             { name: "name", label: "Project", required: true, placeholder: "Update my portfolio website" },
             { name: "targetDate", label: "Target date", type: "date", nullable: true },
             { name: "priority", label: "Priority", type: "select", options: prio, nullable: true },
             { name: "description", label: "Description", type: "textarea", nullable: true }]} />
-        </Reveal>
-      </div>
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-8" />
 
       {view === "list" ? (
         <Section title="Open tasks by deadline">
@@ -68,16 +71,14 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
               const done = ts.filter((t) => t.status === "done").length;
               return (
                 <li key={p.id} className="panel p-4 grid gap-2">
-                  <div className="flex justify-between gap-2"><h3 className="t-h3">{p.name}</h3>{p.status !== "active" && <span className="chip chip-pine">{p.status}</span>}</div>
+                  <ItemRow name={p.name} head={<h3 className="t-h3">{p.name}</h3>} aside={p.status !== "active" ? <span className="chip chip-pine">{p.status}</span> : undefined}
+                    edit={<OpForm op="project.update" fixed={{ id: p.id }} initial={p} submitLabel="Save project" fields={[
+                      { name: "name", label: "Project", required: true }, { name: "status", label: "Status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "done", label: "Done" }, { value: "archived", label: "Archived" }] },
+                      { name: "targetDate", label: "Target date", type: "date", nullable: true }, { name: "priority", label: "Priority", type: "select", options: prio, nullable: true },
+                      { name: "description", label: "Description", type: "textarea", nullable: true }]} />} />
                   {p.description && <p className="t-small text-ink-2">{p.description}</p>}
                   <p className="t-meta">{done}/{ts.length} tasks done{p.targetDate ? `, target ${fmtDate(p.targetDate)}` : ""}</p>
                   <div className="bar"><i style={{ width: `${ts.length ? (done / ts.length) * 100 : 0}%` }} /></div>
-                  <Reveal label="Edit" buttonClass="btn btn-sm btn-ghost">
-                    <OpForm op="project.update" fixed={{ id: p.id }} initial={p} submitLabel="Save project" fields={[
-                      { name: "name", label: "Project", required: true }, { name: "status", label: "Status", type: "select", required: true, options: [{ value: "active", label: "Active" }, { value: "done", label: "Done" }, { value: "archived", label: "Archived" }] },
-                      { name: "targetDate", label: "Target date", type: "date", nullable: true }, { name: "priority", label: "Priority", type: "select", options: prio, nullable: true },
-                      { name: "description", label: "Description", type: "textarea", nullable: true }]} />
-                  </Reveal>
                 </li>
               );
             })}
@@ -93,17 +94,16 @@ function TaskRow({ t, today, project, fields, board }: { t: T; today: string; pr
   const over = t.status !== "done" && t.dueOn && t.dueOn < today;
   return (
     <li className="py-2.5 grid gap-1">
-      <div className="flex items-start gap-3">
-        <OpButton op="task.complete" input={{ id: t.id, done: t.status !== "done" }} label={t.status === "done" ? "✓" : " "} ariaLabel={`${t.status === "done" ? "Reopen" : "Complete"}: ${t.title}`} className="btn btn-sm w-9 px-0 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="t-small font-medium" style={{ textDecoration: t.status === "done" ? "line-through" : undefined }}>{t.title}</p>
-          <p className="t-meta" style={over ? { color: "var(--danger)" } : undefined}>{[project, t.dueOn && `due ${fmtDate(t.dueOn)}${t.dueTime ? ` ${t.dueTime}` : ""}`, t.priority === "high" && "high priority", !board && t.status === "in_progress" && "in progress"].filter(Boolean).join(", ")}</p>
-        </div>
-      </div>
-      <EditPanel>
-          <OpForm op="task.update" fields={fields} fixed={{ id: t.id, checklist: t.checklist }} initial={t} submitLabel="Save task" compact 
-                      deleteAction={{ op: "task.delete", input: { id: t.id }, confirm: "Delete this task?", label: "Delete task" }} />
-        </EditPanel>
+      <ItemRow del={{ op: "task.delete", input: { id: t.id }, confirm: `Delete “${t.title}”?`, label: "Delete task" }} name={t.title}
+        head={<div className="flex items-start gap-3">
+          <OpButton op="task.complete" input={{ id: t.id, done: t.status !== "done" }} label={t.status === "done" ? "✓" : " "} ariaLabel={`${t.status === "done" ? "Reopen" : "Complete"}: ${t.title}`} className="btn btn-sm w-9 px-0 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="t-small font-medium" style={{ textDecoration: t.status === "done" ? "line-through" : undefined }}>{t.title}</p>
+            <p className="t-meta" style={over ? { color: "var(--danger)" } : undefined}>{[project, t.dueOn && `due ${fmtDate(t.dueOn)}${t.dueTime ? ` ${t.dueTime}` : ""}`, t.priority === "high" && "high priority", !board && t.status === "in_progress" && "in progress"].filter(Boolean).join(", ")}</p>
+          </div>
+        </div>}
+        edit={<OpForm op="task.update" fields={fields} fixed={{ id: t.id, checklist: t.checklist }} initial={t} submitLabel="Save task" compact
+          deleteAction={{ op: "task.delete", input: { id: t.id }, confirm: `Delete “${t.title}”?`, label: "Delete task" }} />} />
     </li>
   );
 }

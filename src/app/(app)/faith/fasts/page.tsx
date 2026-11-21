@@ -1,4 +1,5 @@
 import { dmy } from "@/lib/time";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { pageOwner, fastsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal } from "@/components/OpForm";
@@ -13,9 +14,24 @@ export default async function FastsPage() {
   const today = todayLocal(o.timezone);
   return (
     <>
+      <PageAddProvider>
       <PageHeader glyph="fasts" title="Make-up fasts">
-        <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${dmy(today)})?`} />
+        <PageAddButton label="Add" choices={[{ key: "past", label: "Log a past fast" }, { key: "adjust", label: "Manual adjustment" }]} />
       </PageHeader>
+      <PageAddPanel id="past" title="Log a past fast">
+        <OpForm op="fasts.complete" initial={{ onDate: today }} submitLabel="Save fast" fields={[
+          { name: "onDate", label: "Date fasted", type: "date", required: true },
+          { name: "notes", label: "Note", nullable: true, wide: true }]} />
+      </PageAddPanel>
+      <PageAddPanel id="adjust" title="Manual adjustment">
+        <OpForm op="fasts.adjust" initial={{ onDate: today }} submitLabel="Save adjustment" fields={[
+          { name: "delta", label: "Change (+ adds, − removes)", type: "int", required: true }, { name: "onDate", label: "Date", type: "date", required: true },
+          { name: "reason", label: "Reason", required: true, wide: true }]} />
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-6">
+        <OpButton op="fasts.complete" input={{ onDate: today }} label="Fast completed today" className="btn btn-primary" confirmText={`Record one fast completed today (${dmy(today)})?`} />
+      </div>
 
       <div className="money-tiles mb-8">
         <div className="tile mustard min-h-0"><p className="t-small">Remaining</p><p className="t-num text-[2.2rem] md:text-[3rem] mt-1">{s.balance}</p></div>
@@ -33,18 +49,6 @@ export default async function FastsPage() {
         </div>
       )}
 
-      <div className="mb-8 flex flex-wrap gap-3 items-start">
-        <Reveal label="Log a past fast">
-          <OpForm op="fasts.complete" initial={{ onDate: today }} submitLabel="Save fast" fields={[
-            { name: "onDate", label: "Date fasted", type: "date", required: true },
-            { name: "notes", label: "Note", nullable: true, wide: true }]} />
-        </Reveal>
-        <Reveal label="Manual adjustment">
-          <OpForm op="fasts.adjust" initial={{ onDate: today }} submitLabel="Save adjustment" fields={[
-            { name: "delta", label: "Change (+ adds, − removes)", type: "int", required: true }, { name: "onDate", label: "Date", type: "date", required: true },
-            { name: "reason", label: "Reason (required)", required: true, wide: true }]} />
-        </Reveal>
-      </div>
 
       <Section title="Ledger">
         {s.ledger.length ? (

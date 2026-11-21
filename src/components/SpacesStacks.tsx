@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { Icon } from "./icons";
 import { api, ApiError, toast } from "./api";
-import { OpForm, PlusIcon, RevealCtx, type FieldDef } from "./OpForm";
+import { OpForm, PanelClose, PlusIcon, RevealCtx, type FieldDef } from "./OpForm";
 import { frequent } from "@/lib/visits";
 import { MAX_PINS } from "@/lib/spaces";
 
@@ -193,9 +193,10 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
         )}
       </div>
       {adding && !reorder && addFields && (
-        <div id="add-space" className="panel add-space p-4 md:p-5 mt-3 preview-enter">
-          <div className="add-space-inner">
-            <p className="t-h3 mb-3">Add a space</p>
+        <div className="center-panel-wrap mt-3">
+          <div id="add-space" className="panel center-panel panel-closable p-4 md:p-5 preview-enter">
+            <PanelClose onClick={() => setAdding(false)} label="Close add a space" />
+            <p className="t-h3 mb-3 pr-10">Add a space</p>
             <RevealCtx.Provider value={{ close: () => setAdding(false) }}>
               <OpForm op="space.create" fields={addFields} initial={addInitial} submitLabel="Add space" compact
                 onDone={(r) => { if (r.id) { setQ(""); setFocusHref(`/spaces/${r.id}`); } }} />

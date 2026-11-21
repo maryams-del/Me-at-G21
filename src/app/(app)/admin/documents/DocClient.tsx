@@ -4,6 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
 import { useRevealClose } from "@/components/OpForm";
+import { Dropdown } from "@/components/GlyphSelect";
+import { CountdownRail, TimeWheel } from "@/components/ReminderPickers";
+import { titleCaseInput } from "@/lib/titlecase";
 
 /**
  * Optional, owner-chosen compression for photos: resize to ≤2000 px on the long side and re-encode as
@@ -138,6 +141,7 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
   const [compress, setCompress] = useState(false);
   const [remind, setRemind] = useState(false);
   const [tab, setTab] = useState<"details" | "reminders">("details");
+  const [expires, setExpires] = useState("");
   const flip = (on: boolean) => { setRemind(on); setTab(on ? "reminders" : "details"); };
   const sw = (where: string) => (
     <div className="flex items-center justify-between gap-3">
@@ -152,6 +156,7 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
+    if (!v("title")) { setTab("details"); setError("Add a title."); return; }
     let toSend = file, note: string | null = null;
     if (file && compress) ({ file: toSend, note } = await compressIfImage(file));
     if (toSend && toSend.size > 4 * 1024 * 1024) { setError(toSend.type.startsWith("image/") && !compress ? "Files must be 4 MB or smaller. Tick “Compress file to reduce size” to shrink a photo." : "Files must be 4 MB or smaller."); return; }
@@ -193,12 +198,12 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
         <button type="button" role="tab" aria-selected={tab === "reminders"} disabled={!remind} title={!remind ? "Turn reminders on in Details" : undefined} onClick={() => setTab("reminders")}>Reminders</button>
       </div>
       <div className="grid gap-4 sm:grid-cols-2" hidden={tab !== "details"}>
-        <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" /></label>
-        <label className="field"><span className="label">Type</span>
-          <select className="select" name="kind" defaultValue="passport">{DOC_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+        <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" autoCapitalize="words" onInput={titleCaseInput} /></label>
+        <div className="field" role="group"><span className="label">Type</span>
+          <Dropdown name="kind" initial="passport" ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
         <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" /></label>
         <label className="field"><span className="label">Issue date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="issuedOn" /></label>
-        <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" /></label>
+        <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" value={expires} onChange={(e) => setExpires(e.target.value)} /></label>
         <label className="field"><span className="label">ID number <span className="t-meta">(optional)</span></span><input className="input" name="idNumber" autoComplete="off" spellCheck={false} />
           <span className="t-meta">Encrypted; shown only as the last 4 digits until you reveal it.</span></label>
         <div className="field sm:col-span-2">
@@ -219,9 +224,13 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
       </div>
       <div className="grid gap-4" hidden={tab !== "reminders"}>
         {sw("reminders")}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="field"><span className="label">Remind me this many days before expiry</span><input className="input" name="remindDays" defaultValue="90, 30, 7" inputMode="numeric" /></label>
-          <label className="field"><span className="label">Reminder time</span><input className="input" type="time" name="reminderTime" defaultValue="09:00" /></label>
+        <div className="field" role="group" aria-label="Remind me">
+          <span className="label">Remind me</span>
+          <CountdownRail name="remindDays" initial={[30, 7]} anchor={expires || null} endLabel="Expires" presets={[30, 7, 1]} />
+        </div>
+        <div className="flex items-center justify-between gap-3 rule-t pt-4">
+          <span className="grid gap-0.5"><span className="font-semibold">Reminder time</span><span className="t-meta">Same time for each one</span></span>
+          <TimeWheel name="reminderTime" initial="09:00" label="Reminder time" />
         </div>
       </div>
       {error && <p role="alert" className="error">{error}</p>}

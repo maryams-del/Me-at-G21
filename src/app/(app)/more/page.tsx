@@ -68,12 +68,6 @@ export default async function Spaces() {
       { href: "/admin/documents", label: "Documents & IDs", glyph: "documents", d: "Encrypted files and ID numbers" },
       { href: "/vault", label: "Secure vault", glyph: "vault", d: "Locked away" },
     ] },
-    { title: "You", items: [
-      { href: "/inbox", label: "Attention needed", glyph: "inbox", d: "Missing details, overdue items, storage", note: n ? `${n} to look at` : undefined },
-      { href: "/history", label: "History & search", glyph: "history", d: "Everything you've logged" },
-      { href: "/settings", label: "Settings", glyph: "settings", d: "Profile, security, notifications" },
-      { href: "/settings/data", label: "Data & backups", glyph: "documents", d: "Exports, backups, undo" },
-    ] },
   ];
   // The owner's own spaces: under a built-in group, or in sections they made up.
   for (const c of mine) {
@@ -94,7 +88,7 @@ export default async function Spaces() {
   return (
     <>
       <PageHeader title="Spaces" />
-      <SpacesStacks groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "You", glyph: "projects" }} />
+      <SpacesStacks groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "Life admin", glyph: "projects" }} />
     </>
   );
 }

@@ -111,13 +111,10 @@ export function CountdownRail({ name, initial, anchor, endLabel, presets, includ
   const nodes = [...new Set([...usable, ...days])].sort((a, b) => b - a);
   const isPast = (n: number) => dated && n >= left;
 
-  // Spacing follows the calendar (log scale, so the last week isn't squashed), but never closer than one row.
-  const W = dated ? left : Math.max(30, ...nodes);
-  const frac = (n: number) => Math.min(1, Math.log(n + 1) / Math.log(W + 1));
-  const T0 = 56, SPAN = 250;
-  let prev = -Infinity;
-  const ys = nodes.map((n) => { const y = Math.max(T0 + (1 - frac(n)) * SPAN, prev + GAP); prev = y; return y; });
-  const endY = Math.max((ys.at(-1) ?? T0) + GAP, T0 + SPAN + 24);
+  // Evenly spaced, one row each: no big empty stretch between "Today" and the first reminder.
+  const T0 = 64;
+  const ys = nodes.map((_, i) => T0 + i * GAP);
+  const endY = (ys.at(-1) ?? T0 - GAP / 2) + GAP;
   const firstOn = nodes.findIndex((n) => days.includes(n) && !isPast(n));
 
   const chosen = days.filter((n) => !isPast(n)).sort((a, b) => b - a);

@@ -1,4 +1,5 @@
 import { pageOwner, routinesState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { EntryCard } from "@/components/EntryCard";
@@ -33,7 +34,12 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader glyph="routines" title="Routines" />
+      <PageAddProvider initialOpen={sp.add === "1"}>
+      <PageHeader glyph="routines" title="Routines"><PageAddButton label="New custom routine" /></PageHeader>
+      <PageAddPanel title="New custom routine">
+        <OpForm op="routine.create" fields={routineFields} fixed={{ kind: "custom" }} initial={{ anchor: "completed", intervalValue: 7, intervalUnit: "day", reminderTime: "09:00", remindersEnabled: true, beforeDays: [1] }} submitLabel="Create routine" />
+      </PageAddPanel>
+      </PageAddProvider>
 
       <div className="mb-8 grid gap-4">
         {templates.length > 0 && (
@@ -42,12 +48,9 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
             {templates.map((k) => <OpButton key={k} op="routine.template" input={{ template: k }} label={`+ ${ROUTINE_TEMPLATES[k].name}`} className="btn btn-sm" />)}
           </div>
         )}
-        <Reveal label="New custom routine" open={sp.add === "1"}>
-          <OpForm op="routine.create" fields={routineFields} fixed={{ kind: "custom" }} initial={{ anchor: "completed", intervalValue: 7, intervalUnit: "day", reminderTime: "09:00", remindersEnabled: true, beforeDays: [1] }} submitLabel="Create routine" />
-        </Reveal>
       </div>
 
-      {rows.length === 0 && <Empty>No routines yet. Use quick add above, or create your own.</Empty>}
+      {rows.length === 0 && <Empty>No routines yet. Use quick add above, or tap + to create your own.</Empty>}
 
       <ul className="entry-grid">
         {rows.map(({ routine: r, anchor, due, daysSince, daysLeft, overdue, skipped, events }) => {
@@ -57,7 +60,7 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
           const last = !isFirstUse && anchor ? `Last done ${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}`
             : isFirstUse ? `Started ${anchor ? `${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}` : "not recorded"}` : null;
           return (
-            <EntryCard key={r.id} icon="repeat" countLabel="Due" title={r.name} badge={r.sensitive ? <span className="chip chip-fill">private</span> : undefined}
+            <EntryCard del={{ op: "routine.delete", input: { id: r.id }, confirm: `Delete “${r.name}” and its history?` }} key={r.id} icon="repeat" countLabel="Due" title={r.name} badge={r.sensitive ? <span className="chip chip-fill">private</span> : undefined}
               subtitle={schedule(r)} count={count}
               countSub={due ? fmtDate(due) : skipped ? "Skipped, still counting" : undefined}
               reminder={relativeReminderLine({ enabled: r.remindersEnabled, offsets: r.reminderOffsetsDays, time: r.reminderTime })}

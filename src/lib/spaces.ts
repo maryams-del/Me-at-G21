@@ -1,7 +1,7 @@
 import type { GlyphKind } from "@/components/Glyph";
 
 /** The built-in groups on the Spaces page. A custom space goes under one of these or a new section. */
-export const BUILTIN_SECTIONS = ["Money", "Care", "Faith", "Education & career", "Life admin", "You"] as const;
+export const BUILTIN_SECTIONS = ["Money", "Care", "Faith", "Education & career", "Life admin"] as const;
 export const NEW_SECTION = "__new";
 
 /** Icons the owner can pick for a custom space. */
@@ -33,6 +33,6 @@ export function bySavedOrder<T>(xs: T[], key: (x: T) => string, saved: string[] 
 }
 /** Section colours, shared by the Spaces page and other places that show a section. */
 export const SECTION_TINT: Record<string, string> = {
-  "Money": "#8FB59A", "Care": "#C9A48E", "Faith": "#9DB0C6", "Education & career": "#B9B27E", "Life admin": "#C8B48F", "You": "#A9A69A",
+  "Money": "#8FB59A", "Care": "#C9A48E", "Faith": "#9DB0C6", "Education & career": "#B9B27E", "Life admin": "#C8B48F",
 };
 export const CUSTOM_TINT = "#AFA6C2";

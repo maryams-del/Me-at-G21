@@ -2,17 +2,16 @@ import Link from "next/link";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { fmtDateTime } from "@/lib/format";
 
+/** Page title: icon · title · actions (e.g. the + add button) on one line, with the intro underneath. */
 export function PageHeader({ glyph, title, intro, children }: { glyph?: GlyphKind; title: string; intro?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <header className="mb-7 flex flex-wrap items-end justify-between gap-4 pb-5 rule-b">
-      <div className="flex items-start gap-3 min-w-0">
-        {glyph && <Glyph kind={glyph} size={34} accent="var(--rust)" className="mt-0.5 shrink-0" />}
-        <div className="min-w-0">
-          <h1 className="t-h1">{title}</h1>
-          {intro && <p className="t-small text-ink-2 mt-1 prose-w">{intro}</p>}
-        </div>
+    <header className={`page-head rule-b ${glyph ? "has-ic" : ""}`}>
+      <div className="page-head-row">
+        {glyph && <Glyph kind={glyph} size={34} accent="var(--rust)" className="shrink-0" />}
+        <h1 className="t-h1 page-head-title">{title}</h1>
+        {children && <div className="page-head-actions">{children}</div>}
       </div>
-      {children && <div className="flex flex-wrap gap-2">{children}</div>}
+      {intro && <p className="t-small text-ink-2 prose-w page-head-desc">{intro}</p>}
     </header>
   );
 }
@@ -64,6 +63,33 @@ export function ReminderList({ items, tz }: { items: { id: string; title: string
       ))}
     </ul>
   );
+}
+
+/** Applied filters as small tags under the search bar; the × on each removes just that filter. */
+export function FilterTags({ tags, clearHref }: { tags: { label: string; href: string }[]; clearHref?: string }) {
+  if (!tags.length) return null;
+  return (
+    <ul className="filter-tags" aria-label="Filters applied">
+      {tags.map((t) => (
+        <li key={t.label}>
+          <span className="filter-tag">{t.label}
+            <Link href={t.href} className="filter-tag-x" aria-label={`Remove filter: ${t.label}`} title="Remove">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </Link>
+          </span>
+        </li>
+      ))}
+      {clearHref && tags.length > 1 && <li><Link href={clearHref} className="filter-clear">Clear all</Link></li>}
+    </ul>
+  );
+}
+
+/** Build the href for a list page with one filter removed. */
+export function withoutParam(path: string, params: Record<string, string | undefined>, drop: string) {
+  const u = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v && k !== drop) u.set(k, v);
+  const q = u.toString();
+  return q ? `${path}?${q}` : path;
 }
 
 /** Search box for a page toolbar (sits on one line with the filter and + buttons). Keeps the other active filters. */

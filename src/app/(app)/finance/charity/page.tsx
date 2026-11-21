@@ -1,12 +1,13 @@
 import { dmy } from "@/lib/time";
 import { pageOwner, charityState } from "@/server/queries";
-import { PageHeader, Section, Empty, SearchPill } from "@/components/ui";
-import { OpForm, OpButton, Reveal, EditPanel } from "@/components/OpForm";
+import { PageHeader, Section, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
+import { OpForm, OpButton, ItemRow } from "@/components/OpForm";
 import { charityFields } from "@/components/fields";
 import { formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
-import { FilterPanel } from "@/components/FilterPanel";
+import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 
 const monthName = (m: string, withYear = false) =>
   new Intl.DateTimeFormat("en-GB", { month: "long", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(m + "-01"));
@@ -21,6 +22,8 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
   const thisMonth = s.monthly.get(today.slice(0, 7));
   const sum = (m?: Map<string, number>) => (m && m.size ? [...m].map(([c, v]) => formatMoney(v, c)).join(" + ") : formatMoney(0, o.defaultCurrency));
   const suggest = { recipients: s.recipients, causes: s.causes };
+  const thisYear = today.slice(0, 4);
+  const years = [...new Set([String(s.year), ...Array.from({ length: 8 }, (_, i) => String(Number(thisYear) - i))])].sort().reverse();
 
   // History, grouped by month (newest first).
   const byMonth = new Map<string, typeof s.rows>();
@@ -28,27 +31,33 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader glyph="charity" title="Charity" />
+      <PageAddProvider initialOpen={sp.add === "1"}>
+      <PageHeader glyph="charity" title="Charity"><PageAddButton label="Log a donation" /></PageHeader>
       <div className="money-tiles mb-8">
         <div className="tile rust min-h-0"><p className="t-small">This month</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(thisMonth)}</p></div>
         <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(yearTotals)}</p></div>
       </div>
 
-      <div className="toolbar mb-8">
+      <div className="toolbar">
         <SearchPill q={sp.q} placeholder="Search donations" keep={{ year: sp.year }} />
-        <FilterPanel active={s.year !== today.slice(0, 4)}>
+        <FilterPanel active={s.year !== thisYear}>
           <form className="panel p-3 flex flex-wrap gap-2 items-end">
             {sp.q && <input type="hidden" name="q" value={sp.q} />}
-            <label className="field w-[7rem]"><span className="label">Year</span><input name="year" defaultValue={s.year} className="input" inputMode="numeric" /></label>
+            <FilterSelect label="Year" name="year" value={s.year} options={years.map((y) => ({ value: y, label: y }))} />
             <button className="btn">Apply</button>
-            {(sp.q || s.year !== today.slice(0, 4)) && <a href="/finance/charity" className="btn btn-ghost">Clear</a>}
           </form>
         </FilterPanel>
-        <Reveal label="Log a donation" iconOnly open={sp.add === "1"}>
-          <OpForm op="charity.create" fields={charityFields(o.defaultCurrency, { ...suggest, repeatUpTo: 12 - Number(today.slice(5, 7)) })}
-            initial={{ paidOn: today, status: "completed", currency: o.defaultCurrency }} submitLabel="Save donation" />
-        </Reveal>
       </div>
+      <FilterTags clearHref="/finance/charity" tags={[
+        ...(sp.q ? [{ label: `“${sp.q}”`, href: withoutParam("/finance/charity", { q: sp.q, year: sp.year }, "q") }] : []),
+        ...(s.year !== thisYear ? [{ label: s.year, href: withoutParam("/finance/charity", { q: sp.q, year: sp.year }, "year") }] : []),
+      ]} />
+      <PageAddPanel title="Log a donation">
+        <OpForm op="charity.create" fields={charityFields(o.defaultCurrency, { ...suggest, repeatUpTo: 12 - Number(today.slice(5, 7)) })}
+          initial={{ paidOn: today, status: "completed", currency: o.defaultCurrency }} submitLabel="Save donation" />
+      </PageAddPanel>
+      </PageAddProvider>
+      <div className="mb-8" />
 
       {s.monthly.size > 0 && (
         <Section title={`By month, ${s.year}`}>
@@ -68,24 +77,17 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
                 <p className="t-label mb-2">{monthName(m, true)}</p>
                 <ul className="list panel px-4">
                   {rows.map((r) => (
-                    <li key={r.id} className="py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-                      <div className="min-w-0">
-                        <p className="font-medium">{r.recipient}{r.cause && <span className="text-ink-2 font-normal">, {r.cause}</span>}</p>
-                        <p className="t-meta">{fmtDate(r.paidOn)}{r.recurring ? ", recurring" : ""}{r.source === "ai" ? ", captured with AI" : ""}</p>
+                    <li key={r.id} className="py-3 grid gap-1">
+                      <ItemRow del={{ op: "charity.delete", input: { id: r.id }, confirm: "Delete this donation?", note: "It will be removed from your totals.", label: "Delete" }} name={`donation to ${r.recipient}`}
+                        head={<><p className="font-medium">{r.recipient}{r.cause && <span className="text-ink-2 font-normal">, {r.cause}</span>}</p>
+                          <p className="t-meta">{fmtDate(r.paidOn)}{r.recurring ? ", recurring" : ""}{r.source === "ai" ? ", captured with AI" : ""}</p></>}
+                        aside={<div className="text-right"><p className="t-num text-xl">{formatMoney(r.amountMinor, r.currency)}</p>{r.status === "planned" && <span className="chip chip-mustard">planned</span>}</div>}
+                        edit={<OpForm op="charity.update" fields={charityFields(o.defaultCurrency, suggest)} fixed={{ id: r.id, recurring: r.recurring }} submitLabel="Save changes" compact
+                            initial={{ ...r, amount: fromMinor(r.amountMinor, r.currency) }}
+                            deleteAction={{ op: "charity.delete", input: { id: r.id }, confirm: "Delete this donation?", note: "It will be removed from your totals.", label: "Delete" }} />}>
                         {r.notes && <p className="t-small text-ink-2">{r.notes}</p>}
-                      </div>
-                      <div className="text-right">
-                        <p className="t-num text-xl">{formatMoney(r.amountMinor, r.currency)}</p>
-                        {r.status === "planned" && <span className="chip chip-mustard">planned</span>}
-                      </div>
-                      <div className="col-span-2 flex flex-wrap gap-2 items-start">
-                        {r.status === "planned" && <OpButton op="charity.update" className="btn btn-sm" label="Mark paid" input={{ ...r, id: r.id, amount: fromMinor(r.amountMinor, r.currency), status: "completed", paidOn: today, cause: r.cause, notes: r.notes }} confirmText={`Mark as paid today (${dmy(today)})?`} />}
-                        <EditPanel>
-                          <OpForm op="charity.update" fields={charityFields(o.defaultCurrency, suggest)} fixed={{ id: r.id, recurring: r.recurring }} submitLabel="Save changes" compact
-                            initial={{ ...r, amount: fromMinor(r.amountMinor, r.currency) }} 
-                      deleteAction={{ op: "charity.delete", input: { id: r.id }, confirm: "Delete this donation? It will be removed from totals.", label: "Delete" }} />
-                        </EditPanel>
-                      </div>
+                        {r.status === "planned" && <div><OpButton op="charity.update" className="btn btn-sm" label="Mark paid" input={{ ...r, id: r.id, amount: fromMinor(r.amountMinor, r.currency), status: "completed", paidOn: today, cause: r.cause, notes: r.notes }} confirmText={`Mark as paid today (${dmy(today)})?`} /></div>}
+                      </ItemRow>
                     </li>
                   ))}
                 </ul>
