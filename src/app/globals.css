@@ -57,10 +57,10 @@
   --display-weight: 400;
   --num-weight: 300;
   --page-art:
-    radial-gradient(42% 48% at 4% 6%, rgba(156,190,160,.62), transparent 70%),
-    radial-gradient(46% 42% at 40% 104%, rgba(176,204,180,.55), transparent 72%);
-  /* Light only: a second glow that drifts on its own (see "Light: drifting glows") */
-  --page-art-2: radial-gradient(38% 44% at 98% 30%, rgba(222,205,170,.7), transparent 70%);
+    radial-gradient(45% 50% at 8% 0%, rgba(156,190,160,.6), transparent 70%),
+    radial-gradient(35% 40% at 96% 10%, rgba(222,205,170,.6), transparent 70%);
+  /* Soft hills along the bottom of every page (stone, sage, deeper sage) */
+  --page-hills: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 360' preserveAspectRatio='none'%3E%3Cpath d='M0 170 C 220 90 420 210 660 150 S 1080 70 1280 140 L1280 360 L0 360 Z' fill='rgba(222,205,170,.38)'/%3E%3Cpath d='M0 240 C 260 170 470 280 740 225 S 1120 160 1280 215 L1280 360 L0 360 Z' fill='rgba(176,204,180,.45)'/%3E%3Cpath d='M0 300 C 300 255 560 330 860 292 S 1150 260 1280 285 L1280 360 L0 360 Z' fill='rgba(140,176,148,.38)'/%3E%3C/svg%3E");
   /* Home: in Light the week sits on a deep sage panel, the spaces on the page */
   --wk-bg: linear-gradient(150deg, rgba(36,46,37,.94), rgba(28,35,29,.96)); --wk-pad: 22px 20px; --wk-shadow: 0 26px 44px -28px rgba(20,26,21,.7);
   --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
@@ -90,9 +90,9 @@
     --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-body); --display-weight: 400; --num-weight: 300;
     --page-art:
-      radial-gradient(45% 50% at 4% 0%, rgba(110,150,118,.62), transparent 70%),
-      radial-gradient(50% 45% at 35% 105%, rgba(92,128,100,.55), transparent 72%);
-    --page-art-2: radial-gradient(38% 44% at 100% 32%, rgba(176,150,105,.3), transparent 70%);
+      radial-gradient(45% 50% at 8% 0%, rgba(110,150,118,.5), transparent 70%),
+      radial-gradient(30% 34% at 92% 8%, rgba(214,198,166,.16), transparent 70%);
+    --page-hills: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 360' preserveAspectRatio='none'%3E%3Cpath d='M0 170 C 220 90 420 210 660 150 S 1080 70 1280 140 L1280 360 L0 360 Z' fill='rgba(110,140,112,.18)'/%3E%3Cpath d='M0 240 C 260 170 470 280 740 225 S 1120 160 1280 215 L1280 360 L0 360 Z' fill='rgba(70,96,74,.35)'/%3E%3Cpath d='M0 300 C 300 255 560 330 860 292 S 1150 260 1280 285 L1280 360 L0 360 Z' fill='rgba(24,31,24,.55)'/%3E%3C/svg%3E");
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
     --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
@@ -121,9 +121,9 @@
     --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-body); --display-weight: 400; --num-weight: 300;
     --page-art:
-      radial-gradient(45% 50% at 4% 0%, rgba(110,150,118,.62), transparent 70%),
-      radial-gradient(50% 45% at 35% 105%, rgba(92,128,100,.55), transparent 72%);
-    --page-art-2: radial-gradient(38% 44% at 100% 32%, rgba(176,150,105,.3), transparent 70%);
+      radial-gradient(45% 50% at 8% 0%, rgba(110,150,118,.5), transparent 70%),
+      radial-gradient(30% 34% at 92% 8%, rgba(214,198,166,.16), transparent 70%);
+    --page-hills: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 360' preserveAspectRatio='none'%3E%3Cpath d='M0 170 C 220 90 420 210 660 150 S 1080 70 1280 140 L1280 360 L0 360 Z' fill='rgba(110,140,112,.18)'/%3E%3Cpath d='M0 240 C 260 170 470 280 740 225 S 1120 160 1280 215 L1280 360 L0 360 Z' fill='rgba(70,96,74,.35)'/%3E%3Cpath d='M0 300 C 300 255 560 330 860 292 S 1150 260 1280 285 L1280 360 L0 360 Z' fill='rgba(24,31,24,.55)'/%3E%3C/svg%3E");
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
     --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
@@ -711,11 +711,8 @@ html.splashing [data-splash] { visibility: hidden; }
 }
 :root { --glow-flat: color-mix(in srgb, var(--accent-solid) 10%, var(--paper)); }
 
-/* ───────── Drifting glows (Light and Dark) ─────────
-   Two sage glows (top-left, bottom) and a stone glow (right) move very slowly so the page never
-   looks flat. Each theme sets its own colours in --page-art / --page-art-2; reduced motion keeps them still. */
-@keyframes glow-drift-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(6%, 5%) scale(1.08); } }
-@keyframes glow-drift-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-6%, 7%) scale(1.1); } }
-body::before { inset: -12%; animation: glow-drift-a 28s ease-in-out infinite; will-change: transform; }
-body::after { content: ""; position: fixed; inset: -12%; z-index: -1; pointer-events: none; background: var(--page-art-2); animation: glow-drift-b 34s ease-in-out infinite; will-change: transform; }
-@media (prefers-reduced-motion: reduce) { body::before, body::after { animation: none !important; } }
+/* ───────── Soft hills (Light and Dark) ─────────
+   A glow at the top (--page-art, on body::before) and three layered hills fixed along the bottom of the
+   screen (--page-hills, on body::after). Each theme sets its own colours. */
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 38vh; z-index: -1; pointer-events: none;
+  background: var(--page-hills) center bottom / 100% 100% no-repeat; }
