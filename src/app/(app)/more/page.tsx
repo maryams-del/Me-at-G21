@@ -13,7 +13,12 @@ import { spaceFields } from "../spaces/fields";
 type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string; stat?: string };
 
 /** Spaces: every section of the app in one place (the "Spaces" menu item on phone and web). */
-export default async function Spaces() {
+export default async function Spaces({ searchParams }: { searchParams: Promise<{ focus?: string }> }) {
+  const { focus } = await searchParams;
+  return <SpacesPage focus={focus?.slice(0, 200)} />;
+}
+
+async function SpacesPage({ focus }: { focus?: string }) {
   const o = await pageOwner();
   const n = await attentionCount(o);
   const mine = await customSpacesState(o);
@@ -65,7 +70,7 @@ export default async function Spaces() {
   return (
     <>
       <PageHeader title="Spaces" />
-      <SpacesStacks groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "Life admin", glyph: "projects" }} />
+      <SpacesStacks focus={focus} groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "Life admin", glyph: "projects" }} />
       {removed.length > 0 && (
         <section aria-labelledby="removed-h" className="mt-10 pt-5 rule-t">
           <h2 id="removed-h" className="t-label mb-3">Removed spaces</h2>

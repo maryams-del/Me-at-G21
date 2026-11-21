@@ -6,7 +6,7 @@ self.addEventListener("push", (event) => {
   let data = { title: "Reminder", body: "", url: "/", tag: undefined };
   try { data = { ...data, ...event.data.json() }; } catch (_) {}
   event.waitUntil(self.registration.showNotification(data.title, {
-    body: data.body, tag: data.tag, icon: "/icons/icon-192-v5.png", badge: "/icons/icon-192-v5.png", data: { url: data.url },
+    body: data.body, tag: data.tag, icon: "/icons/icon-192-v6.png", badge: "/icons/icon-192-v6.png", data: { url: data.url },
   }));
 });
 
