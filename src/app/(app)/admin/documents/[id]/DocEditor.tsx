@@ -9,7 +9,8 @@ import { askConfirm } from "@/components/ConfirmDialog";
 import { daysBetween, dayMonth, shiftDate } from "@/lib/countdown";
 import { dmy } from "@/lib/time";
 import { Icon } from "@/components/icons";
-import { compressIfImage, uploadFile, ShareFile, DOC_KIND_OPTIONS } from "../DocClient";
+import { compressIfImage, uploadFile, ShareFile, DocKindField, kindFrom } from "../DocClient";
+import { docKindLabel } from "@/lib/docTypes";
 
 type Doc = { id: string; title: string; kind: string; issuer: string | null; issuedOn: string | null; expiresOn: string | null; notes: string | null; idMasked: string | null; personId: string | null; tags: string[] };
 type FileV = { id: string; version: number; filename: string; contentType: string; sizeBytes: number; when: string };
@@ -30,7 +31,7 @@ function localToday() {
 const TABS = [["details", "Details"], ["reminders", "Reminders"], ["files", "Files"], ["notes", "Notes"]] as const;
 type Tab = (typeof TABS)[number][0];
 
-export function DocEditor({ doc, files, reminders, whose }: { doc: Doc; files: FileV[]; reminders: Rem; whose: { value: string; label: string }[] }) {
+export function DocEditor({ doc, files, reminders, whose, kinds }: { doc: Doc; files: FileV[]; reminders: Rem; whose: { value: string; label: string }[]; kinds: { value: string; label: string }[] }) {
   const ownerLabel = whose.find((w) => w.value === (doc.personId ?? ""))?.label ?? doc.title;
   const router = useRouter();
   const formId = "doc-edit-form";
@@ -138,12 +139,14 @@ export function DocEditor({ doc, files, reminders, whose }: { doc: Doc; files: F
     setError(null);
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
+    const kind = kindFrom(fd);
+    if (!kind) { setTab("details"); setError("Add what type of document it is."); return; }
     const personId = v("personId") || null;
     const title = whose.find((w) => w.value === (personId ?? ""))?.label ?? doc.title;
     if (remOn && !v("expiresOn")) { setTab("details"); setError("Add an expiry date to get reminders."); return; }
     if (remOn && !remDays.length) { setTab("reminders"); setError("Pick at least one reminder, or turn reminders off."); return; }
     const input: Record<string, unknown> = {
-      id: doc.id, personId, tags: doc.tags, title, kind: v("kind"),
+      id: doc.id, personId, tags: doc.tags, title, kind,
       issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null, notes: v("notes") || null,
     };
     if (idEditing && idValue.trim() !== idOriginal.trim()) {
@@ -218,7 +221,7 @@ export function DocEditor({ doc, files, reminders, whose }: { doc: Doc; files: F
         {/* Details, reminders, files and notes */}
         <form id={formId} className="doc-main" onSubmit={save} noValidate>
           <header className="grid gap-1">
-            <span className="t-label">{DOC_KIND_OPTIONS.find((k) => k.value === doc.kind)?.label ?? "Document"}</span>
+            <span className="t-label">{docKindLabel(doc.kind)}</span>
             <h1 className="t-h1">{ownerLabel}</h1>
           </header>
 
@@ -231,8 +234,7 @@ export function DocEditor({ doc, files, reminders, whose }: { doc: Doc; files: F
           <section id="doc-panel-details" role="tabpanel" aria-labelledby="doc-tab-details" hidden={tab !== "details"} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="field"><span className="label" id="doc-whose-edit">Whose is it?</span><Dropdown name="personId" initial={doc.personId ?? ""} labelledBy="doc-whose-edit" options={whose} /></div>
-              <div className="field" role="group"><span className="label">Type</span>
-                <Dropdown name="kind" initial={doc.kind} ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
+              <DocKindField kinds={kinds} initial={doc.kind} id="doc-edit-kind" />
               <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" defaultValue={doc.issuer ?? ""} autoCapitalize="words" onInput={titleCaseInput} /></label>
               <label className="field"><span className="label">Issue date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="issuedOn" defaultValue={doc.issuedOn ?? ""} /></label>
               <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" value={expires} onChange={(e) => setExpires(e.target.value)} /></label>

@@ -142,3 +142,20 @@ describe("Belongs to (family members)", () => {
     expect(res.proposal.operations[0].display.personId).toBe("Ali");
   });
 });
+
+describe("Documents — your own types and whose it is", () => {
+  it("a named 'other' type is saved once so it can be picked again", async () => {
+    const { users } = await import("@/db/schema");
+    await op(at("2026-11-18"), "document.create", { title: "Me", kind: "Car Licence" });
+    await op(at("2026-11-18"), "document.create", { title: "Me", kind: "car licence" });
+    const [u] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
+    expect((u.settings as { docTypes?: string[] }).docTypes).toEqual(["Car Licence"]);
+    const docs = await getDb().select().from(documents).where(eq(documents.ownerId, owner.id));
+    expect(docs.map((d) => d.kind)).toContain("Car Licence");
+  });
+  it("an expiry picked by person takes that person's name as its title", async () => {
+    const r = await op(at("2026-11-18"), "expiry.create", { kind: "passport", expiresOn: "2027-06-30" }) as { id: string };
+    const [it] = await getDb().select().from(expiryItems).where(eq(expiryItems.id, r.id));
+    expect(it.label.length).toBeGreaterThan(0);
+  });
+});

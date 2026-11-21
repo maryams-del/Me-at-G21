@@ -11,7 +11,7 @@ import QRCode from "qrcode";
 import { cookies } from "next/headers";
 import { getDb } from "@/db";
 import {
-  users, authSessions, passkeyCredentials, webauthnChallenges, totpAuthenticators,
+  users, notificationPreferences, authSessions, passkeyCredentials, webauthnChallenges, totpAuthenticators,
   accountRecoveryCodeVerifiers, emailVerifications, accountSecurityEvents,
 } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -319,7 +319,18 @@ const onboardingComplete: Handler = async (body) => {
   const [{ n }] = await getDb().select({ n: count() }).from(accountRecoveryCodeVerifiers).where(and(eq(accountRecoveryCodeVerifiers.userId, s.user.id), isNull(accountRecoveryCodeVerifiers.invalidatedAt)));
   if (!n) throw new AuthError(400, "Generate your recovery codes first");
   await getDb().update(users).set({ onboardingStep: "complete" }).where(eq(users.id, s.user.id));
-  await seedDefaultsForOwner(s.user.id, s.user.timezone);
+  const isSiteOwner = s.user.email.trim().toLowerCase() === env.ownerEmail;
+  // The Quran class schedule is the site owner's own; invited people start without it.
+  if (isSiteOwner) await seedDefaultsForOwner(s.user.id, s.user.timezone);
+  else {
+    await getDb().insert(notificationPreferences).values({ ownerId: s.user.id }).onConflictDoNothing();
+    // Let the site owner know someone they invited has finished signing up.
+    try {
+      const [{ n: total }] = await getDb().select({ n: count() }).from(users).where(and(eq(users.onboardingStep, "complete"), ne(users.email, env.ownerEmail)));
+      await sendEmail(env.ownerEmail, `${s.user.email} signed up to Me @ G21`,
+        `${s.user.email} has finished setting up their account.\n\n${total} ${total === 1 ? "person has" : "people have"} signed up so far. See everyone in Settings › People: ${env.origin}/settings`);
+    } catch { /* the sign-up still counts even if the email doesn't send */ }
+  }
   // Replace the onboarding session with a full one (passkey was just proven during setup).
   await getDb().update(authSessions).set({ revokedAt: new Date() }).where(eq(authSessions.id, s.sessionId));
   await createSession(s.user.id, "passkey");
