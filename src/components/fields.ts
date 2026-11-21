@@ -6,7 +6,7 @@ export const currencyField = (def = "SAR"): FieldDef => ({ name: "currency", lab
 export const charityFields = (cur: string, o: { recipients?: string[]; causes?: string[]; repeatUpTo?: number } = {}): FieldDef[] => [
   { name: "amount", label: "Amount", type: "amount", required: true, placeholder: "100" },
   currencyField(cur),
-  { name: "recipient", label: "Platform or recipient", required: true, placeholder: "Ehsan", suggestions: o.recipients },
+  { name: "recipient", label: "Platform or recipient", required: true, placeholder: "Al Khidmat", suggestions: [...new Set(["Al Khidmat", ...(o.recipients ?? [])])] },
   { name: "cause", label: "Cause", placeholder: "Orphan sponsorship", nullable: true, suggestions: o.causes },
   { name: "paidOn", label: "Date", type: "date", required: true },
   { name: "status", label: "Status", type: "select", required: true, options: [{ value: "completed", label: "Paid" }, { value: "planned", label: "Planned (not paid yet)" }] },

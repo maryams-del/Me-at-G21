@@ -1,4 +1,5 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { Dropdown } from "@/components/GlyphSelect";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -17,7 +18,7 @@ function Lines({ title, lines, set, suggestions, currency }: { title: string; li
       <datalist id={listId}>{suggestions.map((s) => <option key={s} value={s} />)}</datalist>
       {lines.map((l, n) => (
         <div key={n} className="grid grid-cols-[1fr_9rem_auto] gap-2 items-center">
-          <input className="input" list={listId} aria-label={`${title} ${n + 1} description`} value={l.label} placeholder="Description" onChange={(e) => set(lines.map((x, i) => i === n ? { ...x, label: e.target.value } : x))} />
+          <input className="input" list={listId} aria-label={`${title} ${n + 1} description`} value={l.label} placeholder="Description" autoCapitalize="words" onChange={(e) => set(lines.map((x, i) => i === n ? { ...x, label: titleCase(e.target.value) } : x))} />
           <input className="input text-right" inputMode="decimal" aria-label={`${title} ${n + 1} amount (${currency})`} value={l.amount} placeholder="0" onChange={(e) => set(lines.map((x, i) => i === n ? { ...x, amount: e.target.value.replace(/[^\d.,]/g, "") } : x))} />
           <button type="button" className="btn btn-sm btn-ghost" aria-label={`Remove ${title.toLowerCase()} line ${n + 1}`} onClick={() => set(lines.filter((_, i) => i !== n))}>×</button>
         </div>
@@ -86,13 +87,13 @@ export function ZakatCalculator({ today, currency: defCurrency }: { today: strin
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="field"><span className="label">{basis === "gold" ? "Gold" : "Silver"} price per gram ({currency})</span><input className="input" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Today's price" /></label>
               <label className="field"><span className="label">Grams <span className="t-meta">(optional)</span></span><input className="input" inputMode="decimal" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder={String(NISAB_GRAMS[basis])} /></label>
-              <label className="field sm:col-span-2"><span className="label">Where the price is from <span className="t-meta">(optional)</span></span><input className="input" value={priceSource} onChange={(e) => setPriceSource(e.target.value)} placeholder="e.g. local jeweller, 18/11/2026" /></label>
+              <label className="field sm:col-span-2"><span className="label">Where the price is from <span className="t-meta">(optional)</span></span><input className="input" value={priceSource} autoCapitalize="words" onChange={(e) => setPriceSource(titleCase(e.target.value))} placeholder="e.g. local jeweller, 18/11/2026" /></label>
               <p className="t-meta sm:col-span-2">Prices are entered by you; the app does not fetch live prices.</p>
             </div>
           )}
           <label className="field max-w-[12rem]"><span className="label">Rate (%)</span><input className="input" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} /></label>
         </fieldset>
-        <label className="field"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+        <label className="field"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" value={notes} autoCapitalize="sentences" onChange={(e) => setNotes(sentenceCase(e.target.value))} /></label>
         <label className="check"><input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} /><span>Remind me one lunar year after this date</span></label>
       </div>
 

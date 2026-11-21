@@ -1,4 +1,5 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { askConfirm } from "@/components/ConfirmDialog";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,7 +7,6 @@ import { api, ApiError, toast } from "@/components/api";
 import { useRevealClose } from "@/components/OpForm";
 import { Dropdown } from "@/components/GlyphSelect";
 import { CountdownRail, TimeWheel } from "@/components/ReminderPickers";
-import { titleCaseInput } from "@/lib/titlecase";
 import { Icon } from "@/components/icons";
 
 /**
@@ -202,7 +202,7 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
         <label className="field"><span className="label">Title</span><input className="input" name="title" required placeholder="Passport" autoCapitalize="words" onInput={titleCaseInput} /></label>
         <div className="field" role="group"><span className="label">Type</span>
           <Dropdown name="kind" initial="passport" ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
-        <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" /></label>
+        <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" autoCapitalize="words" onInput={titleCaseInput} /></label>
         <label className="field"><span className="label">Issue date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="issuedOn" /></label>
         <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" value={expires} onChange={(e) => setExpires(e.target.value)} /></label>
         <label className="field"><span className="label">ID number <span className="t-meta">(optional)</span></span><input className="input" name="idNumber" autoComplete="off" spellCheck={false} />
@@ -220,7 +220,7 @@ export function NewDocumentForm({ onDone }: { onDone?: () => void }) {
           <label className="check t-small"><input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} />Compress file to reduce size
             <span className="t-meta">(photos only; leave unticked to keep full quality)</span></label>
         </div>
-        <label className="field sm:col-span-2"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" name="notes" /></label>
+        <label className="field sm:col-span-2"><span className="label">Notes <span className="t-meta">(optional)</span></span><textarea className="textarea" name="notes" autoCapitalize="sentences" onInput={sentenceCaseInput} /></label>
         <div className="sm:col-span-2 rule-t pt-4">{sw("details")}</div>
       </div>
       <div className="grid gap-4" hidden={tab !== "reminders"}>

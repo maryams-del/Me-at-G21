@@ -1,18 +1,18 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
 import { Icon } from "@/components/icons";
 import { OpForm, PanelClose, PlusIcon, RevealCtx, type FieldDef } from "@/components/OpForm";
 import { api, ApiError, toast } from "@/components/api";
-import { askConfirm } from "@/components/ConfirmDialog";
 
 type Space = { id: string; name: string; description: string | null; section: string; glyph: string };
 
 const UNDO_NOTE = "You can undo this from Settings › Data for 30 days.";
 
 /**
- * The top of every custom space: icon, name and what it's for, with add (+), edit and delete on the same line.
+ * The top of every custom space: icon, name and what it's for, with add (+) and edit on the same line (delete is in the edit panel).
  * + opens a bar above the list for a new to-do item; edit opens the space's settings on the right.
  */
 export function SpaceView({ space: s, glyph, fields, children }: { space: Space; glyph: GlyphKind; fields: FieldDef[]; children: React.ReactNode }) {
@@ -20,7 +20,6 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -40,19 +39,6 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
     } finally { setBusy(false); }
   }
 
-  async function deleteSpace() {
-    if (!(await askConfirm(`This will delete the space “${s.name}” and everything in its list.`, { title: "Delete space?", note: UNDO_NOTE, danger: true }))) return;
-    setDeleting(true);
-    try {
-      const r = await api<{ message?: string }>("/api/ops/space.delete", { id: s.id });
-      toast(r.message ?? "Space deleted");
-      router.push("/more");
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Couldn't delete the space. Nothing was changed.", "error");
-      setDeleting(false);
-    }
-  }
-
   return (
     <>
       <p className="t-label mb-2">Spaces · {s.section}</p>
@@ -67,10 +53,6 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
           <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={editing ? "Close editing" : "Edit space"} title="Edit space"
             aria-expanded={editing} aria-controls="edit-space" onClick={() => setEditing(!editing)}>
             <Icon name="edit" size={18} />
-          </button>
-          <button type="button" className="icon-ghost icon-danger" style={{ margin: 0 }} aria-label="Delete space" title="Delete space"
-            disabled={deleting} onClick={() => { setEditing(false); void deleteSpace(); }}>
-            <Icon name="trash" size={18} />
           </button>
         </div>
         {s.description && <p className="t-small text-ink-2 prose-w space-head-desc">{s.description}</p>}
@@ -97,7 +79,7 @@ export function SpaceView({ space: s, glyph, fields, children }: { space: Space;
           <PanelClose onClick={() => setAdding(false)} label="Close adding" />
           <label htmlFor="add-item-text" className="block text-[0.875rem] font-semibold text-ink-2 mb-2 pr-10">Add a to do list item</label>
           <div className="flex items-center gap-2">
-            <input ref={input} id="add-item-text" className="input flex-1 min-w-0" placeholder="Something to remember or do" maxLength={500} autoFocus autoComplete="off"
+            <input ref={input} id="add-item-text" className="input flex-1 min-w-0" autoCapitalize="sentences" onInput={sentenceCaseInput} placeholder="Something to remember or do" maxLength={500} autoFocus autoComplete="off"
               aria-invalid={!!error || undefined} aria-describedby={error ? "add-item-err" : undefined} />
             <button className="btn btn-primary shrink-0" disabled={busy}>{busy ? "Adding…" : "Add"}</button>
           </div>

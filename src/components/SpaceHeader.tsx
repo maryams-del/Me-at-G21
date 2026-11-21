@@ -2,14 +2,14 @@ import { pageOwner, customSpacesState } from "@/server/queries";
 import { builtinSpace, builtinGlyphOptions, spaceOverridesOf, BUILTIN_SPACES } from "@/lib/spaces";
 import { spaceFields } from "@/app/(app)/spaces/fields";
 import { PageHeader } from "./ui";
-import { OpForm, DeleteIcon } from "./OpForm";
+import { OpForm } from "./OpForm";
 import { SpaceEditScope, SpaceEditButton, SpaceEditPanel } from "./PageAdd";
 
 const NOTE = "Nothing inside it is deleted. You can bring it back from the bottom of the Spaces page.";
 
 /**
  * Title line of a built-in space: its icon and name (as the owner set them), any page actions (e.g. +),
- * then edit (name, icon, section, what it's for) and delete (removes it from Spaces; the data stays).
+ * then edit (name, icon, section, what it's for). Delete is inside the edit panel (removes it from Spaces; the data stays).
  */
 export async function SpaceHeader({ href, children }: { href: string; children?: React.ReactNode }) {
   const o = await pageOwner();
@@ -25,8 +25,6 @@ export async function SpaceHeader({ href, children }: { href: string; children?:
       <PageHeader glyph={sp.glyph} title={sp.label} intro={sp.note ?? undefined}>
         {children}
         <SpaceEditButton />
-        <DeleteIcon op="space.builtin.hide" input={{ href }} label={`Delete ${sp.label}`} redirectTo="/more"
-          confirm={`This will remove “${sp.label}” from your Spaces.`} note={NOTE} />
       </PageHeader>
       <SpaceEditPanel>
         <OpForm op="space.builtin.update" fixed={{ href }} compact submitLabel="Save"
