@@ -149,6 +149,14 @@
 
 html { background: var(--paper); color: var(--ink); -webkit-text-size-adjust: 100%; font-size: calc(93.75% * var(--sz-text, 1)); }
 @media (min-width: 768px) { html { font-size: calc(100% * var(--sz-text, 1)); } }
+/* Phones: no double-tap zoom on taps (buttons, links, chips). Pinch-zoom still works except on the home screen. */
+html { touch-action: manipulation; }
+/* Home screen is a fixed dashboard: no pinch-zoom either (see HomeNoZoom). */
+html.no-zoom, html.no-zoom body { touch-action: pan-x pan-y; }
+/* iPhone Safari zooms in on any text field under 16px when it's tapped. Keep fields at 16px on touch screens. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+}
 body { font-family: var(--font-body); font-size: 1rem; line-height: 1.5; font-feature-settings: "tnum" 1; min-height: 100dvh; background: transparent; position: relative; }
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--page-art); pointer-events: none; }
 ::selection { background: var(--mustard); color: var(--on-mustard); }
