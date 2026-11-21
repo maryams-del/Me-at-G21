@@ -20,3 +20,24 @@ export function titleCaseInput(e: React.FormEvent<HTMLInputElement>) {
   el.value = v;
   if (a !== null && b !== null) el.setSelectionRange(a, b);
 }
+
+/** Capitalise the first letter of each sentence and line (for notes, to-dos and other longer text). */
+export function sentenceCase(s: string): string {
+  return s.replace(/(^\s*|[.!?]\s+|\n\s*)([a-z])/g, (_, pre: string, c: string) => pre + c.toUpperCase());
+}
+
+function caseInput(fn: (s: string) => string) {
+  return (e: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const v = fn(el.value);
+    if (v === el.value) return;
+    const a = el.selectionStart, b = el.selectionEnd;
+    el.value = v;
+    if (a !== null && b !== null) el.setSelectionRange(a, b);
+  };
+}
+/** onInput handler: sentence-cases a note / to-do as you type, without moving the cursor. */
+export const sentenceCaseInput = caseInput(sentenceCase);
+
+/** Fields that must keep exactly what was typed (links, emails, IDs, codes, numbers). */
+export const KEEP_AS_TYPED = /url|link|email|website|idnumber|iban|account|code|password|amount|phone/i;

@@ -11,7 +11,7 @@ import { api, ApiError, toast } from "./api";
 import { CountdownRail, TimeWheel } from "./ReminderPickers";
 import { Icon, type IconName } from "./icons";
 import { Dropdown, GlyphSelect } from "./GlyphSelect";
-import { titleCaseInput } from "@/lib/titlecase";
+import { titleCaseInput, sentenceCaseInput, KEEP_AS_TYPED } from "@/lib/titlecase";
 import { countdown, daysBetween } from "@/lib/countdown";
 import { dmy } from "@/lib/time";
 
@@ -139,9 +139,12 @@ function toInput(fields: FieldDef[], form: FormData): Record<string, unknown> {
 const ANCHOR_FIELDS = ["expiresOn", "dueDate", "dueOn", "deadlineDate"];
 /** The quick picks on every reminder setter: a month, a week and a day before. */
 const FAST_PRESETS = [30, 7, 1];
-/** Text fields that are titles: they're capitalised as you type, for consistency. */
-const TITLE_FIELDS = new Set(["name", "label", "title", "newSection"]);
-const isTitle = (f: FieldDef) => (f.titleCase ?? TITLE_FIELDS.has(f.name)) && (!f.type || f.type === "text");
+/**
+ * Capitals as you type, for consistency: every one-line text entry is title-cased ("Al Khidmat", "Passport Renewal"),
+ * longer text (notes, descriptions) gets a capital at the start of each sentence. Links, emails, IDs and codes are left alone.
+ */
+const isTitle = (f: FieldDef) => (f.titleCase ?? !KEEP_AS_TYPED.test(f.name)) && (!f.type || f.type === "text");
+const isSentence = (f: FieldDef) => f.type === "textarea" && f.titleCase !== false && !KEEP_AS_TYPED.test(f.name);
 /** "Remind me this many days before…" → "Remind me". */
 const reminderLabel = (l: string) => l.replace(/ \(0 = on the day\)/, "").replace(/ (this many days )?before.*$/i, "");
 
@@ -428,7 +431,8 @@ export function OpForm({ op, fields, initial = {}, fixed = {}, submitLabel, succ
                   options={[...(f.required ? [] : [{ value: "", label: "—" }]), ...(f.options ?? [])]}
                   onChange={(v) => { if (f.name in watch) setWatch((w) => ({ ...w, [f.name]: v })); if (error?.field === f.name) setError(null); }} />
               ) : f.type === "textarea" ? (
-                <textarea className="textarea" {...common} defaultValue={val(f)} placeholder={f.placeholder} />
+                <textarea className="textarea" {...common} defaultValue={val(f)} placeholder={f.placeholder} autoCapitalize={isSentence(f) ? "sentences" : undefined}
+                  onInput={(e) => { if (isSentence(f)) sentenceCaseInput(e); if (invalid) setError(null); }} />
               ) : (
                 <input className="input" {...common} defaultValue={val(f)} placeholder={f.placeholder}
                   type={f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"}
@@ -572,7 +576,7 @@ type DelAction = { op: string; input: unknown; confirm: string; note?: string; l
  * A list item whose name line carries the pencil (edit) and bin (delete) icons at its right end.
  * The edit form opens under the item in a panel with its own X.
  */
-export function ItemRow({ head, aside, children, edit, editHref, del, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit?: React.ReactNode; editHref?: string; del?: DelAction; name?: string }) {
+export function ItemRow({ head, aside, children, edit, editHref, del, below, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit?: React.ReactNode; editHref?: string; del?: DelAction; /** a small action shown on the right, under the edit icon (e.g. Mark paid) */ below?: React.ReactNode; name?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
@@ -580,6 +584,7 @@ export function ItemRow({ head, aside, children, edit, editHref, del, name = "th
       <div className="item-head">
         <div className="min-w-0 flex-1">{head}</div>
         {aside && <div className="shrink-0">{aside}</div>}
+        <div className="item-side">
         <div className="entry-actions">
           {editHref
             ? <Link href={editHref} className="icon-ghost" style={{ margin: 0 }} aria-label={`Edit ${name}`} title="Edit"><Icon name="edit" size={17} /></Link>
@@ -587,6 +592,8 @@ export function ItemRow({ head, aside, children, edit, editHref, del, name = "th
                 <Icon name="edit" size={17} />
               </button>}
           {del && <DeleteIcon op={del.op} input={del.input} confirm={del.confirm} note={del.note} label={`Delete ${name}`} redirectTo={del.redirectTo} />}
+        </div>
+        {below && <div className="item-below">{below}</div>}
         </div>
       </div>
       {children}

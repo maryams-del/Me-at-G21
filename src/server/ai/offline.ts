@@ -391,7 +391,7 @@ export const offlineProvider: AiProvider = {
     const ops: ProposedOp[] = prevOps ? structuredClone(prevOps) : [];
     const questions: string[] = [];
     for (const c of splitClauses(text)) parseClause(c, ctx, ops, questions);
-    if (!ops.length && !questions.length) questions.push("I couldn't find anything to log. Try “I donated 100 SAR via Ehsan today”.");
+    if (!ops.length && !questions.length) questions.push("I couldn't find anything to log. Try “I donated 100 SAR via Al Khidmat today”.");
     return { intent: ops.length ? "capture" : "unsupported", operations: ops, questions: [...new Set(questions)] };
   },
 };
