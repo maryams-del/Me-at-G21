@@ -1,7 +1,8 @@
 import { PageHeader } from "@/components/ui";
+import { OpButton } from "@/components/OpForm";
 import { type GlyphKind } from "@/components/Glyph";
 import { pageOwner, attentionCount, customSpacesState, dashboardState } from "@/server/queries";
-import { isSpaceGlyph, spacesOrderOf, spacesPinsOf, bySavedOrder, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
+import { isSpaceGlyph, spacesOrderOf, spacesPinsOf, bySavedOrder, BUILTIN_SPACES, builtinSpace, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { relDays } from "@/lib/format";
 import { addDays, dmy } from "@/lib/time";
@@ -42,33 +43,16 @@ export default async function Spaces() {
     "/projects": s.tasksDueSoon.length > 0,
     "/finance/debts": s.debts.some((d) => d.overdue),
   };
-  const groups: { title: string; items: Item[] }[] = [
-    { title: "Money", items: [
-      { href: "/finance/charity", label: "Charity", glyph: "charity", d: "Donations, monthly and yearly totals" },
-      { href: "/finance/savings", label: "Savings", glyph: "savings", d: "Goals and actual deposits" },
-      { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts", d: "Who owes whom, repayments" },
-      { href: "/finance/subscriptions", label: "Subscriptions", glyph: "subscriptions", d: "Monthly cost and upcoming charges" },
-      { href: "/finance/zakat", label: "Zakat", glyph: "zakat", d: "Step-by-step estimate and payments" },
-    ] },
-    { title: "Care", items: [
-      { href: "/care/routines", label: "Routines", glyph: "routines", d: "Waxing, dental scaling, bedsheets and more" },
-      { href: "/care/period", label: "Period log", glyph: "period", d: "Private, never sent to the AI" },
-    ] },
-    { title: "Faith", items: [
-      { href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts", d: "Balance and completed fasts" },
-      { href: "/quran", label: "Quran class", glyph: "quran", d: "Classes, homework, study time" },
-    ] },
-    { title: "Education & career", items: [
-      { href: "/education/applications", label: "Master's applications", glyph: "applications", d: "Deadlines, requirements, status" },
-      { href: "/education/achievements", label: "Achievements & hobbies", glyph: "achievements", d: "Accomplishments and CV bullets" },
-      { href: "/projects", label: "Projects & tasks", glyph: "projects", d: "Deadlines and checklists" },
-    ] },
-    { title: "Life admin", items: [
-      { href: "/admin/expiries", label: "Expiries & renewals", glyph: "expiries", d: "IDs, licences, anything that runs out" },
-      { href: "/admin/documents", label: "Documents & IDs", glyph: "documents", d: "Encrypted files and ID numbers" },
-      { href: "/vault", label: "Secure vault", glyph: "vault", d: "Locked away" },
-    ] },
-  ];
+  // Built-in spaces, as the owner has set them up (renamed, re-iconed, moved or removed).
+  const groups: { title: string; items: Item[] }[] = [];
+  const removed: { href: string; label: string }[] = [];
+  for (const base of BUILTIN_SPACES) {
+    const sp = builtinSpace(base.href, o.settings)!;
+    if (sp.hidden) { removed.push({ href: sp.href, label: sp.label }); continue; }
+    const item: Item = { href: sp.href, label: sp.label, glyph: sp.glyph, d: sp.note ?? sp.d };
+    const g = groups.find((x) => x.title === sp.section);
+    if (g) g.items.push(item); else groups.push({ title: sp.section, items: [item] });
+  }
   // The owner's own spaces: under a built-in group, or in sections they made up.
   for (const c of mine) {
     const item: Item = { href: `/spaces/${c.space.id}`, label: c.space.name, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : "projects",
@@ -76,7 +60,7 @@ export default async function Spaces() {
     const g = groups.find((x) => x.title === c.space.section);
     if (g) g.items.push(item); else groups.push({ title: c.space.section, items: [item] });
   }
-  const sections = [...new Set(mine.map((c) => c.space.section))];
+  const sections = [...new Set([...mine.map((c) => c.space.section), ...groups.map((g) => g.title)])];
   const order = spacesOrderOf(o.settings);
   const builtIn = new Set(Object.keys(SECTION_TINT));
   const stacked: StackGroup[] = bySavedOrder(groups, (g) => g.title, order.sections).map((g) => ({
@@ -89,6 +73,16 @@ export default async function Spaces() {
     <>
       <PageHeader title="Spaces" />
       <SpacesStacks groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "Life admin", glyph: "projects" }} />
+      {removed.length > 0 && (
+        <section aria-labelledby="removed-h" className="mt-10 pt-5 rule-t">
+          <h2 id="removed-h" className="t-label mb-3">Removed spaces</h2>
+          <ul className="flex flex-wrap gap-2">
+            {removed.map((r) => (
+              <li key={r.href}><OpButton op="space.builtin.restore" input={{ href: r.href }} label={`Bring back ${r.label}`} className="btn btn-sm" /></li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

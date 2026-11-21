@@ -1,4 +1,5 @@
 import { pageOwner, quranState, remindersFor } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty, ReminderList } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
@@ -30,7 +31,7 @@ export default async function QuranPage() {
   return (
     <>
       <PageAddProvider>
-      <PageHeader glyph="quran" title="Quran class"><PageAddButton label="Add a weekly class" /></PageHeader>
+      <SpaceHeader href="/quran"><PageAddButton label="Add a weekly class" /></SpaceHeader>
       <PageAddPanel title="Add a weekly class">
         <OpForm op="event.create" fields={eventFields()} fixed={{ kind: "class", startDate: new Date().toISOString().slice(0, 10) }} initial={{ weekday: "1", localTime: "18:00", reminderLeadMinutes: 60, remindersEnabled: true }} submitLabel="Create" />
       </PageAddPanel>

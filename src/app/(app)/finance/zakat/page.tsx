@@ -1,4 +1,6 @@
 import { pageOwner, zakatState } from "@/server/queries";
+import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef, ItemRow } from "@/components/OpForm";
 import { CURRENCIES, formatMoney, fromMinor } from "@/lib/money";
@@ -24,13 +26,18 @@ export default async function ZakatPage() {
 
   return (
     <>
-      <PageHeader glyph="zakat" title="Zakat" />
+      <PageAddProvider>
+      <SpaceHeader href="/finance/zakat"><PageAddButton label="Log a payment" /></SpaceHeader>
+      <PageAddPanel title="Log a payment">
+        <OpForm op="zakat.payment" fields={payFields} initial={{ paidOn: today, currency: o.defaultCurrency, calculationId: s.calcs[0]?.calc.id }} submitLabel="Save payment" compact />
+      </PageAddPanel>
+      </PageAddProvider>
 
       <Section title="Calculator">
         <ZakatCalculator today={today} currency={o.defaultCurrency} />
       </Section>
 
-      <Section title="Payments" aside={<Reveal label="Log a payment"><OpForm op="zakat.payment" fields={payFields} initial={{ paidOn: today, currency: o.defaultCurrency, calculationId: s.calcs[0]?.calc.id }} submitLabel="Save payment" compact /></Reveal>}>
+      <Section title="Payments">
         <p className="t-small mb-3">Paid in {today.slice(0, 4)}: <strong>{yearTotals.size ? [...yearTotals].map(([c, v]) => formatMoney(v, c)).join(" + ") : formatMoney(0, o.defaultCurrency)}</strong></p>
         {s.payments.length === 0 ? <Empty>No zakat payments logged yet.</Empty> : (
           <ul className="list">

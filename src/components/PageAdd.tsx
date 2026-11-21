@@ -83,3 +83,36 @@ export function PageEditButton({ label = "Edit" }: { label?: string }) {
     </button>
   );
 }
+
+/* ───── Editing the page's own space (name, icon, section): pencil on the title line, panel under it ───── */
+const EditCtx = createContext<{ open: boolean; setOpen: (v: boolean) => void } | null>(null);
+
+export function SpaceEditScope({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <EditCtx.Provider value={{ open, setOpen }}>{children}</EditCtx.Provider>;
+}
+
+export function SpaceEditButton({ label = "Edit space" }: { label?: string }) {
+  const c = useContext(EditCtx);
+  if (!c) return null;
+  return (
+    <button type="button" className="icon-ghost" style={{ margin: 0 }} aria-label={c.open ? "Close editing" : label} title={label}
+      aria-expanded={c.open} aria-controls="space-edit" onClick={() => c.setOpen(!c.open)}>
+      <Icon name="edit" size={18} />
+    </button>
+  );
+}
+
+export function SpaceEditPanel({ title = "Edit space", children }: { title?: string; children: React.ReactNode }) {
+  const c = useContext(EditCtx);
+  if (!c?.open) return null;
+  return (
+    <div className="center-panel-wrap">
+      <div id="space-edit" className="panel center-panel panel-closable p-4 md:p-5 preview-enter" role="region" aria-label={title}>
+        <PanelClose onClick={() => c.setOpen(false)} label="Close editing" />
+        <p className="t-h3 mb-3 pr-10">{title}</p>
+        <RevealCtx.Provider value={{ close: () => c.setOpen(false) }}>{children}</RevealCtx.Provider>
+      </div>
+    </div>
+  );
+}

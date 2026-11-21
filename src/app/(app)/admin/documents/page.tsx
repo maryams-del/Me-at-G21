@@ -1,4 +1,5 @@
 import { pageOwner, documentsState, documentStorageBytes, peopleList } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PeopleManager } from "../People";
 import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
@@ -31,7 +32,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="documents" title="Documents & IDs"><PageAddButton label="Add a document" /></PageHeader>
+      <SpaceHeader href="/admin/documents"><PageAddButton label="Add a document" /></SpaceHeader>
       <div className="toolbar">
         <SearchPill q={q} placeholder="Search documents" keep={{ kind, reminders, sort: sp.sort }} />
         <FilterPanel active={!!(kind || reminders || sp.sort)}>

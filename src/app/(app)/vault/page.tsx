@@ -1,11 +1,12 @@
 import { PageHeader } from "@/components/ui";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { Glyph } from "@/components/Glyph";
 
 /** PRD 5.3 / 12.7: locked placeholder until the vault passes its security release gate. */
 export default function VaultPage() {
   return (
     <>
-      <PageHeader glyph="vault" title="Secure vault" />
+      <SpaceHeader href="/vault" />
       <div className="panel p-6 grid gap-4 prose-w" style={{ borderColor: "var(--rust)", boxShadow: "inset 6px 0 0 var(--rust)" }}>
         <div className="flex items-center gap-3"><Glyph kind="vault" size={36} color="var(--rust)" /><p className="t-h2">Not enabled for real passwords yet</p></div>
         <p className="font-semibold">NOT APPROVED FOR REAL SECRETS</p>

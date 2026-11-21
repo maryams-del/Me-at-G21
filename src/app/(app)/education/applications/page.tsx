@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { pageOwner, applicationsState } from "@/server/queries";
 import { getDb } from "@/db";
@@ -49,11 +50,11 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="applications" title="Master's applications">
+      <SpaceHeader href="/education/applications">
         <a href="?view=list" className={`btn btn-sm ${view === "list" ? "btn-primary" : ""}`} aria-current={view === "list" ? "page" : undefined}>By deadline</a>
         <a href="?view=board" className={`btn btn-sm ${view === "board" ? "btn-primary" : ""}`} aria-current={view === "board" ? "page" : undefined}>Board</a>
         <PageAddButton label="Add application" />
-      </PageHeader>
+      </SpaceHeader>
       <PageAddPanel title="Add application">
         <OpForm op="application.create" fields={applicationFields(docs)} initial={{ deadlineTz: o.timezone, reminderOffsetsDays: [-30, -14, -7, -1], remindersEnabled: true, feeCurrency: "SAR" }} submitLabel="Add application" />
       </PageAddPanel>

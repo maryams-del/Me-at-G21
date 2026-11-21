@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { customSpaces, customSpaceItems, users } from "@/db/schema";
 import { defineOp, zId, zOptText, zText } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
-import { MAX_PINS, NEW_SECTION, SPACE_GLYPHS } from "@/lib/spaces";
+import { MAX_PINS, NEW_SECTION, SPACE_GLYPHS, BUILTIN_SPACES, builtinGlyphOptions, spaceOverridesOf, type SpaceOverride } from "@/lib/spaces";
 
 /* ───────────── Custom spaces: owner-made sections holding a simple list ───────────── */
 
@@ -132,5 +132,57 @@ export const spacesPins = defineOp({
     await ctx.tx.update(users).set({ settings: { ...(u?.settings ?? {}), spacesPins: hrefs }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
     await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, "Changed pinned spaces");
     return { id: null, message: "Pins saved" };
+  },
+});
+
+/* ───── Built-in spaces: rename, re-icon, move to another section, hide or bring back ───── */
+
+async function saveOverride(ctx: Ctx, href: string, change: (o: SpaceOverride) => SpaceOverride) {
+  const [u] = await ctx.tx.select({ settings: users.settings }).from(users).where(eq(users.id, ctx.ownerId));
+  const all = spaceOverridesOf(u?.settings);
+  const next = { ...all, [href]: change(all[href] ?? {}) };
+  await ctx.tx.update(users).set({ settings: { ...(u?.settings ?? {}), spaceOverrides: next }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+}
+const builtinOf = (href: string) => {
+  const b = BUILTIN_SPACES.find((s) => s.href === href);
+  if (!b) throw new UserError("Space not found");
+  return b;
+};
+
+export const builtinSpaceUpdate = defineOp({
+  name: "space.builtin.update", module: "spaces", label: "Edit space", aiAllowed: false,
+  schema: z.object({ href: z.string().max(200), name: zText(80), section: zText(60), newSection: zOptText(60), glyph: z.string().max(40), description: zOptText(300) }),
+  summarize: (i) => `Edit space “${i.name}”`,
+  async run(ctx, i) {
+    const b = builtinOf(i.href);
+    if (!builtinGlyphOptions(b).some((g) => g.value === i.glyph)) throw new UserError("Pick an icon from the list", "glyph");
+    const section = i.section !== NEW_SECTION ? i.section : i.newSection ?? (() => { throw new UserError("Name the new section", "newSection"); })();
+    await saveOverride(ctx, i.href, (o) => ({ ...o, label: i.name === b.label ? undefined : i.name, glyph: i.glyph === b.glyph ? undefined : i.glyph, section: section === b.section ? undefined : section, description: i.description || undefined }));
+    await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, `Edited space “${i.name}”`);
+    return { id: null, message: "Space saved" };
+  },
+});
+
+export const builtinSpaceHide = defineOp({
+  name: "space.builtin.hide", module: "spaces", label: "Remove space", aiAllowed: false,
+  schema: z.object({ href: z.string().max(200) }),
+  summarize: () => "Remove space from Spaces",
+  async run(ctx, i) {
+    const b = builtinOf(i.href);
+    await saveOverride(ctx, i.href, (o) => ({ ...o, hidden: true }));
+    await audit(ctx, "spaces", "deleted", "settings", ctx.ownerId, `Removed “${b.label}” from Spaces`);
+    return { id: null, message: "Removed from Spaces. Bring it back any time from the bottom of the Spaces page." };
+  },
+});
+
+export const builtinSpaceRestore = defineOp({
+  name: "space.builtin.restore", module: "spaces", label: "Bring back space", aiAllowed: false,
+  schema: z.object({ href: z.string().max(200) }),
+  summarize: () => "Bring back space",
+  async run(ctx, i) {
+    const b = builtinOf(i.href);
+    await saveOverride(ctx, i.href, (o) => ({ ...o, hidden: false }));
+    await audit(ctx, "spaces", "edited", "settings", ctx.ownerId, `Brought back “${b.label}”`);
+    return { id: null, message: `${b.label} is back in Spaces` };
   },
 });

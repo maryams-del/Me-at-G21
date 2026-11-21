@@ -36,3 +36,53 @@ export const SECTION_TINT: Record<string, string> = {
   "Money": "#8FB59A", "Care": "#C9A48E", "Faith": "#9DB0C6", "Education & career": "#B9B27E", "Life admin": "#C8B48F",
 };
 export const CUSTOM_TINT = "#AFA6C2";
+
+/* ───── Built-in spaces: the owner can rename them, change their icon or section, or hide them ───── */
+
+export type BuiltinSpace = { href: string; label: string; glyph: GlyphKind; d: string; section: string };
+/** Every built-in space, in its default section and order. */
+export const BUILTIN_SPACES: BuiltinSpace[] = [
+  { href: "/finance/charity", label: "Charity", glyph: "charity", d: "Donations, monthly and yearly totals", section: "Money" },
+  { href: "/finance/savings", label: "Savings", glyph: "savings", d: "Goals and actual deposits", section: "Money" },
+  { href: "/finance/debts", label: "Lent & borrowed", glyph: "debts", d: "Who owes whom, repayments", section: "Money" },
+  { href: "/finance/subscriptions", label: "Subscriptions", glyph: "subscriptions", d: "Monthly cost and upcoming charges", section: "Money" },
+  { href: "/finance/zakat", label: "Zakat", glyph: "zakat", d: "Step-by-step estimate and payments", section: "Money" },
+  { href: "/care/routines", label: "Routines", glyph: "routines", d: "Waxing, dental scaling, bedsheets and more", section: "Care" },
+  { href: "/care/period", label: "Period log", glyph: "period", d: "Private, never sent to the AI", section: "Care" },
+  { href: "/faith/fasts", label: "Make-up fasts", glyph: "fasts", d: "Balance and completed fasts", section: "Faith" },
+  { href: "/quran", label: "Quran class", glyph: "quran", d: "Classes, homework, study time", section: "Faith" },
+  { href: "/education/applications", label: "Master's applications", glyph: "applications", d: "Deadlines, requirements, status", section: "Education & career" },
+  { href: "/education/achievements", label: "Achievements & hobbies", glyph: "achievements", d: "Accomplishments and CV bullets", section: "Education & career" },
+  { href: "/projects", label: "Projects & tasks", glyph: "projects", d: "Deadlines and checklists", section: "Education & career" },
+  { href: "/admin/expiries", label: "Expiries & renewals", glyph: "expiries", d: "IDs, licences, anything that runs out", section: "Life admin" },
+  { href: "/admin/documents", label: "Documents & IDs", glyph: "documents", d: "Encrypted files and ID numbers", section: "Life admin" },
+  { href: "/vault", label: "Secure vault", glyph: "vault", d: "Locked away", section: "Life admin" },
+];
+export const isBuiltinHref = (h: string) => BUILTIN_SPACES.some((s) => s.href === h);
+
+export type SpaceOverride = { label?: string; glyph?: string; section?: string; description?: string; hidden?: boolean };
+export function spaceOverridesOf(settings: Record<string, unknown> | null | undefined): Record<string, SpaceOverride> {
+  const v = (settings ?? {}).spaceOverrides;
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, SpaceOverride>) : {};
+}
+/** A built-in space as the owner has set it up (name, icon, section, hidden). */
+export function builtinSpace(href: string, settings: Record<string, unknown> | null | undefined) {
+  const base = BUILTIN_SPACES.find((s) => s.href === href);
+  if (!base) return null;
+  const o = spaceOverridesOf(settings)[href] ?? {};
+  return {
+    ...base,
+    label: o.label?.trim() || base.label,
+    glyph: (o.glyph && builtinGlyphOptions(base).some((g) => g.value === o.glyph) ? o.glyph : base.glyph) as GlyphKind,
+    section: o.section?.trim() || base.section,
+    /** the owner's own "What it's for" line, shown under the title (null if they haven't written one) */
+    note: o.description?.trim() || null,
+    hidden: !!o.hidden,
+    defaultLabel: base.label,
+  };
+}
+
+/** Icons a built-in space can use: its own original icon plus the usual set. */
+export function builtinGlyphOptions(base: BuiltinSpace) {
+  return [...(SPACE_GLYPHS.some((g) => g.value === base.glyph) ? [] : [{ value: base.glyph, label: "Original" }]), ...SPACE_GLYPHS];
+}

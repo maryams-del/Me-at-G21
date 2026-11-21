@@ -1,4 +1,5 @@
 import { dmy } from "@/lib/time";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { pageOwner, charityState } from "@/server/queries";
 import { PageHeader, Section, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
@@ -32,7 +33,7 @@ export default async function CharityPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1"}>
-      <PageHeader glyph="charity" title="Charity"><PageAddButton label="Log a donation" /></PageHeader>
+      <SpaceHeader href="/finance/charity"><PageAddButton label="Log a donation" /></SpaceHeader>
       <div className="money-tiles mb-8">
         <div className="tile rust min-h-0"><p className="t-small">This month</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(thisMonth)}</p></div>
         <div className="tile min-h-0"><p className="t-small text-ink-2">{s.year} total</p><p className="t-num text-[1.9rem] md:text-[2.4rem] mt-2">{sum(yearTotals)}</p></div>

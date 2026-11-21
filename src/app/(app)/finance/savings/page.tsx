@@ -1,4 +1,5 @@
 import { pageOwner, savingsState } from "@/server/queries";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, Reveal, ItemRow } from "@/components/OpForm";
@@ -29,9 +30,9 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageAddProvider initialOpen={sp.add === "1" ? (active.length ? "deposit" : "goal") : null}>
-      <PageHeader glyph="savings" title="Savings">
+      <SpaceHeader href="/finance/savings">
         <PageAddButton label="Add" choices={[...(active.length ? [{ key: "deposit", label: "Add savings" }] : []), { key: "goal", label: "New goal" }]} />
-      </PageHeader>
+      </SpaceHeader>
       {active.length > 0 && (
         <PageAddPanel id="deposit" title="Add savings">
           <OpForm op="savings.deposit" submitLabel="Save deposit" initial={{ onDate: today }} fields={[

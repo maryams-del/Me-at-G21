@@ -1,4 +1,5 @@
 import { dmy } from "@/lib/time";
+import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { pageOwner, fastsState } from "@/server/queries";
 import { PageHeader, Section, Empty } from "@/components/ui";
@@ -15,9 +16,9 @@ export default async function FastsPage() {
   return (
     <>
       <PageAddProvider>
-      <PageHeader glyph="fasts" title="Make-up fasts">
+      <SpaceHeader href="/faith/fasts">
         <PageAddButton label="Add" choices={[{ key: "past", label: "Log a past fast" }, { key: "adjust", label: "Manual adjustment" }]} />
-      </PageHeader>
+      </SpaceHeader>
       <PageAddPanel id="past" title="Log a past fast">
         <OpForm op="fasts.complete" initial={{ onDate: today }} submitLabel="Save fast" fields={[
           { name: "onDate", label: "Date fasted", type: "date", required: true },
