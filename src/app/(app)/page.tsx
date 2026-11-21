@@ -74,7 +74,7 @@ export default async function Dashboard() {
           <ul className="grid grid-cols-4 gap-y-5">
             {spaces.map((sp) => (
               <li key={sp.key} className="min-w-0">
-                <Link href={sp.href} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
+                <Link href={`${sp.href}?from=home`} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
               </li>
             ))}
           </ul>

@@ -1,19 +1,11 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/ui";
-import { Glyph } from "@/components/Glyph";
+import { SpaceHub } from "@/components/SpaceHub";
 
-export default function EducationIndex() {
+export default async function EducationIndex({ searchParams }: { searchParams: Promise<{ from?: string }> }) {
+  const { from } = await searchParams;
   const items = [
-    { href: "/education/applications", label: "Master's applications", glyph: "applications" as const, d: "Deadlines, requirements, status and follow-ups" },
-    { href: "/projects", label: "Projects & tasks", glyph: "projects" as const, d: "Deadlines and checklists" },
-    { href: "/education/achievements", label: "Achievements & hobbies", glyph: "achievements" as const, d: "Accomplishments bank and CV bullets" },
+    { href: "/education/applications", label: "Master's applications", glyph: "applications" as const },
+    { href: "/projects", label: "Projects & tasks", glyph: "projects" as const },
+    { href: "/education/achievements", label: "Achievements & hobbies", glyph: "achievements" as const },
   ];
-  return (
-    <>
-      <PageHeader glyph="applications" title="Education & career" />
-      <ul className="grid gap-3 grid-cols-2">
-        {items.map((i) => <li key={i.href}><Link href={i.href} className="tile min-h-0"><Glyph kind={i.glyph} size={30} accent="var(--rust)" /><p className="t-h3 mt-3">{i.label}</p></Link></li>)}
-      </ul>
-    </>
-  );
+  return <SpaceHub title="Education & career" glyph="applications" items={items} fromHome={from === "home"} />;
 }

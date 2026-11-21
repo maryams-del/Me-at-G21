@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { relDays } from "@/lib/format";
 import { addDays, dmy } from "@/lib/time";
 import { SpacesStacks, type StackGroup } from "@/components/SpacesStacks";
+import { spaceNeeds } from "@/lib/spaceNeeds";
 import { spaceFields } from "../spaces/fields";
 
 type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string; stat?: string };
@@ -34,15 +35,7 @@ export default async function Spaces() {
     "/inbox": n ? `${n} to look at` : undefined,
   };
   // A small dot on a space means something there needs the owner soon.
-  const in30 = addDays(s.today, 30);
-  const needs: Record<string, boolean> = {
-    "/admin/expiries": s.expiring.some((e) => e.expiresOn <= in30) || s.overdue.some((x) => x.href === "/admin/expiries"),
-    "/inbox": n > 0,
-    "/education/applications": s.appDeadlines.length > 0,
-    "/care/routines": !!nextRoutine && (nextRoutine.overdue || (nextRoutine.daysLeft ?? 99) <= 3),
-    "/projects": s.tasksDueSoon.length > 0,
-    "/finance/debts": s.debts.some((d) => d.overdue),
-  };
+  const needs = spaceNeeds(s, n);
   // Built-in spaces, as the owner has set them up (renamed, re-iconed, moved or removed).
   const groups: { title: string; items: Item[] }[] = [];
   const removed: { href: string; label: string }[] = [];
