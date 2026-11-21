@@ -576,15 +576,17 @@ type DelAction = { op: string; input: unknown; confirm: string; note?: string; l
  * A list item whose name line carries the pencil (edit) and bin (delete) icons at its right end.
  * The edit form opens under the item in a panel with its own X.
  */
-export function ItemRow({ head, aside, children, edit, editHref, del, below, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit?: React.ReactNode; editHref?: string; del?: DelAction; /** a small action shown on the right, under the edit icon (e.g. Mark paid) */ below?: React.ReactNode; name?: string }) {
+export function ItemRow({ head, aside, children, edit, editHref, del, below, stack = false, name = "this" }: { head: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode; edit?: React.ReactNode; editHref?: string; del?: DelAction; /** a small action shown on the right (e.g. Mark paid) */ below?: React.ReactNode; /** stack the right side: aside, then `below`, then the edit icon */ stack?: boolean; name?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
     <>
       <div className="item-head">
         <div className="min-w-0 flex-1">{head}</div>
-        {aside && <div className="shrink-0">{aside}</div>}
+        {!stack && aside && <div className="shrink-0">{aside}</div>}
         <div className="item-side">
+        {stack && aside}
+        {stack && below && <div className="item-below">{below}</div>}
         <div className="entry-actions">
           {editHref
             ? <Link href={editHref} className="icon-ghost" style={{ margin: 0 }} aria-label={`Edit ${name}`} title="Edit"><Icon name="edit" size={17} /></Link>
@@ -602,7 +604,7 @@ export function ItemRow({ head, aside, children, edit, editHref, del, below, nam
             </div>
           )}
         </div>
-        {below && <div className="item-below">{below}</div>}
+        {!stack && below && <div className="item-below">{below}</div>}
         </div>
       </div>
       {children}

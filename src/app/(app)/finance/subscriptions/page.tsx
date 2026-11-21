@@ -1,7 +1,8 @@
 import { pageOwner, subscriptionsState } from "@/server/queries";
 import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
-import { PageHeader, Section, Empty } from "@/components/ui";
+import { PageHeader, Section, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
+import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { EntryCard } from "@/components/EntryCard";
 import { countdown, relativeReminderLine } from "@/lib/countdown";
@@ -26,7 +27,10 @@ const fields = (currency: string): FieldDef[] => [
   { name: "notes", label: "Notes", type: "textarea", nullable: true },
 ];
 
-export default async function SubscriptionsPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
+const STATUS = [{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "cancelled", label: "Cancelled" }];
+const PATH = "/finance/subscriptions";
+
+export default async function SubscriptionsPage({ searchParams }: { searchParams: Promise<{ add?: string; q?: string; status?: string; cadence?: string; category?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
   const s = await subscriptionsState(o);
@@ -34,6 +38,15 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const totals = Object.entries(s.totals);
   const monthEnd = addDays(s.today, 30);
   const upcoming = s.upcoming.filter((u) => u.date <= monthEnd);
+  // Search and filters for "All subscriptions".
+  const q = sp.q?.trim().slice(0, 80) || undefined;
+  const status = STATUS.some((x) => x.value && x.value === sp.status) ? sp.status : undefined;
+  const cadence = sp.cadence && sp.cadence in CADENCE ? sp.cadence : undefined;
+  const categories = [...new Set(s.rows.map((r) => r.sub.category).filter((c): c is string => !!c))].sort();
+  const category = sp.category && categories.includes(sp.category) ? sp.category : undefined;
+  const shown = s.rows.filter(({ sub: x }) => (!q || `${x.name} ${x.category ?? ""} ${x.notes ?? ""}`.toLowerCase().includes(q.toLowerCase()))
+    && (!status || x.status === status) && (!cadence || x.cadence === cadence) && (!category || x.category === category));
+  const params = { q, status, cadence, category };
 
   return (
     <>
@@ -52,13 +65,37 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       <div className="mb-2" />
 
       <Section title="All subscriptions">
-        {s.rows.length === 0 ? <Empty>No subscriptions yet. Add streaming, cloud storage, phone plans, gym memberships, anything that charges you on a schedule.</Empty> : (
+        {s.rows.length > 0 && (
+          <>
+            <div className="toolbar">
+              <SearchPill q={q} placeholder="Search subscriptions" keep={{ status, cadence, category }} />
+              <FilterPanel active={!!(status || cadence || category)}>
+                <form className="panel p-3 flex flex-wrap gap-3 items-end">
+                  {q && <input type="hidden" name="q" value={q} />}
+                  <FilterSelect label="Status" name="status" value={status} options={STATUS} />
+                  <FilterSelect label="Billed" name="cadence" value={cadence} options={[{ value: "", label: "Any" }, ...Object.entries(CADENCE).map(([value, label]) => ({ value, label }))]} />
+                  {categories.length > 0 && <FilterSelect label="Category" name="category" value={category} options={[{ value: "", label: "All" }, ...categories.map((c) => ({ value: c, label: c }))]} />}
+                  <button className="btn">Apply</button>
+                </form>
+              </FilterPanel>
+            </div>
+            <FilterTags clearHref={PATH} tags={[
+              ...(q ? [{ label: `“${q}”`, href: withoutParam(PATH, params, "q") }] : []),
+              ...(status ? [{ label: STATUS.find((x) => x.value === status)!.label, href: withoutParam(PATH, params, "status") }] : []),
+              ...(cadence ? [{ label: CADENCE[cadence], href: withoutParam(PATH, params, "cadence") }] : []),
+              ...(category ? [{ label: category, href: withoutParam(PATH, params, "category") }] : []),
+            ]} />
+            <div className="mb-5" />
+          </>
+        )}
+        {s.rows.length === 0 ? <Empty>No subscriptions yet. Add streaming, cloud storage, phone plans, gym memberships, anything that charges you on a schedule.</Empty>
+        : shown.length === 0 ? <Empty>No subscriptions match.</Empty> : (
           <ul className="entry-grid">
-            {s.rows.map(({ sub: x, next, daysLeft, monthlyMinor }) => {
+            {shown.map(({ sub: x, next, daysLeft, monthlyMinor }) => {
               const active = x.status === "active";
               const how = x.cadence === "custom" ? `Every ${x.intervalValue} ${x.intervalUnit}s` : CADENCE[x.cadence];
               return (
-                <EntryCard del={{ op: "subscription.delete", input: { id: x.id }, confirm: `Delete “${x.name}”? Its reminders stop.` }} key={x.id} icon="card" countLabel="Next charge" title={x.name} dim={!active}
+                <EntryCard key={x.id} icon="card" countLabel="Next charge" title={x.name} dim={!active}
                   badge={!active ? <span className="chip chip-fill">cancelled {x.cancelledOn ? fmtDate(x.cancelledOn) : ""}</span> : undefined}
                   subtitle={[`${formatMoney(x.amountMinor, x.currency)} · ${how}`, x.cadence !== "monthly" ? `≈ ${formatMoney(monthlyMinor, x.currency)}/month` : null, x.category, x.renewal === "manual" ? "renews manually" : null].filter(Boolean).join(" · ")}
                   count={active ? countdown(daysLeft, "charge") : null} countSub={active && next ? fmtDate(next) : undefined}
@@ -83,9 +120,10 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
           <div className="panel p-4">
             <ul className="list">
               {upcoming.map((u) => (
-                <li key={`${u.id}${u.date}`} className="py-2 flex justify-between gap-3 t-small">
-                  <span><span className="t-num inline-block w-16">{fmtDate(u.date).replace(/ \d{4}$/, "")}</span>{u.name}{u.renewal === "manual" && <span className="chip ml-2">renew manually</span>}</span>
-                  <span className="whitespace-nowrap">{formatMoney(u.amountMinor, u.currency)}</span>
+                <li key={`${u.id}${u.date}`} className="py-2.5 flex items-center gap-4 t-small">
+                  <span className="t-num shrink-0 w-12 text-ink-2">{fmtDate(u.date).slice(0, 5)}</span>
+                  <span className="flex-1 min-w-0 truncate">{u.name}{u.renewal === "manual" && <span className="chip ml-2">renew manually</span>}</span>
+                  <span className="whitespace-nowrap shrink-0">{formatMoney(u.amountMinor, u.currency)}</span>
                 </li>
               ))}
             </ul>

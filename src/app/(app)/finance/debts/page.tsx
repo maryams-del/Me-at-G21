@@ -1,4 +1,5 @@
 import { pageOwner, debtsState } from "@/server/queries";
+import { Icon } from "@/components/icons";
 import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Section, Empty } from "@/components/ui";
@@ -76,17 +77,16 @@ function DebtList({ rows, today }: { rows: Awaited<ReturnType<typeof debtsState>
         const isOpen = d.status === "open";
         const left = isOpen && d.dueDate ? daysBetween(today, d.dueDate) : null;
         return (
-          <EntryCard del={{ op: "debt.delete", input: { id: d.id }, confirm: "Delete this record and its reminders?" }} key={d.id} icon="cash" countLabel="Due" title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
-            badge={!isOpen ? <span className="chip chip-pine">settled</span> : undefined}
-            subtitle={`${formatMoney(outstanding, d.currency)} outstanding · ${d.direction === "lent" ? "lent" : "borrowed"} ${formatMoney(d.originalMinor, d.currency)} on ${fmtDate(d.onDate)}`}
-            count={countdown(left, "due")} countSub={left !== null ? fmtDate(d.dueDate) : undefined}
+          <EntryCard key={d.id} icon="cash" countLabel="Due" title={d.direction === "lent" ? `${d.counterparty} owes you` : `You owe ${d.counterparty}`}
+            subtitle={<span className="debt-amount">{formatMoney(isOpen ? outstanding : d.originalMinor, d.currency)}</span>}
+            rowStart={<span className={overdue && isOpen ? "debt-date overdue" : "debt-date"}>{isOpen && d.dueDate ? `Due ${fmtDate(d.dueDate)}${left !== null && left < 0 ? " · overdue" : ""}` : `${d.direction === "lent" ? "Lent" : "Borrowed"} ${fmtDate(d.onDate)}`}</span>}
             reminder={isOpen && d.dueDate ? reminderLine({ enabled: d.remindersEnabled, date: d.dueDate, offsets: d.reminderOffsetsDays, time: d.reminderTime, today }) + (overdue && d.remindersEnabled && d.overdueRepeatDays ? ` · every ${d.overdueRepeatDays} days while overdue` : "") : null}
             action={isOpen ? (
               <Reveal label="Repaid" icon="cash" buttonClass="pill-action">
                 <OpForm op="debt.repay" fixed={{ debtId: d.id }} initial={{ onDate: today }} submitLabel="Save repayment" fields={[
                   { name: "amount", label: "Amount", type: "amount", required: true }, { name: "onDate", label: "Date", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
               </Reveal>
-            ) : undefined}
+            ) : <span className="repaid-mark"><Icon name="check" size={15} strokeWidth={2.6} />Repaid</span>}
             edit={
               <div className="grid gap-4">
                 {isOpen && (

@@ -92,7 +92,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
           <ul className="grid gap-4 md:grid-cols-2">
             {rows.map((a) => (
               <li key={a.id} className="panel p-4 grid gap-2 content-start" style={a.featured ? { boxShadow: "inset 6px 0 0 var(--mustard)" } : undefined}>
-                <ItemRow del={{ op: "achievement.delete", input: { id: a.id }, confirm: `Delete “${a.title}”?`, label: "Delete" }} name={a.title}
+                <ItemRow name={a.title}
                   head={<><h2 className="t-h3">{a.title}</h2><p className="t-meta">{[KIND_LABEL[a.kind], AREA_LABEL[a.area], a.organisation].filter(Boolean).join(", ")}</p></>}
                   aside={datesLabel(a) ? <p className="t-small text-right text-ink-2">{datesLabel(a)}</p> : undefined}
                   edit={<OpForm op="achievement.update" fields={fields} fixed={{ id: a.id }} compact submitLabel="Save"
@@ -128,7 +128,7 @@ export default async function AchievementsPage({ searchParams }: { searchParams:
           <ul className="list">
             {d.hobbies.map((h) => (
               <li key={h.id} className="py-3 grid gap-1">
-                <ItemRow del={{ op: "hobby.delete", input: { id: h.id }, confirm: `Delete “${h.name}”?`, label: "Delete" }} name={h.name}
+                <ItemRow name={h.name}
                   head={<span className="t-small font-medium">{h.name}{h.level ? `, ${h.level}` : ""} {!h.active && <span className="chip chip-fill">paused</span>}</span>}
                   aside={h.since ? <span className="t-small text-ink-2">since {fmtDate(h.since)}</span> : undefined}
                   edit={<OpForm op="hobby.update" fields={hobbyFields} fixed={{ id: h.id }} initial={{ ...h, tagsText: h.tags.join(", "), linksText: linksText(h.links) }} submitLabel="Save" compact

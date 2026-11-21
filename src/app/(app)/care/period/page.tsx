@@ -133,7 +133,7 @@ export default async function PeriodPage() {
           <ul className="list">
             {s.cycles.map((c) => (
               <li key={c.id} className="py-3 grid gap-2">
-                <ItemRow del={{ op: "period.delete", input: { id: c.id }, confirm: "Delete this period entry?", label: "Delete entry" }} name="this entry"
+                <ItemRow name="this entry"
                   head={<span className="t-small font-medium">{fmtDate(c.startDate)} → {c.endDate ? fmtDate(c.endDate) : "ongoing"}</span>}
                   aside={<span className="t-small text-ink-2">{c.length ? `${c.length} days` : ""}{c.cycleLength ? `${c.length ? ", " : ""}cycle ${c.cycleLength} days` : ""}</span>}
                   edit={<OpForm op="period.update" fields={fullFields} fixed={{ id: c.id }} initial={{ ...c }} submitLabel="Save correction" compact

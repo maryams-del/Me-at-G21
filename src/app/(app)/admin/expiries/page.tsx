@@ -70,7 +70,7 @@ export default async function ExpiriesPage({ searchParams }: { searchParams: Pro
           {active.map(({ item: it, daysLeft, renewals }) => {
             const kindLabel = KINDS.find((k) => k.value === it.kind)?.label;
             return (
-              <EntryCard del={{ op: "expiry.delete", input: { id: it.id }, confirm: `Delete “${it.label}”?`, note: "Its reminders will be cancelled." }} key={it.id} icon="idcard" countLabel="Expires" title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
+              <EntryCard key={it.id} icon="idcard" countLabel="Expires" title={it.label} subtitle={kindLabel !== it.label ? kindLabel : undefined}
                 count={countdown(daysLeft, "expiry")} countSub={fmtDate(it.expiresOn)}
                 reminder={reminderLine({ enabled: it.remindersEnabled, date: it.expiresOn, offsets: it.reminderOffsetsDays, time: it.reminderTime, today: s.today })}
                 action={

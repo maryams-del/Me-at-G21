@@ -43,7 +43,7 @@ export default async function ZakatPage() {
           <ul className="list">
             {s.payments.map((p) => (
               <li key={p.id} className="py-2.5 grid gap-1">
-                <ItemRow del={{ op: "zakat.payment.delete", input: { id: p.id }, confirm: "Delete this payment record?", label: "Delete" }} name={`payment to ${p.recipient}`}
+                <ItemRow name={`payment to ${p.recipient}`}
                   head={<span className="t-small"><span className="font-medium">{formatMoney(p.amountMinor, p.currency)}</span> to {p.recipient}{p.calc ? <span className="text-ink-2">, for the {fmtDate(p.calc.evaluationDate)} estimate</span> : null}</span>}
                   aside={<span className="t-small text-ink-2">{fmtDate(p.paidOn)}</span>}
                   edit={<OpForm op="zakat.payment.update" fields={payFields} fixed={{ id: p.id }} initial={{ ...p, amount: fromMinor(p.amountMinor, p.currency) }} submitLabel="Save" compact

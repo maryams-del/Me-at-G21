@@ -11,7 +11,7 @@ import type { Countdown } from "@/lib/countdown";
  * Edit turns the card into the edit view: icon, name and close, the countdown panel, then the entry's
  * form (tabs, Save, and Delete behind a confirmation).
  */
-export function EntryCard({ title, subtitle, badge, icon = "calendar", count, countSub, countLabel = "Due", action, reminder, edit, del, href, dim, children }: {
+export function EntryCard({ title, subtitle, badge, icon = "calendar", count, countSub, countLabel = "Due", action, rowStart, reminder, edit, del, href, dim, children }: {
   title: string;
   subtitle?: React.ReactNode;
   badge?: React.ReactNode;
@@ -21,6 +21,8 @@ export function EntryCard({ title, subtitle, badge, icon = "calendar", count, co
   /** Small label over the date in the edit view's countdown panel, e.g. "Expires". */
   countLabel?: string;
   action?: React.ReactNode;
+  /** Shown on the left of the bottom row, in line with the action, when there is no countdown (e.g. a date). */
+  rowStart?: React.ReactNode;
   reminder?: string | null;
   edit?: React.ReactNode;
   /** Delete action: a bin icon beside the pencil on the title line (asks first). */
@@ -78,14 +80,14 @@ export function EntryCard({ title, subtitle, badge, icon = "calendar", count, co
           </div>
         )}
       </div>
-      {(count || action) && (
-        <div className="entry-row">
+      {(count || action || rowStart) && (
+        <div className={`entry-row ${!count && rowStart ? "entry-row-center" : ""}`}>
           {count ? (
             <div className={`entry-count ${count.tone}`}>
               <span className="n">{count.n}</span>
               <span className="grid"><span className="u">{count.unit}</span>{countSub && <span className="s">{countSub}</span>}</span>
             </div>
-          ) : <span />}
+          ) : rowStart ? <span className="entry-row-start">{rowStart}</span> : <span />}
           {action}
         </div>
       )}

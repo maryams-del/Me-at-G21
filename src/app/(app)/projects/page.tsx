@@ -95,7 +95,7 @@ function TaskRow({ t, today, project, fields, board }: { t: T; today: string; pr
   const over = t.status !== "done" && t.dueOn && t.dueOn < today;
   return (
     <li className="py-2.5 grid gap-1">
-      <ItemRow del={{ op: "task.delete", input: { id: t.id }, confirm: `Delete “${t.title}”?`, label: "Delete task" }} name={t.title}
+      <ItemRow name={t.title}
         head={<div className="flex items-start gap-3">
           <OpButton op="task.complete" input={{ id: t.id, done: t.status !== "done" }} label={t.status === "done" ? "✓" : " "} ariaLabel={`${t.status === "done" ? "Reopen" : "Complete"}: ${t.title}`} className="btn btn-sm w-9 px-0 shrink-0" />
           <div className="min-w-0 flex-1">
