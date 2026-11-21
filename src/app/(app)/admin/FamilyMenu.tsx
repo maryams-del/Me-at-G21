@@ -1,4 +1,5 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { Dropdown } from "@/components/GlyphSelect";
 import { askConfirm } from "@/components/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
@@ -86,7 +87,7 @@ function Row({ p, busy, relations, run, onCancel }: { p?: Person; busy: boolean;
       e.preventDefault(); if (!name.trim()) return;
       void (p ? run("/api/ops/person.update", { id: p.id, name: name.trim(), relation }, "Saved") : run("/api/ops/person.create", { name: name.trim(), relation }, `${name.trim()} added`));
     }}>
-      <input className="input" style={{ minHeight: 38, borderRadius: 999, fontSize: 14 }} autoFocus placeholder="Name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
+      <input className="input" style={{ minHeight: 38, borderRadius: 999, fontSize: 14 }} autoFocus placeholder="Name" maxLength={60} value={name} autoCapitalize="words" onChange={(e) => setName(titleCase(e.target.value))} aria-label="Name" />
       <div className="flex gap-2">
         <Dropdown className="flex-1 min-w-0" size="sm" value={relation} onChange={setRelation} ariaLabel="Relation" options={relations} />
         <button className="btn btn-sm btn-primary" disabled={busy || !name.trim()}>{busy ? "…" : "Save"}</button>

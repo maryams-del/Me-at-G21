@@ -1,4 +1,6 @@
 "use client";
+import { Dropdown } from "@/components/GlyphSelect";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -7,7 +9,6 @@ import { askConfirm } from "@/components/ConfirmDialog";
 import { daysBetween, dayMonth, shiftDate } from "@/lib/countdown";
 import { dmy } from "@/lib/time";
 import { Icon } from "@/components/icons";
-import { titleCaseInput } from "@/lib/titlecase";
 import { compressIfImage, uploadFile, ShareFile, DOC_KIND_OPTIONS } from "../DocClient";
 
 type Doc = { id: string; title: string; kind: string; issuer: string | null; issuedOn: string | null; expiresOn: string | null; notes: string | null; idMasked: string | null; personId: string | null; tags: string[] };
@@ -228,9 +229,9 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
           <section id="doc-panel-details" role="tabpanel" aria-labelledby="doc-tab-details" hidden={tab !== "details"} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="field"><span className="label">Title</span><input className="input" name="title" defaultValue={doc.title} required autoCapitalize="words" onInput={titleCaseInput} /></label>
-              <label className="field"><span className="label">Type</span>
-                <select className="select" name="kind" defaultValue={doc.kind}>{DOC_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-              <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" defaultValue={doc.issuer ?? ""} /></label>
+              <div className="field" role="group"><span className="label">Type</span>
+                <Dropdown name="kind" initial={doc.kind} ariaLabel="Type" options={DOC_KIND_OPTIONS} /></div>
+              <label className="field"><span className="label">Issued by <span className="t-meta">(optional)</span></span><input className="input" name="issuer" defaultValue={doc.issuer ?? ""} autoCapitalize="words" onInput={titleCaseInput} /></label>
               <label className="field"><span className="label">Issue date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="issuedOn" defaultValue={doc.issuedOn ?? ""} /></label>
               <label className="field"><span className="label">Expiry date <span className="t-meta">(optional)</span></span><input className="input" type="date" name="expiresOn" value={expires} onChange={(e) => setExpires(e.target.value)} /></label>
               <div className="field">
@@ -296,7 +297,7 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
           </section>
 
           <section id="doc-panel-notes" role="tabpanel" aria-labelledby="doc-tab-notes" hidden={tab !== "notes"}>
-            <label className="field"><span className="label">Notes</span><textarea className="textarea" name="notes" rows={8} defaultValue={doc.notes ?? ""} placeholder="Anything to remember about this document" /></label>
+            <label className="field"><span className="label">Notes</span><textarea className="textarea" name="notes" rows={8} defaultValue={doc.notes ?? ""} placeholder="Anything to remember about this document" autoCapitalize="sentences" onInput={sentenceCaseInput} /></label>
           </section>
 
           {error && <p role="alert" className="error">{error}</p>}

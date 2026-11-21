@@ -71,9 +71,12 @@ export async function quranState(o: Owner) {
 
 /* ───── finance ───── */
 
-export async function charityState(o: Owner, filter: { q?: string; year?: string }) {
-  const year = filter.year && /^\d{4}$/.test(filter.year) ? filter.year : todayLocal(o.timezone).slice(0, 4);
-  const conds = [eq(t.charityPayments.ownerId, o.id), isNull(t.charityPayments.deletedAt), gte(t.charityPayments.paidOn, `${year}-01-01`), lte(t.charityPayments.paidOn, `${year}-12-31`)];
+export async function charityState(o: Owner, filter: { q?: string; year?: string; month?: string }) {
+  const month = filter.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(filter.month) ? filter.month : null;
+  const year = month ? month.slice(0, 4) : filter.year && /^\d{4}$/.test(filter.year) ? filter.year : todayLocal(o.timezone).slice(0, 4);
+  const lastDay = month ? new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate() : 31;
+  const from = month ? `${month}-01` : `${year}-01-01`, to = month ? `${month}-${String(lastDay).padStart(2, "0")}` : `${year}-12-31`;
+  const conds = [eq(t.charityPayments.ownerId, o.id), isNull(t.charityPayments.deletedAt), gte(t.charityPayments.paidOn, from), lte(t.charityPayments.paidOn, to)];
   if (filter.q) conds.push(sql`(${t.charityPayments.recipient} ilike ${"%" + filter.q + "%"} or ${t.charityPayments.cause} ilike ${"%" + filter.q + "%"})`);
   const rows = await db().select().from(t.charityPayments).where(and(...conds)).orderBy(desc(t.charityPayments.paidOn), desc(t.charityPayments.createdAt));
   const monthly = new Map<string, Map<string, number>>();
@@ -91,6 +94,13 @@ export async function charityState(o: Owner, filter: { q?: string; year?: string
     .groupBy(col).orderBy(sql`count(*) desc`).limit(12)).map((r) => r.v as string);
   const [recipients, causes] = await Promise.all([top(t.charityPayments.recipient), top(t.charityPayments.cause)]);
   return { rows, year, monthly, recipients, causes };
+}
+
+/** Every planned (not yet paid) donation, soonest first, whatever the year. */
+export async function pendingCharity(o: Owner) {
+  return db().select().from(t.charityPayments)
+    .where(and(eq(t.charityPayments.ownerId, o.id), isNull(t.charityPayments.deletedAt), eq(t.charityPayments.status, "planned")))
+    .orderBy(asc(t.charityPayments.paidOn), asc(t.charityPayments.createdAt));
 }
 
 export async function savingsState(o: Owner) {

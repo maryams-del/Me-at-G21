@@ -1,4 +1,5 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { Dropdown } from "@/components/GlyphSelect";
 import { useState } from "react";
 import { api, ApiError, toast } from "@/components/api";
@@ -14,7 +15,7 @@ export function ProfileForm({ initial }: { initial: { displayName: string; timez
       e.preventDefault(); setBusy(true); setErr(null);
       try { await api("/api/auth/profile-update", v); toast("Settings saved"); } catch (x) { setErr(x instanceof ApiError ? x.message : "Couldn't save"); } finally { setBusy(false); }
     }}>
-      <label className="field"><span className="label">Name</span><input className="input" value={v.displayName} maxLength={60} onChange={(e) => setV({ ...v, displayName: e.target.value })} /></label>
+      <label className="field"><span className="label">Name</span><input className="input" value={v.displayName} maxLength={60} autoCapitalize="words" onChange={(e) => setV({ ...v, displayName: titleCase(e.target.value) })} /></label>
       <div className="field" role="group"><span className="label">Timezone</span><Dropdown ariaLabel="Timezone" value={v.timezone} onChange={(z) => setV({ ...v, timezone: z })} options={zones.map((z) => ({ value: z, label: z }))} /></div>
       <div className="field" role="group"><span className="label">Default currency</span><Dropdown ariaLabel="Default currency" value={v.defaultCurrency} onChange={(c) => setV({ ...v, defaultCurrency: c })} options={CURRENCIES.map((c) => ({ value: c, label: c }))} /></div>
       {err && <p className="error sm:col-span-3" role="alert">{err}</p>}

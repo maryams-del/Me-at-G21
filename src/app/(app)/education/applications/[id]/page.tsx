@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { pageOwner, applicationDetail } from "@/server/queries";
 import { PageHeader, Section, ReminderList } from "@/components/ui";
-import { OpForm, OpButton, Reveal, DeleteIcon } from "@/components/OpForm";
+import { OpForm, OpButton, Reveal } from "@/components/OpForm";
 import { PageAddProvider, PageEditButton, PageAddPanel } from "@/components/PageAdd";
 import { applicationFields, STATUS_LABEL, STATUS_OPTIONS } from "../../fields";
 import { fmtDate, fmtDateTime } from "@/lib/format";
@@ -26,11 +26,11 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
       <PageHeader glyph="applications" title={a.university} intro={`${a.program}${a.intake ? `, ${a.intake}` : ""}${a.country ? `, ${a.country}` : ""}`}>
         <span className="chip chip-fill self-center">{STATUS_LABEL[a.status]}</span>
         <PageEditButton label="Edit details" />
-        <DeleteIcon op="application.delete" input={{ id: a.id }} confirm={`Delete ${a.program} at ${a.university}?`} label="Delete application" redirectTo="/education/applications" />
       </PageHeader>
       <PageAddPanel id="edit" title="Edit details">
         <OpForm op="application.update" fields={applicationFields([], true)} fixed={{ id: a.id, links: a.links, documentIds: a.documentIds }}
-          initial={{ ...a, fee: a.feeMinor !== null ? fromMinor(a.feeMinor, a.feeCurrency ?? "SAR") : "", linksText: a.links.map((l) => `${l.label} | ${l.url}`).join("\n") }} submitLabel="Save" />
+          initial={{ ...a, fee: a.feeMinor !== null ? fromMinor(a.feeMinor, a.feeCurrency ?? "SAR") : "", linksText: a.links.map((l) => `${l.label} | ${l.url}`).join("\n") }} submitLabel="Save"
+          deleteAction={{ op: "application.delete", input: { id: a.id }, confirm: `Delete ${a.program} at ${a.university}?`, asButton: true, label: "Delete application", redirectTo: "/education/applications" }} />
       </PageAddPanel>
       </PageAddProvider>
 

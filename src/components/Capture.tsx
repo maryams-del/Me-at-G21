@@ -1,4 +1,5 @@
 "use client";
+import { titleCase, sentenceCase, titleCaseInput, sentenceCaseInput } from "@/lib/titlecase";
 import { askConfirmFor } from "./ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -207,8 +208,8 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
             <>
               <label htmlFor="capture-text" className="sr-only">What happened, or what do you want to find?</label>
               <textarea id="capture-text" ref={inputRef} className="textarea" style={{ minHeight: "7rem", fontSize: "1.05rem" }}
-                placeholder={"I donated 100 SAR via Ehsan today\nOpen Ali's passport · Back up my data · When did I last wax?"}
-                value={text} onChange={(e) => setText(e.target.value)}
+                placeholder={"I donated 100 SAR via Al Khidmat today\nOpen Ali's passport · Back up my data · When did I last wax?"}
+                value={text} autoCapitalize="sentences" onChange={(e) => setText(sentenceCase(e.target.value))}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }} maxLength={2000} />
               {voiceNote && <p className="t-meta" role="status">{voiceNote}</p>}
               <div className="flex flex-wrap gap-2">
@@ -332,7 +333,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
               <div className="grid gap-2">
                 <label htmlFor="fix" className="t-small text-ink-2">Correct anything in your own words</label>
                 <div className="flex gap-2">
-                  <input id="fix" className="input" value={fix} onChange={(e) => setFix(e.target.value)} placeholder="e.g. make that 150 SAR, or: no, next Thursday"
+                  <input id="fix" className="input" value={fix} autoCapitalize="sentences" onChange={(e) => setFix(sentenceCase(e.target.value))} placeholder="e.g. make that 150 SAR, or: no, next Thursday"
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyFix(); } }} />
                   <button className={`btn ${listening ? "btn-accent" : ""}`} onClick={() => listen("fix")} aria-label={listening ? "Listening" : "Say the correction"} aria-pressed={listening}>
                     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden><rect x="8" y="2" width="8" height="13" rx="4" fill="currentColor" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4" stroke="currentColor" strokeWidth="2" fill="none" /></svg>
