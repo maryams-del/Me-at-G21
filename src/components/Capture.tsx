@@ -208,7 +208,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
             <>
               <label htmlFor="capture-text" className="sr-only">What happened, or what do you want to find?</label>
               <textarea id="capture-text" ref={inputRef} className="textarea" style={{ minHeight: "7rem", fontSize: "1.05rem" }}
-                placeholder={"I donated 100 SAR via Al Khidmat today\nOpen Ali's passport · Back up my data · When did I last wax?"}
+                placeholder={"Open Ali's passport, and back up my data"}
                 value={text} autoCapitalize="sentences" onChange={(e) => setText(sentenceCase(e.target.value))}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }} maxLength={2000} />
               {voiceNote && <p className="t-meta" role="status">{voiceNote}</p>}
@@ -219,7 +219,7 @@ export function CaptureSheet({ open, onClose, initialText = "", startVoice = fal
                 </button>
                 <button className="btn" onClick={() => send(undefined, "text")} disabled={busy || listening || !text.trim()}>{busy ? "Working…" : "Send"}</button>
               </div>
-              <p className="t-meta prose-w">Add something, go somewhere, run a command, or ask a question. Nothing is saved, deleted or downloaded until you confirm. Period details, documents and passwords are never sent to the assistant.</p>
+              <p className="t-meta prose-w">Add something, go somewhere, run a command, or ask a question.</p>
             </>
           )}
 
