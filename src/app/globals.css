@@ -712,7 +712,8 @@ html.splashing [data-splash] { visibility: hidden; }
 :root { --glow-flat: color-mix(in srgb, var(--accent-solid) 10%, var(--paper)); }
 
 /* ───────── Soft hills (Light and Dark) ─────────
-   A glow at the top (--page-art, on body::before) and three layered hills fixed along the bottom of the
-   screen (--page-hills, on body::after). Each theme sets its own colours. */
-body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 38vh; z-index: -1; pointer-events: none;
+   A glow at the top (--page-art, on body::before) and three layered hills at the very bottom of the page,
+   behind the footer (--page-hills, on body::after): seen on a short page like Home, and on longer pages
+   only once you scroll down to the footer. Each theme sets its own colours. */
+body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: clamp(200px, 38vh, 360px); z-index: -1; pointer-events: none;
   background: var(--page-hills) center bottom / 100% 100% no-repeat; }
