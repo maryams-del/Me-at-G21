@@ -3,7 +3,8 @@ import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
 import { PageHeader, Empty } from "@/components/ui";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
-import { EntryCard } from "@/components/EntryCard";
+import { Icon } from "@/components/icons";
+import { RoutineRow } from "./RoutineRow";
 import { countdown, relativeReminderLine } from "@/lib/countdown";
 import { ROUTINE_TEMPLATES, type TemplateKey } from "@/server/ops/care";
 import { todayLocal } from "@/lib/time";
@@ -53,50 +54,65 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
 
       {rows.length === 0 && <Empty>No routines yet. Use quick add above, or tap + to create your own.</Empty>}
 
-      <ul className="entry-grid">
-        {rows.map(({ routine: r, anchor, due, daysSince, daysLeft, overdue, skipped, events }) => {
+      {(() => {
+        const items = rows.map((row) => {
+          const { routine: r, anchor, due, daysSince, daysLeft, overdue, skipped, cycleDays, events } = row;
           const isFirstUse = r.anchor === "first_use";
-          const count = due ? countdown(daysLeft ?? null, "due")
-            : skipped && daysSince !== null ? { n: String(daysSince), unit: `day${daysSince === 1 ? "" : "s"} since the last one`, tone: "calm" as const } : null;
-          const last = !isFirstUse && anchor ? `Last done ${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}`
-            : isFirstUse ? `Started ${anchor ? `${fmtDate(anchor)}${daysSince !== null ? ` (${daysSince} day${daysSince === 1 ? "" : "s"} ago)` : ""}` : "not recorded"}` : null;
-          return (
-            <EntryCard del={{ op: "routine.delete", input: { id: r.id }, confirm: `Delete “${r.name}” and its history?` }} key={r.id} icon="repeat" countLabel="Due" title={r.name} badge={r.sensitive ? <span className="chip chip-fill">private</span> : undefined}
-              subtitle={schedule(r)} count={count}
-              countSub={due ? fmtDate(due) : skipped ? "Skipped, still counting" : undefined}
-              reminder={relativeReminderLine({ enabled: r.remindersEnabled, offsets: r.reminderOffsetsDays, time: r.reminderTime })}
-              action={isFirstUse
-                ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label="New one today" icon="renew" className="pill-action" />
-                : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label="Done" icon="check" className="pill-action" />}
-              edit={
-                <div className="grid gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Reveal label="Another date" icon="calendar" buttonClass="pill-action">
-                      <OpForm op="routine.log" fixed={{ routineId: r.id, type: isFirstUse ? "first_use" : "completed" }} initial={{ onDate: today }} submitLabel="Save entry" compact fields={[
-                        { name: "onDate", label: isFirstUse ? "Started a new one on" : "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
-                    </Reveal>
-                    {r.kind !== "waxing" && (isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" icon="skip" className="pill-action"
-                      confirmText={isFirstUse ? "Skip this time? It keeps counting days since the last new one and stops reminding you. Log a new one when you change it." : "Skip this cycle? The next due date will count from today."} />}
-                  </div>
-                  {events.length > 0 && (
-                    <div className="grid gap-1">
-                      <h3 className="t-label">History</h3>
-                      <ul className="list">{events.map((e) => (
-                        <li key={e.id} className="py-1.5 flex justify-between items-center t-small" style={{ opacity: e.voidedAt ? 0.5 : 1 }}>
-                          <span style={{ textDecoration: e.voidedAt ? "line-through" : undefined }}>{fmtDate(e.onDate)}: {e.type === "first_use" ? "started a new one" : e.type}{e.notes ? `, ${e.notes}` : ""}</span>
-                          {!e.voidedAt && <OpButton op="routine.void" input={{ eventId: e.id }} label="Remove" className="btn btn-sm btn-ghost" confirmText="Remove this entry? The schedule will be recalculated." />}
-                        </li>))}</ul>
-                    </div>
-                  )}
-                  <OpForm op="routine.update" fields={routineFields} fixed={{ id: r.id, kind: r.kind }} initial={{ ...r, ...splitOffsets(r.reminderOffsetsDays) }} submitLabel="Save changes" compact
-                    deleteAction={{ op: "routine.delete", input: { id: r.id }, confirm: `Delete “${r.name}” and its history?` }} />
+          const started = !!due || (skipped && daysSince !== null);
+          const since = !isFirstUse && anchor ? `Last done ${fmtDate(anchor)}`
+            : isFirstUse && anchor ? `Started ${fmtDate(anchor)}` : null;
+          const cd = due ? countdown(daysLeft ?? null, "due") : null;
+          const pct = overdue ? 100 : due && cycleDays ? Math.min(100, Math.max(0, Math.round(((cycleDays - (daysLeft ?? 0)) / cycleDays) * 100))) : 0;
+          const ringN = skipped && daysSince !== null ? String(daysSince) : cd?.n ?? "";
+          const ringU = skipped ? "SINCE" : overdue ? "LATE" : cd?.unit.startsWith("month") ? "MONTHS" : cd?.unit.startsWith("year") ? "YEARS" : cd?.n === "Today" ? "" : "DAYS";
+          const ring = started ? (
+            <div className={`routine-ring${overdue ? " over" : ""}`} style={{ "--pct": `${pct * 3.6}deg` } as React.CSSProperties} role="img"
+              aria-label={skipped ? `Skipped, ${daysSince} days since the last one` : overdue ? `${ringN} days overdue` : `${cd?.n} ${cd?.unit}`}>
+              <span><b>{ringN}</b>{ringU && <i>{ringU}</i>}</span>
+            </div>
+          ) : <div className="routine-ring fresh" aria-hidden><Icon name="repeat" size={20} /></div>;
+          const action = isFirstUse
+            ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label={started ? "New one today" : "Started today"} icon="renew" className="pill-action" />
+            : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label={started ? "Done" : "Done today"} icon="check" className="pill-action" />;
+          const edit = (
+            <div className="grid gap-4">
+              <div className="flex flex-wrap gap-2">
+                <Reveal label="Another date" icon="calendar" buttonClass="pill-action" open={!started}>
+                  <OpForm op="routine.log" fixed={{ routineId: r.id, type: isFirstUse ? "first_use" : "completed" }} initial={{ onDate: today }} submitLabel="Save entry" compact fields={[
+                    { name: "onDate", label: isFirstUse ? "Started a new one on" : "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
+                </Reveal>
+                {r.kind !== "waxing" && (isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" icon="skip" className="pill-action"
+                  confirmText={isFirstUse ? "Skip this time? It keeps counting days since the last new one and stops reminding you. Log a new one when you change it." : "Skip this cycle? The next due date will count from today."} />}
+              </div>
+              {events.length > 0 && (
+                <div className="grid gap-1">
+                  <h3 className="t-label">History</h3>
+                  <ul className="list">{events.map((e) => (
+                    <li key={e.id} className="py-1.5 flex justify-between items-center t-small" style={{ opacity: e.voidedAt ? 0.5 : 1 }}>
+                      <span style={{ textDecoration: e.voidedAt ? "line-through" : undefined }}>{fmtDate(e.onDate)}: {e.type === "first_use" ? "started a new one" : e.type}{e.notes ? `, ${e.notes}` : ""}</span>
+                      {!e.voidedAt && <OpButton op="routine.void" input={{ eventId: e.id }} label="Remove" className="btn btn-sm btn-ghost" confirmText="Remove this entry? The schedule will be recalculated." />}
+                    </li>))}</ul>
                 </div>
-              }>
-              {last && <p className="t-small text-ink-2">{last}</p>}
-            </EntryCard>
+              )}
+              <OpForm op="routine.update" fields={routineFields} fixed={{ id: r.id, kind: r.kind }} initial={{ ...r, ...splitOffsets(r.reminderOffsetsDays) }} submitLabel="Save changes" compact
+                deleteAction={{ op: "routine.delete", input: { id: r.id }, confirm: `Delete “${r.name}” and its history?` }} />
+            </div>
           );
-        })}
-      </ul>
+          const badge = r.sensitive ? <span className="chip chip-fill">private</span> : undefined;
+          const sub = started && since ? `${schedule(r)} · ${since}` : `${schedule(r)} · ${relativeReminderLine({ enabled: r.remindersEnabled, offsets: r.reminderOffsetsDays, time: r.reminderTime })}`;
+          const dueEl = due ? <span className={overdue ? "routine-late" : undefined}>{overdue ? "Was due" : "Due"} {fmtDate(due)}</span> : skipped ? <span className="t-meta">Skipped, still counting</span> : undefined;
+          return { key: r.id, started, sortKey: due ? daysLeft ?? 0 : 9999, node: (fresh: boolean) =>
+            <RoutineRow key={r.id} name={r.name} badge={badge} sub={sub} ring={ring} due={dueEl} action={action} edit={edit} fresh={fresh} /> };
+        });
+        const coming = items.filter((x) => x.started).sort((a, b) => a.sortKey - b.sortKey);
+        const fresh = items.filter((x) => !x.started);
+        return (
+          <div className="grid gap-8">
+            {coming.length > 0 && <section className="grid gap-2"><h2 className="t-label mb-1">Coming up</h2><ul className="grid gap-2">{coming.map((x) => x.node(false))}</ul></section>}
+            {fresh.length > 0 && <section className="grid gap-2"><h2 className="t-label mb-1">Not started yet</h2><ul className="grid gap-2">{fresh.map((x) => x.node(true))}</ul></section>}
+          </div>
+        );
+      })()}
     </>
   );
 }
