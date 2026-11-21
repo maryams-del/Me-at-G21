@@ -90,9 +90,9 @@
     --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-body); --display-weight: 400; --num-weight: 300;
     --page-art:
-      radial-gradient(70% 45% at 10% -5%, rgba(92,124,100,.55), transparent 72%),
-      radial-gradient(55% 40% at 100% 35%, rgba(110,127,104,.35), transparent 70%),
-      radial-gradient(60% 40% at 25% 100%, rgba(44,58,48,.7), transparent 72%);
+      radial-gradient(45% 50% at 4% 0%, rgba(110,150,118,.62), transparent 70%),
+      radial-gradient(50% 45% at 35% 105%, rgba(92,128,100,.55), transparent 72%);
+    --page-art-2: radial-gradient(38% 44% at 100% 32%, rgba(176,150,105,.3), transparent 70%);
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
     --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
@@ -121,9 +121,9 @@
     --font-body: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     --font-display: var(--font-body); --display-weight: 400; --num-weight: 300;
     --page-art:
-      radial-gradient(70% 45% at 10% -5%, rgba(92,124,100,.55), transparent 72%),
-      radial-gradient(55% 40% at 100% 35%, rgba(110,127,104,.35), transparent 70%),
-      radial-gradient(60% 40% at 25% 100%, rgba(44,58,48,.7), transparent 72%);
+      radial-gradient(45% 50% at 4% 0%, rgba(110,150,118,.62), transparent 70%),
+      radial-gradient(50% 45% at 35% 105%, rgba(92,128,100,.55), transparent 72%);
+    --page-art-2: radial-gradient(38% 44% at 100% 32%, rgba(176,150,105,.3), transparent 70%);
     /* Home: in Dark the week sits on the page, the spaces on a light stone panel */
     --wk-bg: transparent; --wk-pad: 22px 20px; --wk-shadow: none;
     --wk-ink: #EEF1EA; --wk-ink-3: rgba(238,241,234,.62); --wk-hair: rgba(238,241,234,.13); --wk-acc: #A9C8B0;
@@ -706,15 +706,11 @@ html.splashing [data-splash] { visibility: hidden; }
 .section-flash { animation: section-flash 2.2s ease; border-radius: 22px; }
 @keyframes section-flash { 0%, 55% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent-solid) 14%, transparent); background: color-mix(in srgb, var(--accent-solid) 7%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; background: transparent; } }
 
-/* ───────── Light: drifting glows ─────────
-   The sage glows (top-left, bottom) and the stone glow (right) move very slowly so the page
-   never looks flat white. Dark mode keeps its still background; reduced motion keeps them still. */
+/* ───────── Drifting glows (Light and Dark) ─────────
+   Two sage glows (top-left, bottom) and a stone glow (right) move very slowly so the page never
+   looks flat. Each theme sets its own colours in --page-art / --page-art-2; reduced motion keeps them still. */
 @keyframes glow-drift-a { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(6%, 5%) scale(1.08); } }
 @keyframes glow-drift-b { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-6%, 7%) scale(1.1); } }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) body::before { inset: -12%; animation: glow-drift-a 28s ease-in-out infinite; will-change: transform; }
-  :root:not([data-theme="dark"]) body::after { content: ""; position: fixed; inset: -12%; z-index: -1; pointer-events: none; background: var(--page-art-2); animation: glow-drift-b 34s ease-in-out infinite; will-change: transform; }
-}
-:root[data-theme="light"] body::before { inset: -12%; animation: glow-drift-a 28s ease-in-out infinite; will-change: transform; }
-:root[data-theme="light"] body::after { content: ""; position: fixed; inset: -12%; z-index: -1; pointer-events: none; background: var(--page-art-2); animation: glow-drift-b 34s ease-in-out infinite; will-change: transform; }
+body::before { inset: -12%; animation: glow-drift-a 28s ease-in-out infinite; will-change: transform; }
+body::after { content: ""; position: fixed; inset: -12%; z-index: -1; pointer-events: none; background: var(--page-art-2); animation: glow-drift-b 34s ease-in-out infinite; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { body::before, body::after { animation: none !important; } }
