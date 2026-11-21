@@ -1,7 +1,8 @@
 import { pageOwner, routinesState } from "@/server/queries";
 import { SpaceHeader } from "@/components/SpaceHeader";
 import { PageAddProvider, PageAddButton, PageAddPanel } from "@/components/PageAdd";
-import { PageHeader, Empty } from "@/components/ui";
+import { PageHeader, Empty, SearchPill, FilterTags, withoutParam } from "@/components/ui";
+import { FilterPanel, FilterSelect } from "@/components/FilterPanel";
 import { OpForm, OpButton, Reveal, type FieldDef } from "@/components/OpForm";
 import { Icon } from "@/components/icons";
 import { RoutineRow } from "./RoutineRow";
@@ -25,12 +26,23 @@ const splitOffsets = (xs: number[]) => ({ beforeDays: xs.filter((x) => x < 0).ma
 const schedule = (r: { intervalValue: number; intervalUnit: string; anchor: string }) =>
   `Every ${r.intervalValue} ${r.intervalUnit === "month" ? "calendar month" : r.intervalUnit}${r.intervalValue > 1 ? "s" : ""}${r.anchor === "first_use" ? " after starting a new one" : ""}`;
 
-export default async function RoutinesPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
+const SHOW = [{ value: "", label: "All" }, { value: "soon", label: "Due in the next 7 days" }, { value: "overdue", label: "Overdue" }];
+const PATH = "/care/routines";
+
+export default async function RoutinesPage({ searchParams }: { searchParams: Promise<{ add?: string; q?: string; show?: string; reminders?: string }> }) {
   const sp = await searchParams;
   const o = await pageOwner();
-  const rows = await routinesState(o);
+  const all = await routinesState(o);
+  // Search and filters.
+  const q = sp.q?.trim().slice(0, 80) || undefined;
+  const show = sp.show === "soon" || sp.show === "overdue" ? sp.show : undefined;
+  const reminders = sp.reminders === "on" || sp.reminders === "off" ? sp.reminders : undefined;
+  const rows = all.filter(({ routine: r, overdue, daysLeft, due }) => (!q || r.name.toLowerCase().includes(q.toLowerCase()))
+    && (!show || (show === "overdue" ? !!overdue : !!due && (daysLeft ?? 99) <= 7))
+    && (!reminders || r.remindersEnabled === (reminders === "on")));
+  const params = { q, show, reminders };
   const today = todayLocal(o.timezone);
-  const have = new Set(rows.map((r) => r.routine.kind));
+  const have = new Set(all.map((r) => r.routine.kind));
   // Waxing isn't offered as a quick-add; it's still available via a custom routine or Capture ("I waxed today").
   const templates = (Object.keys(ROUTINE_TEMPLATES) as TemplateKey[]).filter((k) => k !== "waxing" && !have.has(k));
 
@@ -52,7 +64,30 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
         )}
       </div>
 
-      {rows.length === 0 && <Empty>No routines yet. Use quick add above, or tap + to create your own.</Empty>}
+      {all.length > 0 && (
+        <>
+          <div className="toolbar">
+            <SearchPill q={q} placeholder="Search routines" keep={{ show, reminders }} />
+            <FilterPanel active={!!(show || reminders)}>
+              <form className="panel p-3 flex flex-wrap gap-3 items-end">
+                {q && <input type="hidden" name="q" value={q} />}
+                <FilterSelect label="Show" name="show" value={show} options={SHOW} />
+                <FilterSelect label="Reminders" name="reminders" value={reminders} options={[{ value: "", label: "All" }, { value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+                <button className="btn">Apply</button>
+              </form>
+            </FilterPanel>
+          </div>
+          <FilterTags clearHref={PATH} tags={[
+            ...(q ? [{ label: `“${q}”`, href: withoutParam(PATH, params, "q") }] : []),
+            ...(show ? [{ label: SHOW.find((x) => x.value === show)!.label, href: withoutParam(PATH, params, "show") }] : []),
+            ...(reminders ? [{ label: `Reminders ${reminders}`, href: withoutParam(PATH, params, "reminders") }] : []),
+          ]} />
+          <div className="mb-6" />
+        </>
+      )}
+
+      {all.length === 0 ? <Empty>No routines yet. Use quick add above, or tap + to create your own.</Empty>
+        : rows.length === 0 && <Empty>No routines match.</Empty>}
 
       {(() => {
         const items = rows.map((row) => {
@@ -72,14 +107,14 @@ export default async function RoutinesPage({ searchParams }: { searchParams: Pro
             </div>
           ) : <div className="routine-ring fresh" aria-hidden><Icon name="repeat" size={20} /></div>;
           const action = isFirstUse
-            ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label={started ? "New one today" : "Started today"} icon="renew" className="pill-action" />
+            ? <OpButton op="routine.log" input={{ routineId: r.id, type: "first_use", onDate: today }} label={started ? "Done" : "Done today"} icon="check" className="pill-action" />
             : <OpButton op="routine.log" input={{ routineId: r.id, type: "completed", onDate: today }} label={started ? "Done" : "Done today"} icon="check" className="pill-action" />;
           const edit = (
             <div className="grid gap-4">
               <div className="flex flex-wrap gap-2">
                 <Reveal label="Another date" icon="calendar" buttonClass="pill-action" open={!started}>
                   <OpForm op="routine.log" fixed={{ routineId: r.id, type: isFirstUse ? "first_use" : "completed" }} initial={{ onDate: today }} submitLabel="Save entry" compact fields={[
-                    { name: "onDate", label: isFirstUse ? "Started a new one on" : "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
+                    { name: "onDate", label: "Done on", type: "date", required: true }, { name: "notes", label: "Note", nullable: true }]} />
                 </Reveal>
                 {r.kind !== "waxing" && (isFirstUse ? overdue : !!due) && <OpButton op="routine.log" input={{ routineId: r.id, type: "skipped", onDate: today }} label="Skip this time" icon="skip" className="pill-action"
                   confirmText={isFirstUse ? "Skip this time? It keeps counting days since the last new one and stops reminding you. Log a new one when you change it." : "Skip this cycle? The next due date will count from today."} />}
