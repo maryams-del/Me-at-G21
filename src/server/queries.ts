@@ -265,6 +265,19 @@ export function rankDocuments<T extends { title: string; kind: string; issuer: s
   return scored.filter((x) => x.matched > 0).sort((a, b) => b.score - a.score || a.d.title.localeCompare(b.d.title)).map((x) => x.d);
 }
 
+/** One document with its file versions (newest first) and its linked expiry reminders, for the edit page. */
+export async function documentDetail(o: Owner, id: string) {
+  const [doc] = await db().select().from(t.documents).where(and(eq(t.documents.id, id), eq(t.documents.ownerId, o.id), isNull(t.documents.deletedAt)));
+  if (!doc) return null;
+  const files = await db().select({
+    id: t.documentFiles.id, version: t.documentFiles.version, filename: t.documentFiles.filename,
+    contentType: t.documentFiles.contentType, sizeBytes: t.documentFiles.sizeBytes, createdAt: t.documentFiles.createdAt,
+  }).from(t.documentFiles).where(and(eq(t.documentFiles.documentId, id), isNull(t.documentFiles.deletedAt))).orderBy(desc(t.documentFiles.version));
+  const [reminders] = await db().select({ remindersEnabled: t.expiryItems.remindersEnabled, reminderOffsetsDays: t.expiryItems.reminderOffsetsDays, reminderTime: t.expiryItems.reminderTime })
+    .from(t.expiryItems).where(and(eq(t.expiryItems.documentId, id), isNull(t.expiryItems.deletedAt))).limit(1);
+  return { doc, files, reminders: reminders ?? null };
+}
+
 /** Total bytes of live (non-deleted) document files, for the storage meter. */
 export async function documentStorageBytes(ownerId: string) {
   const [{ n }] = await db().select({ n: sql<string>`coalesce(sum(${t.documentFiles.sizeBytes}),0)` }).from(t.documentFiles).where(and(eq(t.documentFiles.ownerId, ownerId), isNull(t.documentFiles.deletedAt)));

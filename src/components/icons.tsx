@@ -18,6 +18,12 @@ const PATHS = {
   doc: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6",
   cap: "M22 10L12 5 2 10l10 5 10-5zM6 12v5c3 2 9 2 12 0v-5",
   pin: "M9 3h6M10 3v6l-3 4v2h10v-2l-3-4V3M12 15v6",
+  download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  share: "M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7",
+  compress: "M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7",
+  upload: "M12 16V4M7 9l5-5 5 5M5 20h14",
+  back: "M15 18l-6-6 6-6",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
 } as const;
 
 export type IconName = keyof typeof PATHS;
