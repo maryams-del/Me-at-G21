@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, toast } from "@/components/api";
 import { askConfirm } from "@/components/ConfirmDialog";
-import { CountdownRail, TimeWheel } from "@/components/ReminderPickers";
+import { daysBetween, dayMonth, shiftDate } from "@/lib/countdown";
+import { dmy } from "@/lib/time";
 import { Icon } from "@/components/icons";
 import { titleCaseInput } from "@/lib/titlecase";
 import { compressIfImage, uploadFile, ShareFile, DOC_KIND_OPTIONS } from "../DocClient";
@@ -18,6 +19,13 @@ const ACCEPT = "application/pdf,image/jpeg,image/png,image/heic,image/webp";
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const isPhoto = (t: string) => t.startsWith("image/");
 const shows = (t: string) => t === "application/pdf" || ["image/jpeg", "image/png", "image/webp"].includes(t);
+const NICE: Record<number, string> = { 1: "1 day", 3: "3 days", 7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months" };
+const nice = (n: number) => NICE[n] ?? `${n} days`;
+const PRESETS = [90, 30, 14, 7, 3, 1];
+function localToday() {
+  const d = new Date(), p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 const TABS = [["details", "Details"], ["reminders", "Reminders"], ["files", "Files"], ["notes", "Notes"]] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -39,7 +47,14 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
 
   const [expires, setExpires] = useState(doc.expiresOn ?? "");
   const [remOn, setRemOn] = useState(!!reminders?.enabled);
-  const [remSummary, setRemSummary] = useState("");
+  const [remDays, setRemDays] = useState<number[]>(() => [...new Set((reminders?.offsets ?? [-90, -30, -7]).map((n) => Math.abs(n)).filter((n) => n > 0))]);
+  const [remTime, setRemTime] = useState(reminders?.time ?? "09:00");
+  const left = /^\d{4}-\d{2}-\d{2}$/.test(expires) ? daysBetween(localToday(), expires) : null;
+  const tiles = [...new Set([...PRESETS, ...remDays])].sort((a, b) => b - a);
+  const isPast = (n: number) => left !== null && n >= left;
+  const upcoming = remDays.filter((n) => !isPast(n)).length;
+  const remSummary = upcoming ? `${upcoming} reminder${upcoming === 1 ? "" : "s"}${left !== null ? ` before ${dmy(expires)}` : ""}` : "None picked yet";
+  const toggleDay = (n: number) => setRemDays((ds) => ds.includes(n) ? ds.filter((x) => x !== n) : ds.length >= 8 ? ds : [...ds, n]);
 
   // A new version waits here until "Upload" is pressed, so the compress choice can be made first.
   const [pending, setPending] = useState<File | null>(null);
@@ -116,16 +131,6 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
     } catch (e) { toast(e instanceof Error ? e.message : "Couldn't delete", "error"); }
   }
 
-  async function deleteDoc() {
-    if (!(await askConfirm(`Delete “${doc.title}”, its ID number and all its files?`, { note: "You can’t undo this.", danger: true, confirmLabel: "Delete" }))) return;
-    try {
-      await api("/api/ops/document.delete", { id: doc.id });
-      toast("Document deleted");
-      router.push("/admin/documents");
-      router.refresh();
-    } catch (e) { toast(e instanceof Error ? e.message : "Couldn't delete", "error"); }
-  }
-
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -133,6 +138,7 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
     const v = (k: string) => String(fd.get(k) ?? "").trim();
     if (!v("title")) { setTab("details"); setError("Add a title."); return; }
     if (remOn && !v("expiresOn")) { setTab("details"); setError("Add an expiry date to get reminders."); return; }
+    if (remOn && !remDays.length) { setTab("reminders"); setError("Pick at least one reminder, or turn reminders off."); return; }
     const input: Record<string, unknown> = {
       id: doc.id, personId: doc.personId, tags: doc.tags, title: v("title"), kind: v("kind"),
       issuer: v("issuer") || null, issuedOn: v("issuedOn") || null, expiresOn: v("expiresOn") || null, notes: v("notes") || null,
@@ -244,10 +250,6 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
                 <span className="t-meta">Encrypted. Face ID / Touch ID is needed to see or change it.</span>
               </div>
             </div>
-            <div className="doc-danger rule-t">
-              <span className="t-meta">Deletes its ID number and every file version.</span>
-              <button type="button" className="btn btn-sm doc-del" onClick={deleteDoc}>Delete document</button>
-            </div>
           </section>
 
           <section id="doc-panel-reminders" role="tabpanel" aria-labelledby="doc-tab-reminders" hidden={tab !== "reminders"} className="grid gap-4">
@@ -260,14 +262,22 @@ export function DocEditor({ doc, files, reminders }: { doc: Doc; files: FileV[];
             </div>
             <div className={remOn && expires ? "grid gap-4" : "grid gap-4 doc-off"} inert={!(remOn && expires)} aria-disabled={!(remOn && expires)}>
               <div className="field" role="group" aria-labelledby="doc-rail-l">
-                <span id="doc-rail-l" className="label">Remind me</span>
-                <CountdownRail key={expires} name="reminderOffsetsDays" initial={reminders?.offsets ?? [-30, -7, -1]} anchor={expires || null} endLabel="Expiry"
-                  presets={[30, 7, 1]} onSummary={setRemSummary} />
+                <span id="doc-rail-l" className="label">Remind me before</span>
+                <input type="hidden" name="reminderOffsetsDays" value={remDays.join(",")} />
+                <div className="doc-rem-tiles">
+                  {tiles.map((n) => {
+                    const on = remDays.includes(n), past = isPast(n);
+                    return (
+                      <button key={n} type="button" className={`doc-rem-tile${on && !past ? " on" : ""}`} aria-pressed={on && !past} disabled={past} onClick={() => toggleDay(n)}>
+                        <span className="font-semibold">{nice(n)}</span>
+                        <span className="t-meta">{past ? "passed" : left !== null ? dayMonth(shiftDate(expires, -n)) : ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-3 rule-t pt-4">
-                <span className="grid gap-0.5"><span className="font-semibold">Reminder time</span><span className="t-meta">Same time for each one</span></span>
-                <TimeWheel name="reminderTime" initial={reminders?.time ?? "09:00"} label="Reminder time" />
-              </div>
+              <label className="field doc-rem-time"><span className="label">Reminder time</span>
+                <input className="input" type="time" name="reminderTime" value={remTime} onChange={(e) => setRemTime(e.target.value)} required /></label>
             </div>
           </section>
 
