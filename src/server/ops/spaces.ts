@@ -171,7 +171,7 @@ export const builtinSpaceHide = defineOp({
     const b = builtinOf(i.href);
     await saveOverride(ctx, i.href, (o) => ({ ...o, hidden: true }));
     await audit(ctx, "spaces", "deleted", "settings", ctx.ownerId, `Removed “${b.label}” from Spaces`);
-    return { id: null, message: "Removed from Spaces. Bring it back any time from the bottom of the Spaces page." };
+    return { id: null, message: "Removed from Spaces" };
   },
 });
 
