@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { pageOwner, dashboardState, customSpacesState } from "@/server/queries";
-import { isSpaceGlyph, isBuiltinHref, builtinSpace, spaceOverridesOf } from "@/lib/spaces";
+import { isSpaceGlyph, builtinSpace, BUILTIN_SPACES, spacesOrderOf, bySavedOrder } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { addDays, formatInstant, formatLocalDate, instantToLocal } from "@/lib/time";
 import { WeekRings, type Day } from "@/components/home/WeekRings";
@@ -40,30 +40,21 @@ export default async function Dashboard() {
   for (const c of s.subscriptions.upcoming) add(c.date, `${c.name} renews · ${formatMoney(c.amountMinor, c.currency)}`, "/finance/subscriptions");
   for (const r of s.appDeadlines) if (r.app.deadlineAt) add(instantToLocal(r.app.deadlineAt, tz).date, `${r.app.university} deadline`, `/education/applications/${r.app.id}`, hm(r.app.deadlineAt));
 
-  // Spaces, as quiet icon tiles: the built-in areas, then the owner's own.
-  const spacesAll: { key: string; name: string; href: string; glyph: GlyphKind }[] = [
-    { key: "money", name: "Money", href: "/finance", glyph: "finance" },
-    { key: "care", name: "Care", href: "/care", glyph: "care" },
-    ...(s.period ? [{ key: "period", name: "Period", href: "/care/period", glyph: "period" as const }] : []),
-    { key: "fasts", name: "Fasts", href: "/faith/fasts", glyph: "fasts" },
-    { key: "quran", name: "Quran", href: "/quran", glyph: "quran" },
-    { key: "admin", name: "Admin", href: "/admin", glyph: "admin" },
-    { key: "education", name: "Education", href: "/education", glyph: "education" },
-    { key: "projects", name: "Projects", href: "/projects", glyph: "projects" },
-    { key: "vault", name: "Vault", href: "/vault", glyph: "vault" },
-    { key: "history", name: "History", href: "/history", glyph: "history" },
-    ...mine.map((c) => ({ key: c.space.id, name: c.space.name, href: `/spaces/${c.space.id}`, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const) })),
+  // Spaces, as quiet icon tiles: every space by its own name (never a section heading), in the order set on the
+  // Spaces page. Removed spaces stay off. Tapping one opens that space.
+  const order = spacesOrderOf(o.settings);
+  const items: { key: string; name: string; href: string; glyph: GlyphKind; section: string }[] = [
+    ...BUILTIN_SPACES.flatMap((base) => {
+      const b = builtinSpace(base.href, o.settings)!;
+      return b.hidden ? [] : [{ key: b.href, name: b.label, href: b.href, glyph: b.glyph, section: b.section }];
+    }),
+    ...mine.map((c) => ({ key: `/spaces/${c.space.id}`, name: c.space.name, href: `/spaces/${c.space.id}`, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : ("projects" as const), section: c.space.section })),
   ];
-  // Built-in spaces follow the owner's own name / icon, and removed ones stay off the home screen.
-  // Tapping a space on Home opens the Spaces page (same as the Spaces tab) and scrolls to that section or space.
-  const SECTION_OF: Record<string, string> = { money: "Money", care: "Care", admin: "Life admin", education: "Education & career" };
-  const spacesLink = (x: { key: string; href: string }) =>
-    x.href === "/history" ? "/history" : `/more?focus=${encodeURIComponent(SECTION_OF[x.key] ?? x.href)}`;
-  const spaces = spacesAll.flatMap((x) => {
-    const b = isBuiltinHref(x.href) ? builtinSpace(x.href, o.settings) : null;
-    if (!b) return [x];
-    return b.hidden ? [] : [{ ...x, name: spaceOverridesOf(o.settings)[x.href]?.label ? b.label : x.name, glyph: b.glyph }];
-  });
+  const sectionNames = [...new Set(items.map((x) => x.section))];
+  const spaces = [
+    ...bySavedOrder(sectionNames, (t) => t, order.sections).flatMap((t) => bySavedOrder(items.filter((x) => x.section === t), (x) => x.key, order.cards[t])),
+    { key: "/history", name: "History", href: "/history", glyph: "history" as GlyphKind, section: "" },
+  ];
 
   return (
     <div className="grid gap-9 md:gap-12">
@@ -80,7 +71,7 @@ export default async function Dashboard() {
           <ul className="grid grid-cols-4 gap-y-5">
             {spaces.map((sp) => (
               <li key={sp.key} className="min-w-0">
-                <Link href={spacesLink(sp)} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
+                <Link href={sp.href} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
               </li>
             ))}
           </ul>

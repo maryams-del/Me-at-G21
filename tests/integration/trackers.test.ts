@@ -119,6 +119,18 @@ describe("Test 4 — make-up fasts ledger", () => {
 });
 
 describe("Test 5 — lent/borrowed partial repayments", () => {
+  it("editing the amount takes the correct total; repayments are kept", async () => {
+    const d = await op(at("2026-11-18"), "debt.create", { direction: "lent", counterparty: "Sara", amount: "200", currency: "SAR", onDate: "2026-11-17" });
+    await op(at("2026-11-19"), "debt.repay", { debtId: d.id, amount: "50", onDate: "2026-11-19" });
+    const base = { id: d.id, counterparty: "Sara", onDate: "2026-11-17" };
+    await op(at("2026-11-19"), "debt.update", { ...base, amount: "300" });
+    expect((await debtOutstanding({ tx: getDb(), ownerId: owner.id }, d.id!)).outstanding).toBe(25000);
+    await expect(op(at("2026-11-19"), "debt.update", { ...base, amount: "40" })).rejects.toThrow(/already been repaid/);
+    await op(at("2026-11-19"), "debt.update", { ...base, amount: "50" });
+    const o = await debtOutstanding({ tx: getDb(), ownerId: owner.id }, d.id!);
+    expect(o.outstanding).toBe(0);
+    expect(o.debt.status).toBe("settled");
+  });
   it("updates outstanding and settles at zero; reminders say collect vs repay", async () => {
     const d = await op(at("2026-11-18"), "debt.create", { direction: "lent", counterparty: "Sara", amount: "200", currency: "SAR", onDate: "2026-11-17", dueDate: "2026-11-20" });
     let r = await pending("debt");

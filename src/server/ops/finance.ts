@@ -250,17 +250,31 @@ export const debtCreate = defineOp({
 
 export const debtUpdate = defineOp({
   name: "debt.update", module: "debts", label: "Edit lent/borrowed", aiAllowed: false,
-  schema: debtInput.omit({ amount: true, currency: true, direction: true }).extend({ id: zId }),
-  summarize: (i) => `Update record for ${i.counterparty}`,
+  // The amount is edited here too: type the correct amount and the outstanding balance follows (repayments are kept).
+  schema: debtInput.omit({ amount: true, currency: true, direction: true }).extend({ id: zId, amount: zAmount.optional() }),
+  summarize: (i) => `Update record for ${i.counterparty}${i.amount ? ` (amount ${i.amount})` : ""}`,
   async run(ctx, i) {
+    let amountChange: { originalMinor: number; status: "open" | "settled" } | null = null;
+    let amountNote = "";
+    if (i.amount !== undefined) {
+      const { debt: d, outstanding } = await debtOutstanding(ctx, i.id);
+      const next = toMinor(i.amount, d.currency);
+      if (next !== Number(d.originalMinor)) {
+        const left = outstanding + (next - Number(d.originalMinor));
+        if (left < 0) throw new UserError(`That's less than what's already been repaid (${formatMoney(Number(d.originalMinor) - outstanding, d.currency)}).`, "amount");
+        amountChange = { originalMinor: next, status: left === 0 ? "settled" : "open" };
+        amountNote = `; amount ${formatMoney(Number(d.originalMinor), d.currency)} → ${formatMoney(next, d.currency)}`;
+      }
+    }
     const res = await ctx.tx.update(debts).set({
+      ...(amountChange ?? {}),
       counterparty: i.counterparty, onDate: i.onDate, dueDate: i.dueDate ?? null,
       reminderOffsetsDays: i.reminderOffsetsDays, overdueRepeatDays: i.overdueRepeatDays, reminderTime: i.reminderTime,
       remindersEnabled: i.remindersEnabled, notes: i.notes, updatedAt: ctx.now,
     }).where(and(eq(debts.id, i.id), eq(debts.ownerId, ctx.ownerId), isNull(debts.deletedAt))).returning({ id: debts.id });
     if (!res.length) throw new UserError("Record not found");
     await syncDebtReminders(ctx, i.id);
-    await audit(ctx, "debts", "edited", "debt", i.id, `Edited record — ${i.counterparty}`);
+    await audit(ctx, "debts", "edited", "debt", i.id, `Edited record — ${i.counterparty}${amountNote}`);
     return { id: i.id, message: "Updated" };
   },
 });
@@ -273,7 +287,7 @@ export const debtRepay = defineOp({
   async run(ctx, i) {
     const { debt: d, outstanding } = await debtOutstanding(ctx, i.debtId);
     const amt = toMinor(i.amount, d.currency);
-    if (amt > outstanding) throw new UserError(`Repayment is more than the outstanding ${formatMoney(outstanding, d.currency)}. Use an adjustment with a note if the original amount was wrong.`, "amount");
+    if (amt > outstanding) throw new UserError(`Repayment is more than the outstanding ${formatMoney(outstanding, d.currency)}. If the amount was wrong, edit the record and type the correct amount.`, "amount");
     const [r] = await ctx.tx.insert(debtRepayments).values({ ownerId: ctx.ownerId, debtId: d.id, type: "repayment", amountMinor: amt, onDate: i.onDate, notes: i.notes }).returning({ id: debtRepayments.id });
     const left = outstanding - amt;
     if (left === 0) await ctx.tx.update(debts).set({ status: "settled", updatedAt: ctx.now }).where(eq(debts.id, d.id));
@@ -286,8 +300,8 @@ export const debtRepay = defineOp({
 
 export const debtAdjust = defineOp({
   name: "debt.adjust", module: "debts", label: "Correct amount (audited)", aiAllowed: false,
-  schema: z.object({ debtId: zId, delta: z.string().regex(/^-?\d+(\.\d{1,3})?$/), onDate: zDate, notes: zText(500) }),
-  summarize: (i) => `Adjust outstanding by ${i.delta}: ${i.notes}`,
+  schema: z.object({ debtId: zId, delta: z.string().regex(/^-?\d+(\.\d{1,3})?$/), onDate: zDate, notes: zOptText(500) }),
+  summarize: (i) => `Adjust outstanding by ${i.delta}${i.notes ? `: ${i.notes}` : ""}`,
   async run(ctx, i) {
     const { debt: d, outstanding } = await debtOutstanding(ctx, i.debtId);
     const delta = toMinor(i.delta, d.currency);
@@ -296,7 +310,7 @@ export const debtAdjust = defineOp({
     const left = outstanding + delta;
     await ctx.tx.update(debts).set({ status: left === 0 ? "settled" : "open", updatedAt: ctx.now }).where(eq(debts.id, d.id));
     await syncDebtReminders(ctx, d.id);
-    await audit(ctx, "debts", "adjusted", "debt", d.id, `Adjusted ${d.counterparty} by ${i.delta} ${d.currency}: ${i.notes}`);
+    await audit(ctx, "debts", "adjusted", "debt", d.id, `Adjusted ${d.counterparty} by ${i.delta} ${d.currency}${i.notes ? `: ${i.notes}` : ""}`);
     return { id: r.id, message: "Adjustment recorded" };
   },
 });

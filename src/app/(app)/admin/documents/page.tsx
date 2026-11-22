@@ -81,7 +81,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                 head={<><h2 className="t-h3 min-w-0 truncate">{who}</h2><p className="t-meta">{[kindLabel !== who ? kindLabel : null, when].filter(Boolean).join(" · ")}</p></>}
                 editHref={`/admin/documents/${d.id}`}>
               {latest
-                ? <a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0 max-w-full justify-self-start self-start w-fit" href={`/file/${latest.id}`} target="_blank" rel="noopener">
+                ? <a className="t-small inline-flex items-center gap-1.5 underline underline-offset-4 min-w-0 max-w-full justify-self-start self-start w-fit" href={`/file/${latest.id}`}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" /></svg>
                     <span className="truncate">{latest.filename}</span></a>
                 : <p className="t-meta">No file attached</p>}
