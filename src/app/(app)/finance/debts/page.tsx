@@ -7,7 +7,7 @@ import { OpForm, Reveal, type FieldDef } from "@/components/OpForm";
 import { EntryCard } from "@/components/EntryCard";
 import { countdown, daysBetween, reminderLine } from "@/lib/countdown";
 import { currencyField } from "@/components/fields";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, fromMinor } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { fmtDate } from "@/lib/format";
 
@@ -61,6 +61,7 @@ export default async function DebtsPage() {
 
 const editFields: FieldDef[] = [
   { name: "counterparty", label: "Person", required: true },
+  { name: "amount", label: "Amount", type: "amount", required: true },
   { name: "onDate", label: "Date", type: "date", required: true },
   { name: "dueDate", label: "Due date", type: "date", nullable: true },
   { name: "reminderOffsetsDays", label: "Remind me this many days before due", type: "intlist", negative: true, includeZero: true, presets: [14, 7, 3, 1], maxDays: 60, maxCount: 6 },
@@ -89,15 +90,8 @@ function DebtList({ rows, today }: { rows: Awaited<ReturnType<typeof debtsState>
             ) : <span className="repaid-mark"><Icon name="check" size={15} strokeWidth={2.6} />Repaid</span>}
             edit={
               <div className="grid gap-4">
-                {isOpen && (
-                  <Reveal label="Correct the amount" icon="edit" buttonClass="pill-action">
-                    <OpForm op="debt.adjust" fixed={{ debtId: d.id }} initial={{ onDate: today }} submitLabel="Save correction" fields={[
-                      { name: "delta", label: "Change to outstanding (+/−)", required: true, placeholder: "-20" }, { name: "onDate", label: "Date", type: "date", required: true },
-                      { name: "notes", label: "Reason (kept in the audit log)", required: true, wide: true }]} />
-                  </Reveal>
-                )}
                 <OpForm op="debt.update" fields={editFields} fixed={{ id: d.id }} compact submitLabel="Save changes"
-                  initial={{ ...d, reminderTime: d.reminderTime ?? "09:00" }}
+                  initial={{ ...d, amount: fromMinor(Number(d.originalMinor), d.currency), reminderTime: d.reminderTime ?? "09:00" }}
                   deleteAction={{ op: "debt.delete", input: { id: d.id }, confirm: "Delete this record and its reminders?" }} />
               </div>
             }>

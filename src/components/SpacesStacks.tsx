@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Glyph, type GlyphKind } from "./Glyph";
 import { Icon } from "./icons";
 import { api, ApiError, toast } from "./api";
@@ -28,8 +28,9 @@ const withPin = (pins: string[], href: string) => [href, ...pins.filter((h) => h
 /**
  * Spaces as quiet icon tiles, grouped by section. Search filters across every section.
  * Right-click a space to pin it (up to three); tap the pin on a pinned card to unpin it.
- * Press and hold any space to rearrange: spaces turn into rows you can drag (and edit or delete with the icons),
- * and each section heading gets its own grip so sections move in the same view. Tap Done to save.
+ * Press and hold any space to rearrange, like the iPhone home screen: the spaces jiggle in place and can be dragged
+ * within their section; the button on each space's corner offers Edit space and Delete space; each section heading
+ * gets a three-line grip so sections move in the same view. Tap Done to save.
  * Swiping back (or the back button) while rearranging just leaves rearranging, staying on Spaces.
  */
 export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addInitial, focus }: {
@@ -37,12 +38,12 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   /** a section title or a space's href to scroll to (e.g. when a space is tapped on Home) */ focus?: string;
 }) {
   const router = useRouter();
-  const STEP = 60, ROW_H = 52;
   const [groups, setGroups] = useState(initial);
   const [q, setQ] = useState("");
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [cardDrag, setCardDrag] = useState<{ key: string; dy: number } | null>(null);
+  const [tileDrag, setTileDrag] = useState<{ key: string; x: number; y: number } | null>(null);
+  const [tileMenu, setTileMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const [secDrag, setSecDrag] = useState<{ title: string; dy: number } | null>(null);
   const [editing, setEditing] = useState<StackCard | null>(null);
   const [deleting, setDeleting] = useState<StackCard | null>(null);
@@ -53,7 +54,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   // Keep up with the server: a space added (or renamed, or deleted) shows up straight away, without a reload.
   // While rearranging, keep the order the owner has dragged so far and just take in the edits.
   useEffect(() => {
-    if (cd.current || sd.current) return;
+    if (td.current || sd.current) return;
     setGroups((cur) => (reorder ? mergeKeepingOrder(cur, initial) : initial));
   }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -65,7 +66,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   };
   const endReorder = (keep: boolean) => {
     if (!keep) setGroups(initial);
-    setReorder(false); setEditing(null); setDeleting(null);
+    setReorder(false); setEditing(null); setDeleting(null); setTileMenu(null);
     if (pushed.current) { pushed.current = false; window.history.back(); }
   };
   useEffect(() => {
@@ -114,8 +115,8 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   const [menu, setMenu] = useState<{ href: string; x: number; y: number } | null>(null);
   const [unpinFor, setUnpinFor] = useState<string | null>(null);
   useEffect(() => {
-    if (!menu && !unpinFor) return;
-    const close = () => { setMenu(null); setUnpinFor(null); };
+    if (!menu && !unpinFor && !tileMenu) return;
+    const close = () => { setMenu(null); setUnpinFor(null); setTileMenu(null); };
     const off = (e: PointerEvent) => { if (!(e.target as Element).closest?.("[data-pin-pop]")) close(); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("pointerdown", off);
@@ -123,7 +124,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
     window.addEventListener("scroll", close, { passive: true });
     window.addEventListener("resize", close);
     return () => { document.removeEventListener("pointerdown", off); document.removeEventListener("keydown", esc); window.removeEventListener("scroll", close); window.removeEventListener("resize", close); };
-  }, [menu, unpinFor]);
+  }, [menu, unpinFor, tileMenu]);
 
   async function savePins(next: string[], message: string) {
     const prev = pins;
@@ -142,7 +143,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
 
   const press = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
   const pointerKind = useRef<string>("mouse");
-  const cd = useRef<{ gi: number; idx: number; startY: number } | null>(null);
+  const td = useRef<{ gi: number; key: string; offX: number; offY: number } | null>(null);
   const sd = useRef<{ idx: number; startY: number } | null>(null);
   const secBox = useRef<HTMLDivElement | null>(null);
   const sectionCount = useRef(initial.length);
@@ -159,17 +160,18 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
 
   const moveTo = <T,>(xs: T[], from: number, to: number) => { const c = xs.slice(); const [x] = c.splice(from, 1); c.splice(to, 0, x); return c; };
 
-  // ---- Long press on a space starts reorder mode ----
+  // ---- Long press on a space starts rearranging (and, if the finger keeps going, drags that space straight away) ----
   const cancelPress = () => clearTimeout(press.current.t);
-  const startPress = (e: React.PointerEvent) => {
+  const startPress = (e: React.PointerEvent, gi: number, key: string) => {
     pointerKind.current = e.pointerType;
     if (reorder || e.button !== 0) return;
     cancelPress();
     press.current = { x: e.clientX, y: e.clientY, fired: false };
-    press.current.t = setTimeout(() => { press.current.fired = true; startReorder(); navigator.vibrate?.(12); }, LONG_PRESS_MS);
+    const { clientX, clientY } = e;
+    press.current.t = setTimeout(() => { press.current.fired = true; startReorder(); navigator.vibrate?.(12); beginTileDrag(gi, key, clientX, clientY); }, LONG_PRESS_MS);
   };
-  const movePress = (e: React.PointerEvent) => { if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress(); };
-  // ---- Right-click (or the keyboard menu key) on a space opens the pin menu. A finger's long press stays "reorder". ----
+  const movePress = (e: React.PointerEvent) => { if (!press.current.fired && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress(); };
+  // ---- Right-click (or the keyboard menu key) on a space opens the pin menu. A finger's long press stays "rearrange". ----
   const openMenu = (e: React.MouseEvent, href: string) => {
     e.preventDefault();
     if (pointerKind.current === "touch") return;
@@ -180,26 +182,87 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
     setMenu({ href, x, y });
   };
 
-  // ---- Drag a space by its grip (within its section) ----
-  const cardDown = (e: React.PointerEvent, gi: number, ci: number, key: string) => {
-    e.preventDefault(); e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    cd.current = { gi, idx: ci, startY: e.clientY };
-    setCardDrag({ key, dy: 0 });
+  // ---- Drag a space around its section's grid while rearranging ----
+  // While a space is being dragged the page mustn't scroll under the finger.
+  useEffect(() => {
+    const stop = (e: TouchEvent) => { if (td.current) e.preventDefault(); };
+    document.addEventListener("touchmove", stop, { passive: false });
+    return () => document.removeEventListener("touchmove", stop);
+  }, []);
+  const tileHold = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number }>({ x: 0, y: 0 });
+  const centerOf = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  const tileEls = (gi: number) => Array.from(document.querySelectorAll<HTMLElement>(`[data-sec-i="${gi}"] [data-tile]`));
+  function beginTileDrag(gi: number, key: string, x: number, y: number) {
+    const el = tileEls(gi).find((t) => t.dataset.tile === key);
+    const c = el ? centerOf(el.getBoundingClientRect()) : { x, y };
+    td.current = { gi, key, offX: x - c.x, offY: y - c.y };
+    setTileMenu(null);
+    setTileDrag({ key, x, y });
+    const move = (ev: PointerEvent) => {
+      const d = td.current; if (!d) return;
+      const els = tileEls(d.gi);
+      const cx = ev.clientX - d.offX, cy = ev.clientY - d.offY;
+      // The slot nearest the dragged space's centre is where it goes.
+      let best = -1, bestDist = Infinity, from = -1;
+      els.forEach((t, i) => {
+        if (t.dataset.tile === d.key) from = i;
+        const r = t.getBoundingClientRect();
+        // the dragged tile is drawn shifted; use where its slot is
+        const base = t.dataset.tile === d.key ? { x: r.left + r.width / 2 - (Number(t.dataset.dx) || 0), y: r.top + r.height / 2 - (Number(t.dataset.dy) || 0) } : centerOf(r);
+        const dist = Math.hypot(base.x - cx, base.y - cy);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+      if (best >= 0 && from >= 0 && best !== from) {
+        snapshotTiles(d.gi);
+        setGroups((gs) => gs.map((g, i) => (i === d.gi ? { ...g, cards: moveTo(g.cards, from, best) } : g)));
+        navigator.vibrate?.(6);
+      }
+      setTileDrag({ key: d.key, x: ev.clientX, y: ev.clientY });
+    };
+    const up = () => {
+      td.current = null; setTileDrag(null);
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  }
+  // In rearrange mode: hold a space briefly to pick it up (a quick swipe still scrolls the page).
+  const tileDown = (e: React.PointerEvent, gi: number, key: string) => {
+    if (e.button !== 0 || (e.target as Element).closest("[data-tile-btn]")) return;
+    clearTimeout(tileHold.current.t);
+    tileHold.current = { x: e.clientX, y: e.clientY };
+    const { clientX, clientY } = e;
+    const wait = e.pointerType === "mouse" ? 0 : 160;
+    tileHold.current.t = setTimeout(() => { navigator.vibrate?.(8); beginTileDrag(gi, key, clientX, clientY); }, wait);
   };
-  const cardMove = (e: React.PointerEvent) => {
-    const d = cd.current; if (!d) return;
-    const n = groups[d.gi].cards.length;
-    const target = Math.max(0, Math.min(n - 1, Math.round(d.idx + (e.clientY - d.startY) / STEP)));
-    if (target !== d.idx) {
-      const from = d.idx;
-      setGroups((gs) => gs.map((g, i) => (i === d.gi ? { ...g, cards: moveTo(g.cards, from, target) } : g)));
-      d.startY += (target - from) * STEP; d.idx = target;
-      navigator.vibrate?.(6);
+  const tileMoveBeforeHold = (e: React.PointerEvent) => { if (!td.current && Math.hypot(e.clientX - tileHold.current.x, e.clientY - tileHold.current.y) > 8) clearTimeout(tileHold.current.t); };
+  const tileUpBeforeHold = () => clearTimeout(tileHold.current.t);
+
+  // The space being dragged sits under the finger: measure its slot, then shift it from there.
+  useLayoutEffect(() => {
+    const d = td.current;
+    document.querySelectorAll<HTMLElement>("[data-tile][data-dx]").forEach((el) => { if (el.dataset.tile !== tileDrag?.key) { el.style.translate = ""; delete el.dataset.dx; delete el.dataset.dy; } });
+    if (!d || !tileDrag) return;
+    const el = document.querySelector<HTMLElement>(`[data-tile="${CSS.escape(tileDrag.key)}"]`); if (!el) return;
+    el.style.translate = "";
+    const r = el.getBoundingClientRect();
+    const dx = tileDrag.x - d.offX - (r.left + r.width / 2), dy = tileDrag.y - d.offY - (r.top + r.height / 2);
+    el.style.translate = `${dx}px ${dy}px`; el.dataset.dx = String(dx); el.dataset.dy = String(dy);
+  }, [tileDrag, groups]);
+
+  // Other spaces glide into their new places instead of jumping.
+  const before = useRef<Map<string, DOMRect> | null>(null);
+  const snapshotTiles = (gi: number) => { before.current = new Map(tileEls(gi).map((t) => [t.dataset.tile!, t.getBoundingClientRect()])); };
+  useLayoutEffect(() => {
+    const prev = before.current; if (!prev) return;
+    before.current = null;
+    for (const [key, r] of prev) {
+      if (key === td.current?.key) continue;
+      const el = document.querySelector<HTMLElement>(`[data-tile="${CSS.escape(key)}"]`); if (!el) continue;
+      const n = el.getBoundingClientRect();
+      const dx = r.left - n.left, dy = r.top - n.top;
+      if (dx || dy) el.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 220, easing: "cubic-bezier(.3,1.2,.5,1)" });
     }
-    setCardDrag((c) => (c ? { ...c, dy: e.clientY - d.startY } : c));
-  };
-  const cardUp = () => { cd.current = null; setCardDrag(null); };
+  }, [groups]);
 
   // ---- Drag a whole section by the grip on its heading: the sections fold down to their headings while you drag ----
   const SEC = 52;
@@ -267,7 +330,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
       <div className="flex items-center gap-2">
         {reorder ? (
           <>
-            <span className="t-small font-semibold flex-1">Drag the grips to rearrange</span>
+            <span className="t-small font-semibold flex-1">Drag spaces to move them</span>
             <button type="button" className="btn" onClick={() => endReorder(false)} disabled={saving}>Cancel</button>
             <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
@@ -364,69 +427,65 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
                 </button>
               )}
             </div>
-            {reorder ? (
-              <div className="relative no-callout" style={{ height: g.cards.length * STEP - (STEP - ROW_H) }}>
-                {g.cards.map((c, ci) => {
-                  const dragging = cardDrag?.key === c.key;
-                  const on = isPinned(c.href);
-                  return (
-                    <div key={c.key} className="space-row absolute left-0 right-0"
-                      style={{ top: ci * STEP + (dragging ? cardDrag.dy : 0), height: ROW_H, zIndex: dragging ? 20 : 1,
-                        transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.4)" : undefined }}>
-                      <span className="ic"><Glyph kind={c.glyph} size={17} color="currentColor" accent="currentColor" /></span>
-                      <span className="flex-1 truncate text-[14px] font-semibold">{c.label}</span>
-                      <button type="button" className={`row-pin ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? `Unpin ${c.label}` : `Pin ${c.label}`} title={on ? "Unpin" : "Pin"}
-                        onClick={() => (on ? unpin(c.href) : pin(c.href))}>
-                        <Icon name="pin" size={16} />
-                      </button>
-                      {c.edit && (
-                        <>
-                          <button type="button" className="row-pin" aria-label={`Edit ${c.label}`} title="Edit" onClick={() => { setDeleting(null); setEditing(c); }}>
-                            <Icon name="edit" size={16} />
-                          </button>
-                          <button type="button" className="row-pin row-del" aria-label={`Delete ${c.label}`} title="Delete" onClick={() => { setEditing(null); setDeleting(c); }}>
-                            <Icon name="trash" size={16} />
-                          </button>
-                        </>
-                      )}
-                      <button type="button" className="grip" aria-label={`Drag to move ${c.label}`}
-                        onPointerDown={(e) => cardDown(e, gi, ci, c.key)} onPointerMove={cardMove} onPointerUp={cardUp} onPointerCancel={cardUp}
-                        onKeyDown={(e) => {
-                          const to = e.key === "ArrowUp" ? ci - 1 : e.key === "ArrowDown" ? ci + 1 : -1;
-                          if (to >= 0 && to < g.cards.length) { e.preventDefault(); setGroups((gs) => gs.map((x, i) => (i === gi ? { ...x, cards: moveTo(x.cards, ci, to) } : x))); }
-                        }}>
-                        <Grip />
-                      </button>
+            <ul className={`space-grid ${reorder ? "jiggling" : ""}`} data-sec-i={gi}>
+              {g.cards.map((c, ci) => (
+                <li key={c.key} className="min-w-0 relative" data-tile={c.key}
+                  style={tileDrag?.key === c.key ? { zIndex: 30, position: "relative" } : undefined}>
+                  {reorder ? (
+                    <div className={`sp-tile no-callout jiggle ${tileDrag?.key === c.key ? "lifted" : ""}`} style={{ animationDelay: `${(ci % 3) * -0.09}s`, touchAction: "pan-y", cursor: "grab" }}
+                      role="button" tabIndex={0} aria-label={`${c.label}. Drag to move, or use the arrow keys.`}
+                      onPointerDown={(e) => tileDown(e, gi, c.key)} onPointerMove={tileMoveBeforeHold} onPointerUp={tileUpBeforeHold} onPointerCancel={tileUpBeforeHold}
+                      onContextMenu={(e) => e.preventDefault()}
+                      onKeyDown={(e) => {
+                        const to = e.key === "ArrowLeft" || e.key === "ArrowUp" ? ci - 1 : e.key === "ArrowRight" || e.key === "ArrowDown" ? ci + 1 : -1;
+                        if (to >= 0 && to < g.cards.length) { e.preventDefault(); setGroups((gs) => gs.map((x, i) => (i === gi ? { ...x, cards: moveTo(x.cards, ci, to) } : x))); }
+                      }}>
+                      <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" /></span>
+                      <span>{c.label}</span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <ul className="space-grid">
-                {g.cards.map((c) => (
-                  <li key={c.key} className="min-w-0">
+                  ) : (
                     <Link href={c.href} data-space={c.href} className={`sp-tile no-callout ${flash === c.href ? "just-added" : ""}`} draggable={false} title={c.stat ? `${c.label} · ${c.stat}` : c.label}
-                      onPointerDown={startPress} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={cancelPress}
+                      onPointerDown={(e) => startPress(e, gi, c.key)} onPointerMove={movePress} onPointerUp={cancelPress} onPointerCancel={cancelPress} onPointerLeave={() => { if (!press.current.fired) cancelPress(); }}
                       onContextMenu={(e) => openMenu(e, c.href)}
                       onClick={(e) => { if (press.current.fired) { e.preventDefault(); press.current.fired = false; } }}>
                       <span className="ic"><Glyph kind={c.glyph} size={22} color="currentColor" accent="currentColor" />{c.needs && <span className="need-dot" />}</span>
                       <span>{c.label}{c.needs && <span className="sr-only"> (needs you)</span>}</span>
                     </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  )}
+                  {reorder && c.edit && tileDrag?.key !== c.key && (
+                    <button type="button" className="tile-edit" data-tile-btn data-pin-pop aria-label={`Options for ${c.label}`} aria-haspopup="menu" aria-expanded={tileMenu?.key === c.key}
+                      onClick={(e) => {
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setTileMenu(tileMenu?.key === c.key ? null : { key: c.key, x: r.left, y: r.bottom + 6 });
+                      }}>
+                      <Icon name="edit" size={13} strokeWidth={2.4} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           </section>
         );
       })}
       </div>
       )}
+      {tileMenu && (() => {
+        const c = allCards.find((x) => x.key === tileMenu.key);
+        if (!c) return null;
+        return (
+          <div className="pin-pop preview-enter" data-pin-pop role="menu" aria-label={`${c.label} options`}
+            style={{ position: "fixed", zIndex: 60, left: Math.max(8, Math.min(tileMenu.x, window.innerWidth - 200)), top: Math.min(tileMenu.y, window.innerHeight - 110) }}>
+            <button type="button" role="menuitem" className="pin-pop-item" autoFocus onClick={() => { setTileMenu(null); setEditing(c); }}><Icon name="edit" size={15} />Edit space</button>
+            <button type="button" role="menuitem" className="pin-pop-item icon-danger" onClick={() => { setTileMenu(null); setDeleting(c); }}><Icon name="trash" size={15} />Delete space</button>
+          </div>
+        );
+      })()}
       {editing?.edit && (
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="edit-space-h">
           <div className="absolute inset-0" style={{ background: "rgba(20,26,21,.45)" }} onClick={() => setEditing(null)} />
-          <div className="relative panel panel-closable w-full max-w-lg p-4 md:p-5 preview-enter max-h-[88dvh] overflow-y-auto" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+          <div className="relative panel center-panel panel-closable w-full max-w-lg p-4 md:p-5 preview-enter max-h-[88dvh] overflow-y-auto" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
             <PanelClose onClick={() => setEditing(null)} label="Close editing" />
-            <p id="edit-space-h" className="t-h3 mb-3 pr-10">Edit {editing.label}</p>
+            <p id="edit-space-h" className="t-h3 mb-3 pr-10">Edit space</p>
             <RevealCtx.Provider value={{ close: () => setEditing(null) }}>
               <OpForm op={editing.edit.op} fields={editing.edit.fields} fixed={editing.edit.fixed} initial={editing.edit.initial} compact submitLabel="Save"
                 onDone={() => { setEditing(null); router.refresh(); }} />

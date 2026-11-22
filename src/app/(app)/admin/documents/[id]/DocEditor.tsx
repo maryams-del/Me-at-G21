@@ -193,7 +193,7 @@ export function DocEditor({ doc, files, reminders, whose, kinds }: { doc: Doc; f
               {cur && <span className="chip-soft">{cur.id === files[0]?.id ? "Latest" : `v${cur.version}`}</span>}
             </div>
             {cur ? (
-              <a className="doc-preview-sheet" href={`/file/${cur.id}`} target="_blank" rel="noopener" aria-label={`Open ${cur.filename}`}>
+              <a className="doc-preview-sheet" href={`/file/${cur.id}`} aria-label={`Open ${cur.filename}`}>
                 {cur.contentType === "application/pdf"
                   ? <iframe src={`/api/documents/file/${cur.id}?view=1#toolbar=0&navpanes=0`} title={`Preview of ${cur.filename}`} tabIndex={-1} />
                   : shows(cur.contentType)
