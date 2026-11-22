@@ -7,6 +7,7 @@ import { WeekRings, type Day } from "@/components/home/WeekRings";
 import { AiBar } from "@/components/home/AiBar";
 import { FrequentlyVisited } from "@/components/home/FrequentlyVisited";
 import { HomeNoZoom } from "@/components/home/HomeNoZoom";
+import { SpacePages } from "@/components/home/SpacePages";
 import { Glyph, type GlyphKind } from "@/components/Glyph";
 
 export default async function Dashboard() {
@@ -68,13 +69,7 @@ export default async function Dashboard() {
         <WeekRings days={days} />
         <section aria-labelledby="spaces-h" className="home-spaces">
           <h2 id="spaces-h" className="t-label mb-4" style={{ color: "var(--ink-3)" }}>Spaces</h2>
-          <ul className="grid grid-cols-4 gap-y-5">
-            {spaces.map((sp) => (
-              <li key={sp.key} className="min-w-0">
-                <Link href={sp.href} className="sp-tile"><span className="ic"><Glyph kind={sp.glyph} size={22} color="currentColor" accent="currentColor" /></span><span>{sp.name}</span></Link>
-              </li>
-            ))}
-          </ul>
+          <SpacePages spaces={spaces} />
         </section>
       </div>
     </div>

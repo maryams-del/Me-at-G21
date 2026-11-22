@@ -762,3 +762,10 @@ body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; hei
   color: var(--ink); background: color-mix(in srgb, var(--paper) 70%, var(--ink) 18%); box-shadow: 0 2px 8px -2px rgba(0,0,0,.35), inset 0 0 0 1px var(--hair); }
 .tile-edit:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 2px; }
 .pin-pop-item.icon-danger { color: var(--danger); }
+
+/* Home spaces: pages of nine, swiped sideways */
+.space-pages { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.space-pages::-webkit-scrollbar { display: none; }
+.space-page { flex: 0 0 100%; scroll-snap-align: start; align-content: start; }
+.page-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 999px; background: var(--ink-3); opacity: .35; cursor: pointer; transition: opacity .2s, width .2s; }
+.page-dot[data-on] { opacity: .9; width: 18px; }
