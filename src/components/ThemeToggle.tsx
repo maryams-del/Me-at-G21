@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { MASCOTS, type MascotKind } from "@/lib/invites";
 import { THEME_COOKIE, THEME_COLORS, FAVICONS, type ThemeChoice } from "@/lib/theme";
 
 function current(): ThemeChoice {
@@ -9,7 +10,8 @@ function current(): ThemeChoice {
 }
 
 /** Dark / Light switch with the mascot sitting on top of it. The choice is kept in a cookie for a year. */
-export function ThemeToggle() {
+export function ThemeToggle({ mascot = "cat" }: { mascot?: MascotKind }) {
+  const m = MASCOTS[mascot];
   const [theme, setTheme] = useState<ThemeChoice | null>(null);
   useEffect(() => setTheme(current()), []);
 
@@ -39,7 +41,7 @@ export function ThemeToggle() {
   return (
     <div className="flex flex-col items-center shrink-0">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/mascot.png" alt="" width={48} height={64} data-splash="mascot" className="relative z-[2] -mb-[11px] object-contain w-[48px] h-[64px]" style={{ filter: "drop-shadow(0 6px 8px rgba(0,0,0,.25))" }} />
+      <img src={m.src} alt="" width={m.header.w} height={m.header.h} data-splash="mascot" className="relative z-[2] object-contain" style={{ width: `${m.header.w}px`, height: `${m.header.h}px`, marginBottom: `${-m.header.lift}px`, marginTop: `${(MASCOTS.family.header.h - MASCOTS.family.header.lift) - (m.header.h - m.header.lift)}px`, filter: "drop-shadow(0 6px 8px rgba(0,0,0,.25))" }} />
       <div className="seg quiet" role="group" aria-label="Appearance">
         <button type="button" aria-pressed={theme === "dark"} onClick={() => choose("dark")}>Dark</button>
         <button type="button" aria-pressed={theme === "light"} onClick={() => choose("light")}>Light</button>

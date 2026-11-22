@@ -4,6 +4,7 @@ import { getDb, closeDb } from "@/db";
 import { users } from "@/db/schema";
 import { runOpInTx } from "@/server/ops";
 import { mayEnroll } from "@/server/auth/invites";
+import { mascotFor } from "@/server/mascot";
 import { invitedEmailsOf } from "@/lib/invites";
 import { resetDb, makeOwner, withCtx } from "../support/db";
 
@@ -54,5 +55,21 @@ describe("Accounts for other people (invite-only)", () => {
     await op(owner.id, "invite.remove", { email: "friend@example.com" });
     const [u2] = await getDb().select({ settings: users.settings }).from(users).where(eq(users.id, owner.id));
     expect(inviteTokensOf(u2.settings)["friend@example.com"]).toBeUndefined();
+  });
+
+  it("the owner and people marked as family see the original mascot; everyone else sees the cat", async () => {
+    expect(await mascotFor("Owner@example.com")).toBe("family");
+    await op(owner.id, "invite.add", { email: "mum@example.com", family: true });
+    await op(owner.id, "invite.add", { email: "friend@example.com" });
+    expect(await mascotFor("mum@example.com")).toBe("family");
+    expect(await mascotFor("friend@example.com")).toBe("cat");
+    expect(await mascotFor("stranger@example.com")).toBe("cat");
+    await op(owner.id, "invite.family", { email: "friend@example.com", family: true });
+    await op(owner.id, "invite.family", { email: "mum@example.com", family: false });
+    expect(await mascotFor("friend@example.com")).toBe("family");
+    expect(await mascotFor("mum@example.com")).toBe("cat");
+    await expect(op(owner.id, "invite.family", { email: "stranger@example.com", family: true })).rejects.toThrow(/isn't invited/);
+    await op(owner.id, "invite.remove", { email: "friend@example.com" });
+    expect(await mascotFor("friend@example.com")).toBe("cat");
   });
 });

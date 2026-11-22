@@ -9,6 +9,7 @@ import { LogoMark } from "./LogoMark";
 import { recordVisit } from "@/lib/visits";
 import { BackButton, trackPath } from "./BackButton";
 import { Splash } from "./Splash";
+import { MASCOT_COOKIE, type MascotKind } from "@/lib/invites";
 
 type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
@@ -35,7 +36,11 @@ export function openCapture(detail: { text?: string; voice?: boolean } = {}) {
   window.dispatchEvent(new CustomEvent("ld-capture", { detail }));
 }
 
-export function AppShell({ children, inboxCount }: { children: React.ReactNode; name: string; inboxCount: number; dateLine?: string }) {
+export function AppShell({ children, inboxCount, mascot = "cat" }: { children: React.ReactNode; name: string; inboxCount: number; dateLine?: string; mascot?: MascotKind }) {
+  // Remember a family device, so the sign-in page shows the family mascot there too.
+  useEffect(() => {
+    document.cookie = mascot === "family" ? `${MASCOT_COOKIE}=family; path=/; max-age=31536000; samesite=lax` : `${MASCOT_COOKIE}=; path=/; max-age=0; samesite=lax`;
+  }, [mascot]);
   const path = usePathname();
   const [capture, setCapture] = useState<{ open: boolean; key: number; text: string; voice: boolean }>({ open: false, key: 0, text: "", voice: false });
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: string }[]>([]);
@@ -91,7 +96,7 @@ export function AppShell({ children, inboxCount }: { children: React.ReactNode; 
               <Icon d={SPARKLE} size={16} /> Ask AI
             </button>
           </nav>
-          <ThemeToggle />
+          <ThemeToggle mascot={mascot} />
         </header>
 
         <main id="main" className="pt-5 md:pt-8 flex-1">{!TOP_LEVEL.includes(path) && <BackButton path={path} />}{children}</main>
@@ -107,7 +112,7 @@ export function AppShell({ children, inboxCount }: { children: React.ReactNode; 
         {bottomRight.map((it) => <MobileLink key={it.href} it={it} active={current(it)} />)}
       </nav>
 
-      <Splash />
+      <Splash mascot={mascot} />
 
       <CaptureSheet key={capture.key} open={capture.open} initialText={capture.text} startVoice={capture.voice} onClose={() => setCapture((c) => ({ ...c, open: false }))} />
 
