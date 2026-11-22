@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { LogoMark } from "./LogoMark";
+import { MASCOTS, type MascotKind } from "@/lib/invites";
 
 const SEEN = "g21-splash-seen";
 
@@ -9,11 +10,12 @@ const SEEN = "g21-splash-seen";
  * glides to its place in the header (logo top-left, mascot onto the Dark/Light switch), then the screen fades.
  * Plays once per visit; reloads in the same session only get a quick fade.
  */
-export function Splash() {
+export function Splash({ mascot = "cat" }: { mascot?: MascotKind }) {
+  const m = MASCOTS[mascot];
   const [on, setOn] = useState(true);
   const root = useRef<HTMLDivElement>(null);
   const logo = useRef<HTMLDivElement>(null);
-  const mascot = useRef<HTMLImageElement>(null);
+  const mascotEl = useRef<HTMLImageElement>(null);
 
   const seenAtLoad = useRef<boolean | null>(null);
 
@@ -45,7 +47,7 @@ export function Splash() {
     };
     const t = setTimeout(() => {
       el.querySelector(".splash-bg")?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 650, fill: "forwards" });
-      Promise.all([fly(logo.current, "logo"), fly(mascot.current, "mascot")]).then(finish, finish);
+      Promise.all([fly(logo.current, "logo"), fly(mascotEl.current, "mascot")]).then(finish, finish);
     }, 900);
     return () => { clearTimeout(t); html.classList.remove("splashing"); };
   }, []);
@@ -56,7 +58,7 @@ export function Splash() {
       <div className="splash-bg" style={{ background: "var(--page-art), var(--paper)" }} />
       <div ref={logo} className="relative"><LogoMark size={64} /></div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img ref={mascot} src="/mascot.png" alt="" width={72} height={96} className="relative object-contain w-[72px] h-[96px]" style={{ filter: "drop-shadow(0 6px 8px rgba(0,0,0,.25))" }} />
+      <img ref={mascotEl} src={m.src} alt="" width={m.splash.w} height={m.splash.h} className="relative object-contain" style={{ width: `${m.splash.w}px`, height: `${m.splash.h}px`, filter: "drop-shadow(0 6px 8px rgba(0,0,0,.25))" }} />
     </div>
   );
 }

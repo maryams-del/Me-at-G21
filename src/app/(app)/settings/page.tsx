@@ -7,7 +7,7 @@ import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { invitedEmailsOf } from "@/lib/invites";
+import { invitedEmailsOf, familyEmailsOf } from "@/lib/invites";
 import { InviteLinkButton } from "./InviteLinkButton";
 
 export default async function SettingsPage() {
@@ -15,6 +15,7 @@ export default async function SettingsPage() {
   // Only the site owner manages who else can have an account.
   const isOwner = o.email === env.ownerEmail;
   const invited = isOwner ? invitedEmailsOf(o.settings) : [];
+  const family = new Set(isOwner ? familyEmailsOf(o.settings) : []);
   const joined = invited.length
     ? new Map((await getDb().select({ email: users.email, step: users.onboardingStep }).from(users).where(inArray(users.email, invited))).map((u) => [u.email, u.step]))
     : new Map<string, string>();
@@ -31,7 +32,8 @@ export default async function SettingsPage() {
         <Section title="People">
           <div className="panel p-4 grid gap-4">
             <p className="t-small text-ink-2 prose-w">Invite someone to make their own Me @ G21. They sign up with the email you add here and get a separate, private account with their own passkey. You never see their things, and they never see yours.</p>
-            <OpForm op="invite.add" compact resetOnSuccess submitLabel="Invite" fields={[{ name: "email", label: "Their email", required: true, placeholder: "name@example.com" }]} />
+            <OpForm op="invite.add" compact resetOnSuccess submitLabel="Invite" fields={[{ name: "email", label: "Their email", required: true, placeholder: "name@example.com" },
+              { name: "family", label: "Family (they see your mascot instead of the cat)", type: "checkbox", wide: true }]} />
             {invited.length > 0 && (() => {
               const done = invited.filter((e) => joined.get(e) === "complete").length;
               return <p className="t-small"><strong>{done}</strong> of {invited.length} invited {invited.length === 1 ? "person has" : "people have"} signed up. Tap <strong>Share link</strong> to send someone their private sign-up link (it works once, for 7 days).</p>;
@@ -47,6 +49,9 @@ export default async function SettingsPage() {
                         <span className="t-meta">{step === "complete" ? "Has an account" : step ? "Setting up" : "Invited, not signed up yet"}</span>
                       </span>
                       <span className="flex items-start gap-2">
+                      <OpButton op="invite.family" input={{ email: e, family: !family.has(e) }} label={family.has(e) ? "✓ Family" : "Family"}
+                        ariaLabel={family.has(e) ? `${e} is family. Tap to unmark` : `Mark ${e} as family`}
+                        className={`btn btn-sm family-chip ${family.has(e) ? "on" : ""}`} />
                       {step !== "complete" && <InviteLinkButton email={e} />}
                       <OpButton op="invite.remove" input={{ email: e }} label="Remove" icon="trash" className="btn btn-sm"
                         confirmText={step === "complete" ? `Remove ${e} from your invite list? They keep their account and can still sign in.` : `Remove the invite for ${e}? They won't be able to sign up.`} />

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
-import { invitedEmailsOf, inviteTokensOf, INVITE_LINK_DAYS } from "@/lib/invites";
+import { invitedEmailsOf, inviteTokensOf, familyEmailsOf, INVITE_LINK_DAYS } from "@/lib/invites";
 import { randomToken, verifier } from "@/lib/crypto";
 import { defineOp } from "./registry";
 import { audit, UserError, type Ctx } from "../audit";
@@ -22,14 +22,15 @@ const zEmail = z.string().trim().toLowerCase().email().max(254);
 
 export const inviteAdd = defineOp({
   name: "invite.add", module: "accounts", label: "Invite someone", aiAllowed: false,
-  schema: z.object({ email: zEmail }),
+  schema: z.object({ email: zEmail, family: z.boolean().optional() }),
   summarize: (i) => `Invite ${i.email}`,
   async run(ctx, i) {
     const settings = await ownerSettings(ctx);
     if (i.email === env.ownerEmail) throw new UserError("That's your own email.", "email");
     const list = invitedEmailsOf(settings);
     if (list.includes(i.email)) throw new UserError("That email is already invited.", "email");
-    await ctx.tx.update(users).set({ settings: { ...settings, invitedEmails: [...list, i.email] }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+    const family = familyEmailsOf(settings);
+    await ctx.tx.update(users).set({ settings: { ...settings, invitedEmails: [...list, i.email], familyEmails: i.family ? [...new Set([...family, i.email])] : family.filter((x) => x !== i.email) }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
     await audit(ctx, "accounts", "invited", "invite", null, `Invited ${i.email} to create an account`);
     const link = await makeInviteLink(ctx, i.email);
     let emailed = true;
@@ -70,8 +71,23 @@ export const inviteRemove = defineOp({
     const settings = await ownerSettings(ctx);
     const list = invitedEmailsOf(settings);
     if (!list.includes(i.email)) throw new UserError("That email isn't invited.");
-    await ctx.tx.update(users).set({ settings: { ...settings, invitedEmails: list.filter((x) => x !== i.email), inviteTokens: Object.fromEntries(Object.entries(inviteTokensOf(settings)).filter(([e]) => e !== i.email)) }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+    await ctx.tx.update(users).set({ settings: { ...settings, invitedEmails: list.filter((x) => x !== i.email), familyEmails: familyEmailsOf(settings).filter((x) => x !== i.email), inviteTokens: Object.fromEntries(Object.entries(inviteTokensOf(settings)).filter(([e]) => e !== i.email)) }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
     await audit(ctx, "accounts", "uninvited", "invite", null, `Removed the invite for ${i.email}`);
     return { id: null, message: "Invite removed" };
+  },
+});
+
+/** Mark (or unmark) an invited person as family. Family see the original mascot; everyone else sees the cat. */
+export const inviteFamily = defineOp({
+  name: "invite.family", module: "accounts", label: "Mark as family", aiAllowed: false,
+  schema: z.object({ email: zEmail, family: z.boolean() }),
+  summarize: (i) => `${i.family ? "Mark" : "Unmark"} ${i.email} as family`,
+  async run(ctx, i) {
+    const settings = await ownerSettings(ctx);
+    if (!invitedEmailsOf(settings).includes(i.email)) throw new UserError("That email isn't invited.");
+    const family = familyEmailsOf(settings).filter((x) => x !== i.email);
+    await ctx.tx.update(users).set({ settings: { ...settings, familyEmails: i.family ? [...family, i.email] : family }, updatedAt: ctx.now }).where(eq(users.id, ctx.ownerId));
+    await audit(ctx, "accounts", "edited", "invite", null, `${i.family ? "Marked" : "Unmarked"} ${i.email} as family`);
+    return { id: null, message: i.family ? `${i.email} is marked as family` : `${i.email} is no longer marked as family` };
   },
 });
