@@ -11,7 +11,9 @@ import { MAX_PINS } from "@/lib/spaces";
 
 const PIN_DEFAULTS = ["/admin/documents", "/finance/charity", "/quran"];
 
-export type StackCard = { key: string; href: string; label: string; glyph: GlyphKind; d: string; stat?: string; needs?: boolean };
+/** How to edit or delete a space from the press-and-hold view (the same op and form as on the space's own page). */
+export type CardEdit = { op: string; fixed: Record<string, unknown>; fields: FieldDef[]; initial: Record<string, unknown>; del: { op: string; input: Record<string, unknown>; confirm: string } };
+export type StackCard = { key: string; href: string; label: string; glyph: GlyphKind; d: string; stat?: string; needs?: boolean; edit?: CardEdit };
 export type StackGroup = { title: string; tint: string; custom: boolean; cards: StackCard[] };
 
 const LONG_PRESS_MS = 600;
@@ -26,8 +28,9 @@ const withPin = (pins: string[], href: string) => [href, ...pins.filter((h) => h
 /**
  * Spaces as quiet icon tiles, grouped by section. Search filters across every section.
  * Right-click a space to pin it (up to three); tap the pin on a pinned card to unpin it.
- * Press and hold any space to reorder: the sections turn into lists with three-line grips to drag,
- * then tap Done to save. Tap a section heading to rearrange the sections themselves.
+ * Press and hold any space to rearrange: spaces turn into rows you can drag (and edit or delete with the icons),
+ * and each section heading gets its own grip so sections move in the same view. Tap Done to save.
+ * Swiping back (or the back button) while rearranging just leaves rearranging, staying on Spaces.
  */
 export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addInitial, focus }: {
   groups: StackGroup[]; pins: string[] | null; addFields?: FieldDef[]; addInitial?: Record<string, unknown>;
@@ -40,13 +43,41 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   const [reorder, setReorder] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cardDrag, setCardDrag] = useState<{ key: string; dy: number } | null>(null);
-  const [sorting, setSorting] = useState(false);
+  const [secDrag, setSecDrag] = useState<{ title: string; dy: number } | null>(null);
+  const [editing, setEditing] = useState<StackCard | null>(null);
+  const [deleting, setDeleting] = useState<StackCard | null>(null);
   const [adding, setAdding] = useState(false);
   const [focusHref, setFocusHref] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   // Keep up with the server: a space added (or renamed, or deleted) shows up straight away, without a reload.
-  useEffect(() => { if (!reorder && !cd.current) setGroups(initial); }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
+  // While rearranging, keep the order the owner has dragged so far and just take in the edits.
+  useEffect(() => {
+    if (cd.current || sd.current) return;
+    setGroups((cur) => (reorder ? mergeKeepingOrder(cur, initial) : initial));
+  }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Rearranging gets its own history entry, so swiping back (or the back button) only leaves rearranging.
+  const pushed = useRef(false);
+  const startReorder = () => {
+    setQ(""); setAdding(false); setReorder(true);
+    if (!pushed.current) { window.history.pushState(null, "", window.location.pathname); pushed.current = true; }
+  };
+  const endReorder = (keep: boolean) => {
+    if (!keep) setGroups(initial);
+    setReorder(false); setEditing(null); setDeleting(null);
+    if (pushed.current) { pushed.current = false; window.history.back(); }
+  };
+  useEffect(() => {
+    const onPop = () => {
+      if (!pushed.current) return;
+      pushed.current = false;
+      setGroups(initial); setReorder(false); setEditing(null); setDeleting(null); setSecDrag(null);
+      if (window.location.pathname !== "/more") router.replace("/more");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [initial, router]);
 
   // After adding a space, scroll to it once it's on the page and give it a brief glow.
   useEffect(() => {
@@ -112,6 +143,10 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   const press = useRef<{ t?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
   const pointerKind = useRef<string>("mouse");
   const cd = useRef<{ gi: number; idx: number; startY: number } | null>(null);
+  const sd = useRef<{ idx: number; startY: number } | null>(null);
+  const secBox = useRef<HTMLDivElement | null>(null);
+  const sectionCount = useRef(initial.length);
+  sectionCount.current = groups.length;
 
   const query = q.trim().toLowerCase();
   const shown = useMemo(() => {
@@ -131,7 +166,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
     if (reorder || e.button !== 0) return;
     cancelPress();
     press.current = { x: e.clientX, y: e.clientY, fired: false };
-    press.current.t = setTimeout(() => { press.current.fired = true; setQ(""); setAdding(false); setReorder(true); navigator.vibrate?.(12); }, LONG_PRESS_MS);
+    press.current.t = setTimeout(() => { press.current.fired = true; startReorder(); navigator.vibrate?.(12); }, LONG_PRESS_MS);
   };
   const movePress = (e: React.PointerEvent) => { if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancelPress(); };
   // ---- Right-click (or the keyboard menu key) on a space opens the pin menu. A finger's long press stays "reorder". ----
@@ -166,12 +201,58 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
   };
   const cardUp = () => { cd.current = null; setCardDrag(null); };
 
+  // ---- Drag a whole section by the grip on its heading: the sections fold down to their headings while you drag ----
+  const SEC = 52;
+  const secDown = (e: React.PointerEvent, gi: number, title: string) => {
+    e.preventDefault(); e.stopPropagation();
+    const y = e.clientY;
+    sd.current = { idx: gi, startY: y };
+    setSecDrag({ title, dy: 0 });
+    navigator.vibrate?.(10);
+    // Once folded, bring the heading being dragged under the finger.
+    requestAnimationFrame(() => {
+      const box = secBox.current; if (!box) return;
+      window.scrollBy({ top: box.getBoundingClientRect().top + gi * SEC + SEC / 2 - y });
+    });
+    const move = (ev: PointerEvent) => {
+      const d = sd.current; if (!d) return;
+      ev.preventDefault();
+      const target = Math.max(0, Math.min(sectionCount.current - 1, Math.round(d.idx + (ev.clientY - d.startY) / SEC)));
+      if (target !== d.idx) {
+        const from = d.idx; d.startY += (target - from) * SEC; d.idx = target; navigator.vibrate?.(6);
+        setGroups((gs) => moveTo(gs, from, target));
+      }
+      const dy = ev.clientY - d.startY;
+      setSecDrag((x) => (x ? { ...x, dy } : x));
+    };
+    const up = () => {
+      sd.current = null; setSecDrag(null);
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move, { passive: false }); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+  const moveSection = (gi: number, to: number) => { if (to >= 0 && to < groups.length) setGroups((gs) => moveTo(gs, gi, to)); };
+
+  async function removeSpace(c: StackCard) {
+    if (!c.edit) return;
+    setSaving(true);
+    try {
+      await api(`/api/ops/${c.edit.del.op}`, c.edit.del.input);
+      setGroups((gs) => gs.map((g) => ({ ...g, cards: g.cards.filter((x) => x.key !== c.key) })).filter((g) => g.cards.length > 0));
+      setDeleting(null);
+      toast(`${c.label} removed`);
+      router.refresh();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't remove it. Try again.", "error");
+    } finally { setSaving(false); }
+  }
+
   async function save(gs: StackGroup[] = groups) {
     setSaving(true);
     try {
       await api("/api/ops/spaces.order", { sections: gs.map((g) => g.title), cards: Object.fromEntries(gs.map((g) => [g.title, g.cards.map((c) => c.key)])) });
       toast("Order saved");
-      setGroups(gs); setReorder(false); setSorting(false);
+      setGroups(gs); endReorder(true);
       router.refresh();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Couldn't save the order. Try again.", "error");
@@ -186,8 +267,8 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
       <div className="flex items-center gap-2">
         {reorder ? (
           <>
-            <span className="t-small font-semibold flex-1">Drag the grips to reorder</span>
-            <button type="button" className="btn" onClick={() => { setGroups(initial); setReorder(false); }} disabled={saving}>Cancel</button>
+            <span className="t-small font-semibold flex-1">Drag the grips to rearrange</span>
+            <button type="button" className="btn" onClick={() => endReorder(false)} disabled={saving}>Cancel</button>
             <button type="button" className="btn btn-primary" onClick={() => save()} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
           </>
         ) : (
@@ -216,7 +297,7 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
           </div>
         </div>
       )}
-      {!reorder && !query && <p className="t-meta mt-2">Press on a space to reorder.</p>}
+      {!reorder && !query && <p className="t-meta mt-2">Press and hold a space to rearrange, edit or delete.</p>}
       {!reorder && !query && pinned.length > 0 && (
         <section aria-labelledby="pin-h" className="mt-7">
           <h2 id="pin-h" className="t-label mb-3">Pinned</h2>
@@ -246,16 +327,43 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
       )}
       {query && <p className="t-meta mt-2" aria-live="polite">{total ? `${total} space${total === 1 ? "" : "s"} found` : "No spaces match. Try another word."}</p>}
 
+      {reorder && secDrag ? (
+        // Dragging a section: just the headings, to move as a whole.
+        <div ref={secBox} className="relative no-callout mt-7" style={{ height: groups.length * SEC, touchAction: "none" }}>
+          {groups.map((g, i) => {
+            const dragging = secDrag.title === g.title;
+            return (
+              <div key={g.title} className="absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[16px] sorter-row"
+                style={{ top: i * SEC + (dragging ? secDrag.dy : 0), height: SEC - 8, zIndex: dragging ? 10 : 1,
+                  transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.45)" : undefined }}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: g.tint }} aria-hidden />
+                <span className="font-bold flex-1 truncate">{g.title}</span>
+                <span className="t-meta">{g.cards.length}</span>
+                <span className="opacity-70" aria-hidden><Grip /></span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div className={reorder ? "grid gap-x-8 md:grid-cols-2 items-start" : ""}>
       {shown.map((g) => {
         const gi = groups.findIndex((x) => x.title === g.title);
         return (
           <section key={g.title} aria-labelledby={`st-${gi}`} data-section={g.title} className="mt-7 min-w-0 scroll-mt-24">
-            <button type="button" className="flex items-center gap-2 mb-4 bg-transparent border-0 p-0 cursor-pointer" style={{ color: "inherit", font: "inherit" }}
-              onClick={() => setSorting(true)} aria-label={`${g.title}. Rearrange sections`}>
+            <div className="flex items-center gap-2 mb-4">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.tint }} aria-hidden />
-              <h2 id={`st-${gi}`} className="t-label">{g.title}</h2>
-            </button>
+              <h2 id={`st-${gi}`} className="t-label flex-1">{g.title}</h2>
+              {reorder && groups.length > 1 && (
+                <button type="button" className="grip" style={{ touchAction: "none" }} aria-label={`Drag to move the ${g.title} section. Arrow keys move it too.`}
+                  onPointerDown={(e) => secDown(e, gi, g.title)}
+                  onKeyDown={(e) => {
+                    const to = e.key === "ArrowUp" ? gi - 1 : e.key === "ArrowDown" ? gi + 1 : -1;
+                    if (to >= 0) { e.preventDefault(); moveSection(gi, to); }
+                  }}>
+                  <Grip />
+                </button>
+              )}
+            </div>
             {reorder ? (
               <div className="relative no-callout" style={{ height: g.cards.length * STEP - (STEP - ROW_H) }}>
                 {g.cards.map((c, ci) => {
@@ -271,6 +379,16 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
                         onClick={() => (on ? unpin(c.href) : pin(c.href))}>
                         <Icon name="pin" size={16} />
                       </button>
+                      {c.edit && (
+                        <>
+                          <button type="button" className="row-pin" aria-label={`Edit ${c.label}`} title="Edit" onClick={() => { setDeleting(null); setEditing(c); }}>
+                            <Icon name="edit" size={16} />
+                          </button>
+                          <button type="button" className="row-pin row-del" aria-label={`Delete ${c.label}`} title="Delete" onClick={() => { setEditing(null); setDeleting(c); }}>
+                            <Icon name="trash" size={16} />
+                          </button>
+                        </>
+                      )}
                       <button type="button" className="grip" aria-label={`Drag to move ${c.label}`}
                         onPointerDown={(e) => cardDown(e, gi, ci, c.key)} onPointerMove={cardMove} onPointerUp={cardUp} onPointerCancel={cardUp}
                         onKeyDown={(e) => {
@@ -302,6 +420,33 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
         );
       })}
       </div>
+      )}
+      {editing?.edit && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="edit-space-h">
+          <div className="absolute inset-0" style={{ background: "rgba(20,26,21,.45)" }} onClick={() => setEditing(null)} />
+          <div className="relative panel panel-closable w-full max-w-lg p-4 md:p-5 preview-enter max-h-[88dvh] overflow-y-auto" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+            <PanelClose onClick={() => setEditing(null)} label="Close editing" />
+            <p id="edit-space-h" className="t-h3 mb-3 pr-10">Edit {editing.label}</p>
+            <RevealCtx.Provider value={{ close: () => setEditing(null) }}>
+              <OpForm op={editing.edit.op} fields={editing.edit.fields} fixed={editing.edit.fixed} initial={editing.edit.initial} compact submitLabel="Save"
+                onDone={() => { setEditing(null); router.refresh(); }} />
+            </RevealCtx.Provider>
+          </div>
+        </div>
+      )}
+      {deleting?.edit && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="alertdialog" aria-modal="true" aria-labelledby="del-space-h">
+          <div className="absolute inset-0" style={{ background: "rgba(20,26,21,.45)" }} onClick={() => !saving && setDeleting(null)} />
+          <div className="relative panel w-full max-w-md p-4 md:p-5 preview-enter" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+            <p id="del-space-h" className="t-h3 mb-2 flex items-center gap-2"><Icon name="trash" size={18} />Delete {deleting.label}?</p>
+            <p className="t-small text-ink-2 mb-4">{deleting.edit.del.confirm}</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn" onClick={() => setDeleting(null)} disabled={saving} autoFocus>Cancel</button>
+              <button type="button" className="btn btn-danger" onClick={() => removeSpace(deleting)} disabled={saving}>{saving ? "Deleting…" : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {menu && menuCard && (
         <div className="pin-pop preview-enter" data-pin-pop role="menu" aria-label={`${menuCard.label} options`}
           style={{ position: "fixed", left: Math.max(8, Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 400) - 208)), top: Math.max(8, Math.min(menu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 96)) }}>
@@ -315,64 +460,18 @@ export function SpacesStacks({ groups: initial, pins: savedPins, addFields, addI
           )}
         </div>
       )}
-      {sorting && <SectionSorter titles={groups.map((g) => g.title)} tints={Object.fromEntries(groups.map((g) => [g.title, g.tint]))} saving={saving}
-        onCancel={() => setSorting(false)}
-        onSave={(order) => save(order.map((t) => groups.find((g) => g.title === t)!))} />}
     </div>
   );
 }
 
-const ROW = 56;
-
-/** Just the section headings, to drag into a new order. */
-function SectionSorter({ titles, tints, saving, onCancel, onSave }: { titles: string[]; tints: Record<string, string>; saving: boolean; onCancel: () => void; onSave: (order: string[]) => void }) {
-  const [order, setOrder] = useState(titles);
-  const [drag, setDrag] = useState<{ title: string; dy: number } | null>(null);
-  const d = useRef<{ idx: number; startY: number } | null>(null);
-  const moveTo = (xs: string[], from: number, to: number) => { const c = xs.slice(); const [x] = c.splice(from, 1); c.splice(to, 0, x); return c; };
-
-  const down = (e: React.PointerEvent, i: number, title: string) => {
-    e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
-    d.current = { idx: i, startY: e.clientY }; setDrag({ title, dy: 0 });
-  };
-  const move = (e: React.PointerEvent) => {
-    const s = d.current; if (!s) return;
-    const target = Math.max(0, Math.min(order.length - 1, Math.round(s.idx + (e.clientY - s.startY) / ROW)));
-    if (target !== s.idx) { const from = s.idx; setOrder((o) => moveTo(o, from, target)); s.startY += (target - from) * ROW; s.idx = target; navigator.vibrate?.(6); }
-    setDrag((x) => (x ? { ...x, dy: e.clientY - s.startY } : x));
-  };
-  const up = () => { d.current = null; setDrag(null); };
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-3" role="dialog" aria-modal="true" aria-label="Rearrange sections">
-      <div className="absolute inset-0" style={{ background: "rgba(20,26,21,.45)" }} onClick={onCancel} />
-      <div className="relative glass w-full max-w-md p-4 rounded-[28px] preview-enter" style={{ background: "color-mix(in srgb, var(--paper) 94%, transparent)", marginBottom: "env(safe-area-inset-bottom)" }}>
-        <p className="t-h3 mb-3">Rearrange sections</p>
-        <div className="relative no-callout" style={{ height: order.length * ROW }}>
-          {order.map((t, i) => {
-            const dragging = drag?.title === t;
-            return (
-              <div key={t} className="absolute left-0 right-0 flex items-center gap-3 px-3 rounded-[16px] sorter-row"
-                style={{ position: "absolute", top: i * ROW + (dragging ? drag.dy : 0), height: ROW - 8, zIndex: dragging ? 10 : 1, touchAction: "none", cursor: "grab",
-                  transition: dragging ? "none" : "top .3s cubic-bezier(.3,1.3,.5,1)", boxShadow: dragging ? "0 16px 30px -12px rgba(0,0,0,.45)" : undefined }}
-                onPointerDown={(e) => down(e, i, t)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
-                tabIndex={0} aria-label={`${t}, position ${i + 1} of ${order.length}. Use arrow keys to move.`}
-                onKeyDown={(e) => {
-                  const to = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
-                  if (to >= 0 && to < order.length) { e.preventDefault(); setOrder((o) => moveTo(o, i, to)); }
-                }}>
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: tints[t] }} aria-hidden />
-                <span className="font-bold flex-1 truncate">{t}</span>
-                <span className="opacity-70" aria-hidden><Grip /></span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex justify-end gap-2 mt-3">
-          <button type="button" className="btn" onClick={onCancel} disabled={saving}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={() => onSave(order)} disabled={saving}>{saving ? "Saving…" : "Done"}</button>
-        </div>
-      </div>
-    </div>
-  );
+/** While rearranging: keep the dragged order, take in renamed/re-iconed/moved spaces, drop deleted ones, add new ones at the end. */
+function mergeKeepingOrder(cur: StackGroup[], next: StackGroup[]): StackGroup[] {
+  const nextCards = new Map(next.flatMap((g) => g.cards.map((c) => [c.key, { c, title: g.title }] as const)));
+  const titles = [...cur.map((g) => g.title).filter((t) => next.some((g) => g.title === t)), ...next.map((g) => g.title).filter((t) => !cur.some((g) => g.title === t))];
+  return titles.map((t) => {
+    const fresh = next.find((g) => g.title === t)!;
+    const kept = (cur.find((g) => g.title === t)?.cards ?? []).filter((c) => nextCards.get(c.key)?.title === t).map((c) => nextCards.get(c.key)!.c);
+    const added = fresh.cards.filter((c) => !kept.some((k) => k.key === c.key));
+    return { ...fresh, cards: [...kept, ...added] };
+  }).filter((g) => g.cards.length > 0);
 }

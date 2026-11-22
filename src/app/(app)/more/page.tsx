@@ -1,16 +1,15 @@
 import { PageHeader } from "@/components/ui";
-import { OpButton } from "@/components/OpForm";
 import { type GlyphKind } from "@/components/Glyph";
 import { pageOwner, attentionCount, customSpacesState, dashboardState } from "@/server/queries";
-import { isSpaceGlyph, spacesOrderOf, spacesPinsOf, bySavedOrder, BUILTIN_SPACES, builtinSpace, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
+import { isSpaceGlyph, spacesOrderOf, spacesPinsOf, bySavedOrder, BUILTIN_SPACES, builtinSpace, builtinGlyphOptions, spaceOverridesOf, SECTION_TINT, CUSTOM_TINT } from "@/lib/spaces";
 import { formatMoney } from "@/lib/money";
 import { relDays } from "@/lib/format";
 import { addDays, dmy } from "@/lib/time";
-import { SpacesStacks, type StackGroup } from "@/components/SpacesStacks";
+import { SpacesStacks, type StackGroup, type CardEdit } from "@/components/SpacesStacks";
 import { spaceNeeds } from "@/lib/spaceNeeds";
 import { spaceFields } from "../spaces/fields";
 
-type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string; stat?: string };
+type Item = { href: string; label: string; glyph: GlyphKind; d: string; note?: string; stat?: string; edit: CardEdit };
 
 /** Spaces: every section of the app in one place (the "Spaces" menu item on phone and web). */
 export default async function Spaces({ searchParams }: { searchParams: Promise<{ focus?: string }> }) {
@@ -43,18 +42,26 @@ async function SpacesPage({ focus }: { focus?: string }) {
   const needs = spaceNeeds(s, n);
   // Built-in spaces, as the owner has set them up (renamed, re-iconed, moved or removed).
   const groups: { title: string; items: Item[] }[] = [];
-  const removed: { href: string; label: string }[] = [];
+  // Sections for the edit form: built-in ones plus any the owner made up.
+  const madeUp = [...new Set([...mine.map((c) => c.space.section), ...Object.values(spaceOverridesOf(o.settings)).map((x) => x.section).filter((x): x is string => !!x)])];
   for (const base of BUILTIN_SPACES) {
     const sp = builtinSpace(base.href, o.settings)!;
-    if (sp.hidden) { removed.push({ href: sp.href, label: sp.label }); continue; }
-    const item: Item = { href: sp.href, label: sp.label, glyph: sp.glyph, d: sp.note ?? sp.d };
+    // Removed spaces don't show anywhere (their data and history stay).
+    if (sp.hidden) continue;
+    const item: Item = { href: sp.href, label: sp.label, glyph: sp.glyph, d: sp.note ?? sp.d, edit: {
+      op: "space.builtin.update", fixed: { href: sp.href }, fields: spaceFields(madeUp, builtinGlyphOptions(base)),
+      initial: { name: sp.label, glyph: sp.glyph, section: sp.section, description: sp.note },
+      del: { op: "space.builtin.hide", input: { href: sp.href }, confirm: `Remove “${sp.label}” from your Spaces? Nothing inside it is deleted.` } } };
     const g = groups.find((x) => x.title === sp.section);
     if (g) g.items.push(item); else groups.push({ title: sp.section, items: [item] });
   }
   // The owner's own spaces: under a built-in group, or in sections they made up.
   for (const c of mine) {
     const item: Item = { href: `/spaces/${c.space.id}`, label: c.space.name, glyph: isSpaceGlyph(c.space.glyph) ? c.space.glyph : "projects",
-      d: c.space.description ?? "Your own space", stat: c.open ? `${c.open} to do` : c.done ? "All done" : undefined };
+      d: c.space.description ?? "Your own space", stat: c.open ? `${c.open} to do` : c.done ? "All done" : undefined, edit: {
+        op: "space.update", fixed: { id: c.space.id }, fields: spaceFields(madeUp),
+        initial: { name: c.space.name, glyph: c.space.glyph, section: c.space.section, description: c.space.description },
+        del: { op: "space.delete", input: { id: c.space.id }, confirm: `Delete the space “${c.space.name}” and everything in its list?` } } };
     const g = groups.find((x) => x.title === c.space.section);
     if (g) g.items.push(item); else groups.push({ title: c.space.section, items: [item] });
   }
@@ -65,22 +72,12 @@ async function SpacesPage({ focus }: { focus?: string }) {
     title: g.title,
     tint: SECTION_TINT[g.title] ?? CUSTOM_TINT,
     custom: !builtIn.has(g.title),
-    cards: bySavedOrder(g.items, (i) => i.href, order.cards[g.title]).map((i) => ({ key: i.href, href: i.href, label: i.label, glyph: i.glyph, d: i.d, stat: i.stat ?? stat[i.href], needs: !!needs[i.href] })),
+    cards: bySavedOrder(g.items, (i) => i.href, order.cards[g.title]).map((i) => ({ key: i.href, href: i.href, label: i.label, glyph: i.glyph, d: i.d, stat: i.stat ?? stat[i.href], needs: !!needs[i.href], edit: i.edit })),
   }));
   return (
     <>
       <PageHeader title="Spaces" />
       <SpacesStacks focus={focus} groups={stacked} pins={spacesPinsOf(o.settings)} addFields={spaceFields(sections)} addInitial={{ section: "Life admin", glyph: "projects" }} />
-      {removed.length > 0 && (
-        <section aria-labelledby="removed-h" className="mt-10 pt-5 rule-t">
-          <h2 id="removed-h" className="t-label mb-3">Removed spaces</h2>
-          <ul className="flex flex-wrap gap-2">
-            {removed.map((r) => (
-              <li key={r.href}><OpButton op="space.builtin.restore" input={{ href: r.href }} label={`Bring back ${r.label}`} className="btn btn-sm" /></li>
-            ))}
-          </ul>
-        </section>
-      )}
     </>
   );
 }

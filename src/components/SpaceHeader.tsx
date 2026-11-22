@@ -5,7 +5,7 @@ import { PageHeader } from "./ui";
 import { OpForm } from "./OpForm";
 import { SpaceEditScope, SpaceEditButton, SpaceEditPanel } from "./PageAdd";
 
-const NOTE = "Nothing inside it is deleted. You can bring it back from the bottom of the Spaces page.";
+const NOTE = "Nothing inside it is deleted.";
 
 /**
  * Title line of a built-in space: its icon and name (as the owner set them), any page actions (e.g. +),
